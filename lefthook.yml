@@ -1,0 +1,7 @@
+pre-commit:
+    parallel: true
+    jobs:
+        - name: prettier
+          glob: "*.{ts,vue,md,json,css,yml,yaml,mjs,js}"
+          run: pnpm exec prettier --write --ignore-unknown {staged_files}
+          stage_fixed: true

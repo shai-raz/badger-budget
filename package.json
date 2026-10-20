@@ -1,0 +1,28 @@
+{
+    "name": "badger-budget",
+    "private": true,
+    "license": "AGPL-3.0-only",
+    "scripts": {
+        "build": "turbo run build",
+        "dev": "turbo run dev",
+        "dev:web": "turbo run dev --filter=web",
+        "dev:api": "turbo run dev --filter=api...",
+        "dev:web:api": "turbo run dev --filter=web --filter=api...",
+        "lint": "turbo run lint",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "check-types": "turbo run check-types",
+        "test": "turbo run test",
+        "test:watch": "turbo run test -- --watch"
+    },
+    "devDependencies": {
+        "lefthook": "^2.1.10",
+        "prettier": "^3.7.4",
+        "turbo": "^2.6.3",
+        "typescript": "5.9.2"
+    },
+    "packageManager": "pnpm@9.15.9",
+    "engines": {
+        "node": ">=22.19"
+    }
+}

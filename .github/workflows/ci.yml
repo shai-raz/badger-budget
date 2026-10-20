@@ -1,0 +1,60 @@
+name: CI
+
+on:
+    pull_request:
+    push:
+        branches: [main]
+
+# Cancel superseded runs on the same branch/PR.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    format:
+        name: Prettier
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            # Reads the pnpm version from `packageManager` in package.json.
+            - uses: pnpm/action-setup@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version-file: .node-version
+                  cache: pnpm
+
+            # `--ignore-scripts` skips postinstall hooks — Puppeteer's Chrome
+            # download, `nuxt prepare`, and lefthook's git-hook install. None of
+            # them matter to Prettier, and the Chrome download dominates runtime.
+            - run: pnpm install --frozen-lockfile --ignore-scripts
+
+            - run: pnpm format:check
+
+    web:
+        name: Web lint & type-check
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: pnpm/action-setup@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version-file: .node-version
+                  cache: pnpm
+
+            # `--ignore-scripts` skips Puppeteer's Chrome download; web's
+            # postinstall (`nuxt prepare`) runs explicitly below.
+            - run: pnpm install --frozen-lockfile --ignore-scripts
+
+            # eslint.config.mjs imports ./.nuxt/eslint.config.mjs, so .nuxt must
+            # exist before linting.
+            - run: pnpm --filter web exec nuxt prepare
+
+            - run: pnpm --filter web lint
+
+            # Through turbo so `^build` builds the shared packages first (bare
+            # `pnpm --filter web check-types` would read stale/missing dist/).
+            - run: pnpm check-types --filter=web

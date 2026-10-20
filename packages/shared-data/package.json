@@ -1,0 +1,27 @@
+{
+    "name": "@badger/shared-data",
+    "version": "0.0.0",
+    "private": true,
+    "license": "AGPL-3.0-only",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "module": "./src/index.ts",
+            "default": "./dist/index.js"
+        }
+    },
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+        "lint": "eslint .",
+        "check-types": "tsc --noEmit"
+    },
+    "devDependencies": {
+        "@repo/eslint-config": "workspace:*",
+        "@repo/typescript-config": "workspace:*",
+        "eslint": "^9.39.1",
+        "typescript": "5.9.2"
+    }
+}

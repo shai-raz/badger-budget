@@ -1,0 +1,22 @@
+services:
+    postgres:
+        image: postgres:16-alpine
+        container_name: badger-postgres
+        restart: unless-stopped
+        ports:
+            - "5433:5432"
+        environment:
+            POSTGRES_USER: badger
+            POSTGRES_PASSWORD: badger_password
+            POSTGRES_DB: badger_db
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U badger -d badger_db"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+volumes:
+    postgres_data:
+        driver: local

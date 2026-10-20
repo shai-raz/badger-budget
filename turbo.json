@@ -1,0 +1,30 @@
+{
+    "$schema": "https://turborepo.com/schema.json",
+    "ui": "tui",
+    "globalEnv": ["PUBLIC_URL", "WEB_DIST_DIR"],
+    "tasks": {
+        "build": {
+            "dependsOn": ["^build"],
+            "inputs": ["$TURBO_DEFAULT$", ".env*"],
+            "outputs": ["dist/**", "dist-seed/**", ".output/**", ".nuxt/**"]
+        },
+        "lint": {
+            "dependsOn": ["^lint"]
+        },
+        "check-types": {
+            "dependsOn": ["^build"]
+        },
+        "generate": {
+            "dependsOn": ["^build"],
+            "outputs": [".output/**"]
+        },
+        "dev": {
+            "dependsOn": ["^build"],
+            "cache": false,
+            "persistent": true
+        },
+        "test": {
+            "dependsOn": ["^build"]
+        }
+    }
+}

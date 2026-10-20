@@ -1,0 +1,11 @@
+{
+    "eslint.workingDirectories": [
+        {
+            "mode": "auto"
+        }
+    ],
+    "jest.rootPath": ".",
+    "jest.runMode": {
+        "type": "watch"
+    }
+}

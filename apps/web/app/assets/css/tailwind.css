@@ -1,0 +1,26 @@
+/* Tailwind entry point (wired up via `tailwindcss.cssPath` in nuxt.config.ts).
+ *
+ * The explicit layer order is what keeps dev and production looking the same.
+ * PrimeVue injects its styled-mode CSS into <style> tags at runtime, so in a
+ * production build it always lands AFTER the bundled Tailwind stylesheet, while
+ * Vite's dev server injects Tailwind last. Without layers that flips which of
+ * two equal-specificity rules wins between the two modes (e.g. PrimeVue's
+ * `.p-button { position: relative }` silently beating Tailwind's `.fixed`).
+ *
+ * Declaring the order up front makes it source-order independent:
+ *   tailwind-base  < primevue < tailwind-utilities
+ *   (preflight)      (theme)    (utility classes always win)
+ *
+ * The matching `cssLayer` option on the PrimeVue theme puts its CSS into the
+ * `primevue` layer — both halves are required.
+ */
+@layer tailwind-base, primevue, tailwind-utilities;
+
+@layer tailwind-base {
+    @tailwind base;
+}
+
+@layer tailwind-utilities {
+    @tailwind components;
+    @tailwind utilities;
+}

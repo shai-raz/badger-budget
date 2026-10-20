@@ -1,0 +1,135 @@
+{
+    "name": "api",
+    "version": "0.0.1",
+    "description": "Badger Budget API",
+    "author": "Badger Team",
+    "private": true,
+    "license": "AGPL-3.0-only",
+    "scripts": {
+        "build": "pnpm run prisma:generate && nest build && pnpm run build:seed",
+        "build:seed": "tsc -p tsconfig.seed.json",
+        "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+        "start": "nest start",
+        "dev": "turbo run build --filter=\"api^...\" && pnpm prisma:migrate && pnpm prisma:generate && nest start --watch",
+        "start:debug": "nest start --debug --watch",
+        "migrate:deploy": "prisma migrate deploy",
+        "start:prod": "prisma migrate deploy && prisma db seed && node dist/main",
+        "lint": "eslint .",
+        "test": "jest",
+        "test:watch": "jest --watch",
+        "test:cov": "jest --coverage",
+        "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
+        "check-types": "tsc --noEmit",
+        "fx:backfill-conversions": "ts-node -r tsconfig-paths/register src/scripts/backfill-missing-conversions.ts",
+        "prisma:generate": "prisma generate",
+        "prisma:migrate": "prisma migrate dev",
+        "prisma:studio": "prisma studio",
+        "prisma:seed": "ts-node prisma/seed.ts"
+    },
+    "dependencies": {
+        "@aws-sdk/client-s3": "^3.844.0",
+        "@aws-sdk/s3-request-presigner": "^3.844.0",
+        "@badger/shared-data": "workspace:*",
+        "@badger/utils": "workspace:*",
+        "@faker-js/faker": "^9.0.0",
+        "@googleapis/sheets": "^14.0.0",
+        "@modelcontextprotocol/node": "^2.1.1",
+        "@modelcontextprotocol/server": "^2.3.1",
+        "@nestjs/common": "^11.0.0",
+        "@nestjs/config": "^3.3.0",
+        "@nestjs/core": "^11.0.0",
+        "@nestjs/jwt": "^11.0.2",
+        "@nestjs/passport": "^11.0.5",
+        "@nestjs/platform-express": "^11.0.0",
+        "@nestjs/swagger": "^8.0.7",
+        "@nestjs/throttler": "^6.0.0",
+        "@prisma/client": "^6.2.0",
+        "axios": "^1.7.9",
+        "bcrypt": "^5.1.1",
+        "class-transformer": "^0.5.1",
+        "class-validator": "^0.14.1",
+        "google-auth-library": "^10.5.0",
+        "israeli-bank-scrapers": "github:shai-raz/israeli-bank-scrapers#c76ac3cbfc446d9fff933281df0becb612c8433e",
+        "passport": "^0.7.0",
+        "passport-google-oauth20": "^2.0.0",
+        "passport-jwt": "^4.0.1",
+        "passport-local": "^1.0.0",
+        "prisma": "^6.2.0",
+        "puppeteer-extra": "^3.3.6",
+        "puppeteer-extra-plugin-stealth": "^2.11.2",
+        "reflect-metadata": "^0.2.0",
+        "rxjs": "^7.8.1",
+        "serve-static": "^2.2.1",
+        "zod": "^4.2.0"
+    },
+    "devDependencies": {
+        "@badger/types": "workspace:*",
+        "@modelcontextprotocol/client": "^2.3.1",
+        "@nestjs/cli": "^11.0.0",
+        "@nestjs/schematics": "^11.0.0",
+        "@nestjs/testing": "^11.0.0",
+        "@repo/eslint-config": "workspace:*",
+        "@repo/typescript-config": "workspace:*",
+        "@swc/cli": "^0.7.9",
+        "@swc/core": "1.16.2",
+        "@swc/jest": "^0.2.39",
+        "@types/bcrypt": "^5.0.2",
+        "@types/express": "^4.17.17",
+        "@types/jest": "^29.5.2",
+        "@types/node": "^20.3.1",
+        "@types/passport-google-oauth20": "^2.0.17",
+        "@types/passport-jwt": "^4.0.1",
+        "@types/passport-local": "^1.0.38",
+        "@types/serve-static": "^1.15.10",
+        "@types/supertest": "^6.0.0",
+        "chokidar": "^4",
+        "eslint": "^9.39.1",
+        "jest": "^29.5.0",
+        "prettier": "^3.0.0",
+        "source-map-support": "^0.5.21",
+        "supertest": "^6.3.3",
+        "ts-loader": "^9.4.3",
+        "ts-node": "^10.9.1",
+        "tsconfig-paths": "^4.2.0",
+        "typescript": "5.9.2"
+    },
+    "jest": {
+        "moduleFileExtensions": [
+            "js",
+            "json",
+            "ts"
+        ],
+        "rootDir": "src",
+        "testRegex": ".*\\.spec\\.ts$",
+        "transform": {
+            "^.+\\.(t|j)s$": [
+                "@swc/jest",
+                {
+                    "jsc": {
+                        "parser": {
+                            "syntax": "typescript",
+                            "decorators": true
+                        },
+                        "transform": {
+                            "legacyDecorator": true,
+                            "decoratorMetadata": true
+                        },
+                        "target": "es2021",
+                        "keepClassNames": true
+                    },
+                    "module": {
+                        "type": "commonjs"
+                    }
+                }
+            ]
+        },
+        "collectCoverageFrom": [
+            "**/*.(t|j)s"
+        ],
+        "coverageDirectory": "../coverage",
+        "testEnvironment": "node"
+    },
+    "prisma": {
+        "seed": "ts-node prisma/seed.ts"
+    }
+}

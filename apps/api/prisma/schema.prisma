@@ -1,0 +1,622 @@
+// This is your Prisma schema file
+// For more information: https://pris.ly/d/prisma-schema
+// Last updated: December 14, 2025
+// Sync with: /database-schema.dbml
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                String    @unique @db.VarChar(255)
+  password             String?   @db.VarChar(255)
+  firstName            String    @map("first_name") @db.VarChar(255)
+  lastName             String    @map("last_name") @db.VarChar(255)
+  googleId             String?   @unique @map("google_id") @db.VarChar(255)
+  avatarUrl            String?   @map("avatar_url") @db.VarChar(500)
+  currencyBackfilledAt DateTime? @map("currency_backfilled_at") @db.Timestamp(6)
+  // Last day through which demo transactions were generated (demo user only; null for everyone else; see src/demo).
+  demoDataThrough      DateTime? @map("demo_data_through") @db.Date
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt            DateTime? @map("deleted_at") @db.Timestamp(6)
+
+  accounts               Account[]
+  categories             Category[]
+  budgets                Budget[]
+  transactions           Transaction[]
+  transactionAttachments TransactionAttachment[]
+  categoryMappingRules CategoryMappingRule[]
+  cardPayoffPatterns   CardPayoffPattern[]
+  cashWithdrawalPatterns CashWithdrawalPattern[]
+  refreshTokens        RefreshToken[]
+  sheetConnections     SheetConnection[]
+  userSyncSecret       UserSyncSecret?
+  syncPasskeys         SyncPasskey[]
+  scraperConnections   ScraperConnection[]
+  syncJobs             SyncJob[]
+  balanceSnapshots     AccountBalanceSnapshot[]
+  oauthAuthorizationRequests OAuthAuthorizationRequest[]
+  oauthGrants          OAuthGrant[]
+
+  @@index([email])
+  @@index([googleId])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Currency {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code           String   @unique @db.VarChar(3)
+  symbol         String   @db.VarChar(10)
+  name           String   @db.VarChar(100)
+  decimalPlaces  Int      @default(2) @map("decimal_places") @db.SmallInt
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  accounts                   Account[]             @relation("account_currency")
+  budgets                    Budget[]
+  transactions               Transaction[]         @relation("transaction_currency")
+  originalTransactions       Transaction[]         @relation("transaction_original_currency")
+  fxRatesDailyBaseCurrency   FxRateDaily[]         @relation("fx_rates_daily_base_currency")
+  fxRatesDailyQuoteCurrency  FxRateDaily[]         @relation("fx_rates_daily_quote_currency")
+  transactionConversions     TransactionConversion[]
+  accountBalanceSnapshots    AccountBalanceSnapshot[]
+
+  @@index([code])
+  @@map("currencies")
+}
+
+model Account {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  name          String    @db.VarChar(255)
+  accountNumber String?   @map("account_number") @db.VarChar(255)
+  type          String    @db.VarChar(20) // credit_card, bank, cash, unknown
+  icon          String?   @db.VarChar(50)
+  color         String?   @db.VarChar(7)
+  currencyId    String?   @map("currency_id") @db.Uuid
+
+  // Latest balance, denormalized from account_balance_snapshots for cheap reads.
+  // balanceKind is stored alongside because Account has no link back to the scraper provider,
+  // and the number is uninterpretable without it (see BalanceKind in @badger/shared-data).
+  balance          Decimal?  @db.Decimal(12, 2)
+  balanceKind      String?   @map("balance_kind") @db.VarChar(20)
+  balanceDate      DateTime? @map("balance_date") @db.Date
+  balanceUpdatedAt DateTime? @map("balance_updated_at") @db.Timestamp(6)
+  // Card credit limit, latest observation. Cards only, and NOT summable across accounts: Cal
+  // reports a group-level frame shared by every card in the issuing agreement.
+  cardFrame        Decimal?  @map("card_frame") @db.Decimal(12, 2)
+  // IBS `cardType` — bankIssued | companyIssued. Cal-only. Named `cardIssuer` so it doesn't read
+  // as a sibling of `type` above.
+  cardIssuer       String?   @map("card_issuer") @db.VarChar(20)
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamp(6)
+
+  user             User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency         Currency?                @relation("account_currency", fields: [currencyId], references: [id])
+  transactions     Transaction[]
+  budgets          Budget[]
+  balanceSnapshots AccountBalanceSnapshot[]
+
+  @@index([userId])
+  @@index([type])
+  @@index([currencyId])
+  @@index([userId, deletedAt])
+  @@index([userId, accountNumber], name: "accounts_user_id_account_number_idx")
+  @@map("accounts")
+}
+
+model Category {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  name      String   @db.VarChar(100)
+  color     String   @db.VarChar(7)
+  icon      String?  @db.VarChar(50)
+  isSystem  Boolean  @default(false) @map("is_system")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamp(6)
+
+  user                 User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budgets              Budget[]
+  budgetCategories     BudgetCategory[]
+  transactions         Transaction[]
+  categoryMappingRules CategoryMappingRule[]
+
+  @@index([userId])
+  @@index([isSystem])
+  @@index([userId, deletedAt])
+  @@unique([userId, name, deletedAt])
+  @@map("categories")
+}
+
+model CategoryMappingRule {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  categoryId  String   @map("category_id") @db.Uuid
+  field       String   @db.VarChar(50) // original_category or description
+  operator    String   @db.VarChar(20) // equals, contains, starts_with, ends_with
+  value       String   @db.VarChar(255)
+  priority    Int      @default(0)
+  stopOnMatch Boolean  @default(true) @map("stop_on_match")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([isActive])
+  @@index([userId, isActive, priority])
+  @@map("category_mapping_rules")
+}
+
+model Budget {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  categoryId String?   @map("category_id") @db.Uuid
+  accountId  String?   @map("account_id") @db.Uuid
+  name       String    @db.VarChar(255)
+  amount     Decimal   @db.Decimal(12, 2)
+  currencyId String    @map("currency_id") @db.Uuid
+  period     String    @db.VarChar(20) // daily, weekly, monthly, yearly
+  startDate  DateTime  @map("start_date") @db.Date
+  endDate    DateTime? @map("end_date") @db.Date
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt  DateTime? @map("deleted_at") @db.Timestamp(6)
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category     Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  account      Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  currency     Currency      @relation(fields: [currencyId], references: [id])
+  transactions Transaction[]
+  budgetCategories BudgetCategory[]
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([accountId])
+  @@index([userId, deletedAt])
+  @@index([startDate, endDate])
+  @@map("budgets")
+}
+
+model Transaction {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                String    @map("user_id") @db.Uuid
+  accountId             String    @map("account_id") @db.Uuid
+  budgetId              String?   @map("budget_id") @db.Uuid
+  categoryId            String?   @map("category_id") @db.Uuid
+  type                  String    @db.VarChar(50) // income, expense, or transfer
+  hidden                Boolean   @default(false)
+  transferDirection     String?   @map("transfer_direction") @db.VarChar(3) // "in" | "out"; null for income/expense
+  amount                Decimal   @db.Decimal(12, 2)
+  currencyId            String    @map("currency_id") @db.Uuid
+  originalAmount        Decimal?  @map("original_amount") @db.Decimal(12, 2)
+  originalCurrencyId    String?   @map("original_currency_id") @db.Uuid
+  description           String    @db.Text
+  additionalDescription String?   @map("additional_description") @db.Text
+  notes                 String?   @db.Text
+  originalCategory      String?   @map("original_category") @db.VarChar(255)
+  externalId            String?   @map("external_id") @db.VarChar(255)
+  paymentType           String?   @map("payment_type") @db.VarChar(20) // normal, installments
+  transactionDate       DateTime  @map("transaction_date") @db.Date
+  postedDate            DateTime? @map("posted_date") @db.Date
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt             DateTime? @map("deleted_at") @db.Timestamp(6)
+  // Set ONLY on the app-created mirror row of a linked transfer; points at the source row.
+  counterpartOfId String?      @unique @map("counterpart_of_id") @db.Uuid
+  counterpartOf   Transaction? @relation("TransferCounterpart", fields: [counterpartOfId], references: [id], onDelete: Cascade)
+  counterpart     Transaction? @relation("TransferCounterpart")
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account          Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  budget           Budget?   @relation(fields: [budgetId], references: [id], onDelete: SetNull)
+  category         Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  currency         Currency  @relation("transaction_currency", fields: [currencyId], references: [id])
+  originalCurrency Currency? @relation("transaction_original_currency", fields: [originalCurrencyId], references: [id])
+  conversions      TransactionConversion[]
+  attachments      TransactionAttachment[]
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([budgetId])
+  @@index([categoryId])
+  @@index([type])
+  @@index([externalId])
+  @@index([transactionDate])
+  @@index([postedDate])
+  @@index([userId, deletedAt])
+  @@index([userId, transactionDate])
+  @@index([userId, hidden, transactionDate])
+  @@index([accountId, transactionDate])
+  @@map("transactions")
+}
+
+model TransactionAttachment {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transactionId String    @map("transaction_id") @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  fileName      String    @map("file_name") @db.VarChar(255)
+  mimeType      String    @map("mime_type") @db.VarChar(100)
+  sizeBytes     Int       @map("size_bytes")
+  storageKey    String?   @map("storage_key") @db.VarChar(512) // set once files are actually uploaded to object storage
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamp(6)
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId, deletedAt])
+  @@index([userId])
+  @@map("transaction_attachments")
+}
+
+model BudgetCategory {
+  budgetId    String   @map("budget_id") @db.Uuid
+  categoryId  String   @map("category_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  budget   Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([budgetId, categoryId])
+  @@index([categoryId])
+  @@map("budget_categories")
+}
+
+model TransactionConversion {
+  transactionId     String   @map("transaction_id") @db.Uuid
+  targetCurrencyId  String   @map("target_currency_id") @db.Uuid
+  convertedAmount   Decimal  @map("converted_amount") @db.Decimal(20, 8)
+  conversionRate    Decimal  @map("conversion_rate") @db.Decimal(20, 10)
+  rateDate          DateTime @map("rate_date") @db.Date
+  provider          String?  @db.VarChar(100)
+  providerMetadata  Json?    @map("provider_metadata")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  transaction    Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  targetCurrency Currency    @relation(fields: [targetCurrencyId], references: [id])
+
+  @@id([transactionId, targetCurrencyId])
+  @@index([targetCurrencyId])
+  @@index([rateDate])
+  @@map("transaction_conversions")
+}
+
+model FxRateDaily {
+  baseCurrencyId  String   @map("base_currency_id") @db.Uuid
+  quoteCurrencyId String   @map("quote_currency_id") @db.Uuid
+  rateDate        DateTime @map("rate_date") @db.Date
+  rate            Decimal  @db.Decimal(20, 10)
+  provider        String?  @db.VarChar(100)
+  providerMetadata Json?   @map("provider_metadata")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  baseCurrency  Currency @relation("fx_rates_daily_base_currency", fields: [baseCurrencyId], references: [id])
+  quoteCurrency Currency @relation("fx_rates_daily_quote_currency", fields: [quoteCurrencyId], references: [id])
+
+  @@id([baseCurrencyId, quoteCurrencyId, rateDate])
+  @@index([quoteCurrencyId])
+  @@map("fx_rates_daily")
+}
+
+model RefreshToken {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique @db.VarChar(500)
+  expiresAt DateTime @map("expires_at") @db.Timestamp(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model CardPayoffPattern {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  description String   @db.VarChar(255)
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([description])
+  @@index([isSystem])
+  @@map("card_payoff_patterns")
+}
+
+model CashWithdrawalPattern {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  isSystem   Boolean  @default(false) @map("is_system")
+  /// description | additionalDescription
+  matchField String   @map("match_field") @db.VarChar(30)
+  text       String   @db.VarChar(255)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isSystem])
+  @@map("cash_withdrawal_patterns")
+}
+
+model SheetConnection {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  spreadsheetId String    @map("spreadsheet_id") @db.VarChar(255)
+  sheetName     String    @map("sheet_name") @db.VarChar(100) @default("Sheet1")
+  lastSyncedAt  DateTime? @map("last_synced_at") @db.Timestamp(6)
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isActive])
+  @@map("sheet_connections")
+}
+
+model UserSyncSecret {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @unique @map("user_id") @db.Uuid
+  kdfSalt         String   @map("kdf_salt") @db.VarChar(64)
+  verifierCt      String   @map("verifier_ct") @db.Text
+  verifierIv      String   @map("verifier_iv") @db.VarChar(32)
+  verifierAuthTag String   @map("verifier_auth_tag") @db.VarChar(32)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_sync_secrets")
+}
+
+model SyncPasskey {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  credentialId String   @unique @map("credential_id") @db.VarChar(1400)
+  prfSalt      String   @map("prf_salt") @db.VarChar(64)
+  wrappedPinCt String   @map("wrapped_pin_ct") @db.Text
+  wrappedPinIv String   @map("wrapped_pin_iv") @db.VarChar(32)
+  label        String   @db.VarChar(100)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sync_passkeys")
+}
+
+model ScraperConnection {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  companyId          String    @map("company_id") @db.VarChar(50)
+  displayName        String    @map("display_name") @db.VarChar(100)
+  credentialsCt      String    @map("credentials_ct") @db.Text
+  credentialsIv      String    @map("credentials_iv") @db.VarChar(32)
+  credentialsAuthTag String    @map("credentials_auth_tag") @db.VarChar(32)
+  credentialsSalt    String    @map("credentials_salt") @db.VarChar(64)
+  scrapeLookbackDays Int       @default(60) @map("scrape_lookback_days")
+  isActive           Boolean   @default(true) @map("is_active")
+  lastSyncedAt       DateTime? @map("last_synced_at") @db.Timestamp(6)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamp(6)
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scraperJobs ScraperJob[]
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([userId, deletedAt])
+  @@map("scraper_connections")
+}
+
+model SyncJob {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  status             String    @db.VarChar(20)
+  transactionsSynced Int       @default(0) @map("transactions_synced")
+  accountsSynced     Int       @default(0) @map("accounts_synced")
+  error              String?   @db.Text
+  startedAt          DateTime  @default(now()) @map("started_at") @db.Timestamp(6)
+  finishedAt         DateTime? @map("finished_at") @db.Timestamp(6)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scraperJobs ScraperJob[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([userId, status])
+  @@map("sync_jobs")
+}
+
+model ScraperJob {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  syncJobId           String    @map("sync_job_id") @db.Uuid
+  scraperConnectionId String?   @map("scraper_connection_id") @db.Uuid
+  companyId           String    @map("company_id") @db.VarChar(50)
+  displayName         String    @map("display_name") @db.VarChar(100)
+  status              String    @db.VarChar(20)
+  transactionsSynced  Int       @default(0) @map("transactions_synced")
+  accountsSynced      Int       @default(0) @map("accounts_synced")
+  error               String?   @db.Text
+  startedAt           DateTime? @map("started_at") @db.Timestamp(6)
+  finishedAt          DateTime? @map("finished_at") @db.Timestamp(6)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  syncJob           SyncJob            @relation(fields: [syncJobId], references: [id], onDelete: Cascade)
+  scraperConnection ScraperConnection? @relation(fields: [scraperConnectionId], references: [id], onDelete: SetNull)
+  balanceSnapshots  AccountBalanceSnapshot[]
+
+  @@index([syncJobId])
+  @@index([scraperConnectionId])
+  @@map("scraper_jobs")
+}
+
+/// Append-only history of scraped account balances.
+/// Deliberately has no `deletedAt` (unlike every other entity here): a balance is an observation
+/// at a point in time, not editable state, and it is not reconstructable after the fact — we only
+/// ever scrape a lookback window of transactions, so an unrecorded balance is gone for good.
+model AccountBalanceSnapshot {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  accountId    String    @map("account_id") @db.Uuid
+  scraperJobId String?   @map("scraper_job_id") @db.Uuid
+  amount       Decimal   @db.Decimal(12, 2)
+  currencyId   String    @map("currency_id") @db.Uuid
+  kind         String    @db.VarChar(20) // account_balance | next_charge | utilized_credit
+  balanceDate  DateTime? @map("balance_date") @db.Date
+  cardFrame    Decimal?  @map("card_frame") @db.Decimal(12, 2)
+  cardIssuer   String?   @map("card_issuer") @db.VarChar(20)
+  scrapedAt    DateTime  @default(now()) @map("scraped_at") @db.Timestamp(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account    Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  currency   Currency    @relation(fields: [currencyId], references: [id])
+  scraperJob ScraperJob? @relation(fields: [scraperJobId], references: [id], onDelete: SetNull)
+
+  @@index([accountId, scrapedAt])
+  @@index([userId, scrapedAt])
+  @@map("account_balance_snapshots")
+}
+
+// OAuth 2.1 authorization server for the MCP endpoint.
+// Credentials (codes, tokens, grants) use revokedAt/usedAt instead of deletedAt, and expired rows are purged.
+// Secrets are stored only as SHA-256 hashes.
+model OAuthClient {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clientId     String    @unique @map("client_id") @db.VarChar(64)
+  clientName   String    @map("client_name") @db.VarChar(100)
+  redirectUris String[]  @map("redirect_uris")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  lastUsedAt   DateTime? @map("last_used_at") @db.Timestamp(6)
+
+  authorizationRequests OAuthAuthorizationRequest[]
+  grants                OAuthGrant[]
+
+  @@map("oauth_clients")
+}
+
+model OAuthAuthorizationRequest {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestHash   String    @unique @map("request_hash") @db.VarChar(64)
+  clientId      String    @map("client_id") @db.Uuid
+  redirectUri   String    @map("redirect_uri")
+  codeChallenge String    @map("code_challenge") @db.VarChar(128)
+  state         String?
+  scope         String    @db.VarChar(100)
+  resource      String
+  // Bound on first consent view.
+  userId        String?   @map("user_id") @db.Uuid
+  expiresAt     DateTime  @map("expires_at") @db.Timestamp(6)
+  consumedAt    DateTime? @map("consumed_at") @db.Timestamp(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  client OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("oauth_authorization_requests")
+}
+
+// A user's "connection" of a client to the MCP resource.
+model OAuthGrant {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  clientId   String    @map("client_id") @db.Uuid
+  scope      String    @db.VarChar(100)
+  resource   String
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamp(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamp(6)
+
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  authorizationCodes OAuthAuthorizationCode[]
+  refreshTokens      OAuthRefreshToken[]
+  accessTokens       OAuthAccessToken[]
+
+  @@index([userId, revokedAt])
+  @@map("oauth_grants")
+}
+
+model OAuthAuthorizationCode {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  codeHash      String    @unique @map("code_hash") @db.VarChar(64)
+  grantId       String    @map("grant_id") @db.Uuid
+  codeChallenge String    @map("code_challenge") @db.VarChar(128)
+  redirectUri   String    @map("redirect_uri")
+  expiresAt     DateTime  @map("expires_at") @db.Timestamp(6)
+  usedAt        DateTime? @map("used_at") @db.Timestamp(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  grant OAuthGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@map("oauth_authorization_codes")
+}
+
+model OAuthRefreshToken {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tokenHash    String    @unique @map("token_hash") @db.VarChar(64)
+  grantId      String    @map("grant_id") @db.Uuid
+  expiresAt    DateTime  @map("expires_at") @db.Timestamp(6)
+  rotatedAt    DateTime? @map("rotated_at") @db.Timestamp(6)
+  replacedById String?   @map("replaced_by_id") @db.Uuid
+  graceUsedAt  DateTime? @map("grace_used_at") @db.Timestamp(6)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamp(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  grant OAuthGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@index([grantId])
+  @@map("oauth_refresh_tokens")
+}
+
+model OAuthAccessToken {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tokenHash      String    @unique @map("token_hash") @db.VarChar(64)
+  grantId        String    @map("grant_id") @db.Uuid
+  // The refresh token issued in the same pair.
+  refreshTokenId String?   @map("refresh_token_id") @db.Uuid
+  expiresAt      DateTime  @map("expires_at") @db.Timestamp(6)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamp(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  grant OAuthGrant @relation(fields: [grantId], references: [id], onDelete: Cascade)
+
+  @@index([grantId])
+  @@map("oauth_access_tokens")
+}

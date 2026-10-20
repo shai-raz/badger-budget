@@ -1,0 +1,18 @@
+# Dependencies & lockfiles
+node_modules
+pnpm-lock.yaml
+
+# Build outputs
+dist
+build
+out
+.next
+.nuxt
+.output
+.turbo
+.vercel
+coverage
+
+# Generated / not Prettier's business
+apps/api/prisma/migrations
+*.min.*

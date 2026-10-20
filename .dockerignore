@@ -1,0 +1,30 @@
+# Keep local state, secrets and build leftovers out of the image build context.
+**/node_modules
+.git
+.trai
+.agents
+.github
+.claude
+.vscode
+
+# Secrets: local env files and service-account keys never belong in an image.
+**/.env
+**/.env.*
+!**/.env.example
+**/*.secret.json
+
+# Build outputs and caches are rebuilt inside the image.
+**/dist
+**/dist-seed
+**/.output
+**/.nuxt
+**/.turbo
+**/coverage
+*.tsbuildinfo
+
+# Runtime data and debug artifacts from local runs.
+apps/api/debug-artifacts
+apps/api/data
+backups
+data
+*.log

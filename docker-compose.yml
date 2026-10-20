@@ -1,0 +1,123 @@
+# Badger Budget, self-hosted production stack: app + Postgres 16 + nightly backups.
+#
+# Quickstart (no config needed):
+#   curl -O https://raw.githubusercontent.com/shai-raz/badger-budget/main/docker-compose.yml
+#   docker compose up -d
+#   open http://localhost:8080
+#
+# Values come from an optional .env file next to this file (compose reads it automatically).
+# Every variable has a default, so the file is optional. Set JWT_SECRET, JWT_REFRESH_SECRET and
+# CREDENTIAL_ENCRYPTION_PEPPER yourself to pin them; otherwise they are generated into the app_data volume.
+#
+# HTTPS recipe (Caddy, automatic certificates; DOMAIN must point at this host):
+#   DOMAIN=budget.example.com
+#   PUBLIC_URL=https://budget.example.com
+#   TRUST_PROXY_HOPS=1
+#   APP_PORT=127.0.0.1:8080
+#   docker compose --profile https up -d
+#
+# POSTGRES_USER, POSTGRES_PASSWORD and POSTGRES_DB are put into DATABASE_URL unencoded, so use URL-safe characters
+# only (letters, digits, - _ . ~). `openssl rand -hex 24` makes a safe password.
+#
+# Backups: the backup service writes daily dumps to ./backups (see README for restore steps).
+# It is on by default. To turn it off, set BACKUP_REPLICAS=0 in .env and run `docker compose up -d`.
+
+name: badger-budget
+
+services:
+    app:
+        image: ${BADGER_IMAGE:-ghcr.io/shai-raz/badger-budget:latest}
+        restart: unless-stopped
+        depends_on:
+            db:
+                condition: service_healthy
+        # Set APP_PORT=127.0.0.1:8080 when using the https profile, so only Caddy is reachable from outside.
+        ports:
+            - "${APP_PORT:-8080}:8080"
+        volumes:
+            - app_data:/data
+        environment:
+            DATABASE_URL: postgresql://${POSTGRES_USER:-badger}:${POSTGRES_PASSWORD:-badger}@db:5432/${POSTGRES_DB:-badger}
+            PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
+            TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
+            ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-}
+            SEED_DEMO: ${SEED_DEMO:-}
+            JWT_SECRET: ${JWT_SECRET:-}
+            JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-}
+            CREDENTIAL_ENCRYPTION_PEPPER: ${CREDENTIAL_ENCRYPTION_PEPPER:-}
+            FREE_CURRENCY_API_KEY: ${FREE_CURRENCY_API_KEY:-}
+            GOOGLE_SHEETS_TYPE: ${GOOGLE_SHEETS_TYPE:-}
+            GOOGLE_SHEETS_PROJECT_ID: ${GOOGLE_SHEETS_PROJECT_ID:-}
+            GOOGLE_SHEETS_PRIVATE_KEY_ID: ${GOOGLE_SHEETS_PRIVATE_KEY_ID:-}
+            GOOGLE_SHEETS_PRIVATE_KEY: ${GOOGLE_SHEETS_PRIVATE_KEY:-}
+            GOOGLE_SHEETS_CLIENT_EMAIL: ${GOOGLE_SHEETS_CLIENT_EMAIL:-}
+            GOOGLE_SHEETS_CLIENT_ID: ${GOOGLE_SHEETS_CLIENT_ID:-}
+            BROWSERLESS_URL: ${BROWSERLESS_URL:-}
+            R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+            R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+            R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+            R2_BUCKET: ${R2_BUCKET:-}
+            # Read with a default in the API, and an empty string would parse to NaN, so keep the 7-day default here.
+            R2_PRESIGN_TTL: ${R2_PRESIGN_TTL:-604800}
+            CAL_PROXY_URL: ${CAL_PROXY_URL:-}
+            STORE_SCRAPER_DEBUG_LOCALLY: ${STORE_SCRAPER_DEBUG_LOCALLY:-}
+
+    db:
+        image: postgres:16
+        restart: unless-stopped
+        # No ports: the database is reachable only from other services on the compose network.
+        environment:
+            POSTGRES_USER: ${POSTGRES_USER:-badger}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-badger}
+            POSTGRES_DB: ${POSTGRES_DB:-badger}
+        volumes:
+            - pgdata:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    backup:
+        image: prodrigestivill/postgres-backup-local:16
+        restart: unless-stopped
+        # 1 = on (default). BACKUP_REPLICAS=0 in .env turns the service off.
+        scale: ${BACKUP_REPLICAS:-1}
+        # Runs as root so the auto-created ./backups bind mount is writable on any host.
+        user: "0:0"
+        depends_on:
+            db:
+                condition: service_healthy
+        volumes:
+            - ./backups:/backups
+        environment:
+            POSTGRES_HOST: db
+            POSTGRES_DB: ${POSTGRES_DB:-badger}
+            POSTGRES_USER: ${POSTGRES_USER:-badger}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-badger}
+            SCHEDULE: "@daily"
+            BACKUP_KEEP_DAYS: 7
+            BACKUP_KEEP_WEEKS: 4
+            BACKUP_KEEP_MONTHS: 6
+
+    caddy:
+        image: caddy:2
+        profiles: [https]
+        restart: unless-stopped
+        # DOMAIN defaults to localhost, so compose can interpolate this file with the profile off.
+        command: caddy reverse-proxy --from ${DOMAIN:-localhost} --to app:8080
+        ports:
+            - "80:80"
+            - "443:443"
+            - "443:443/udp"
+        volumes:
+            - caddy_data:/data
+            - caddy_config:/config
+        depends_on:
+            - app
+
+volumes:
+    pgdata: {}
+    app_data: {}
+    caddy_data: {}
+    caddy_config: {}

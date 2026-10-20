@@ -1,0 +1,12 @@
+# Revisions listed here are skipped by `git blame`.
+#
+# Enable locally (one-time, per clone):
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# GitHub honours this file automatically in its blame view.
+#
+# Only add commits that are purely mechanical — formatting, renames, and the
+# like — never commits that change behaviour.
+
+# style: format entire repo with Prettier
+94aa79ff04a8f6ba36eee7f09a86a12d427747dc
