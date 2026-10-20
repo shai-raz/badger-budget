@@ -110,6 +110,12 @@ onBeforeUnmount(() => {
     >
         <Toast />
         <div class="w-full max-w-md">
+            <div class="mb-6 flex justify-center">
+                <SharedBrandLogo
+                    variant="stacked"
+                    class="h-20"
+                />
+            </div>
             <Card v-if="errorMessage">
                 <template #title>Authorization unavailable</template>
                 <template #content>

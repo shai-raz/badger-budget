@@ -59,6 +59,12 @@ const handleRegister = async () => {
         class="auth-page flex items-center justify-center min-h-screen bg-surface-50 dark:bg-surface-950 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pl-[calc(0.75rem+env(safe-area-inset-left))] pr-[calc(0.75rem+env(safe-area-inset-right))]"
     >
         <div class="auth-card-wrapper">
+            <div class="mb-6 flex justify-center">
+                <SharedBrandLogo
+                    variant="stacked"
+                    class="h-20 md:h-28"
+                />
+            </div>
             <Card class="w-full">
                 <template #title>
                     <div class="text-center">

@@ -20,7 +20,13 @@ const user = computed(() => authStore.user);
         class="flex flex-col h-full w-52 border-r border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900"
     >
         <div class="flex items-center justify-between px-3 py-2 border-surface-200 dark:border-surface-700">
-            <span class="text-xl font-semibold">Badger</span>
+            <NuxtLink
+                to="/"
+                aria-label="Badger, go to Overview"
+                class="flex"
+            >
+                <SharedBrandLogo class="h-9" />
+            </NuxtLink>
             <Button
                 :icon="themeStore.isDark ? 'pi pi-sun' : 'pi pi-moon'"
                 severity="secondary"
