@@ -6,4 +6,4 @@ Spending limits over a period (daily/weekly/monthly/yearly) tied to one or more 
 - Category overlap across budgets (the same category counted toward more than one budget) is intentional/expected behavior, not a bug — don't "fix" it.
 - A budget has a legacy single `categoryId` plus a `categoryIds[]` / `budgetCategories` join table — `create()` resolves whichever the caller sent into the other. Check `resolveCategoryIds()` before assuming only one shape exists.
 - Spend totals read pre-materialized `TransactionConversion` snapshot rows for cross-currency amounts and treat a missing snapshot as 0 — this is deliberately different from `reports`, which fails hard on unresolvable FX rather than under-reporting. See `transactions/fx-conversion.service.ts`.
-- Deleting a category detaches it from budgets (`categoryId` set to null) rather than cascading the budget delete — see `categories/CLAUDE.md`.
+- Deleting a category detaches it from budgets (`categoryId` set to null) rather than cascading the budget delete — see `categories/AGENTS.md`.

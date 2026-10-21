@@ -4,13 +4,13 @@ NestJS 11 REST API.
 
 - **Global prefix**: `/api/v1`
 - **Auth**: JWT (access + refresh tokens) + Google OAuth 2.0 via Passport.js _(Google OAuth is currently not in use)_. Google routes are only wired when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are both set (otherwise 404). Secrets (`JWT_SECRET`, `JWT_REFRESH_SECRET`, `CREDENTIAL_ENCRYPTION_PEPPER`) come from env, then `DATA_DIR/secrets/<NAME>`, else are generated there on first boot; there are no hardcoded fallbacks (see `src/config/secrets.ts`).
-- **Registration**: open until the first non-demo user exists, then `POST /auth/register` returns 403 unless `ALLOW_REGISTRATION=true`. Google sign-up follows the same rule. See `src/auth/CLAUDE.md`.
+- **Registration**: open until the first non-demo user exists, then `POST /auth/register` returns 403 unless `ALLOW_REGISTRATION=true`. Google sign-up follows the same rule. See `src/auth/AGENTS.md`.
 - **Validation**: `class-validator` + `class-transformer` with global `ValidationPipe` (whitelist + forbidNonWhitelisted)
 - **Rate limiting**: `ThrottlerModule` is configured (10 req/60s default) but the global `ThrottlerGuard` is NOT registered (see #163). OAuth/MCP routes apply `ThrottlerGuard` locally with per-route `@Throttle` limits.
 - **Trust proxy**: `TRUST_PROXY_HOPS` (default 1) sets Express `trust proxy`, which decides `req.ip` and so every per-IP limit. With Cloudflare in front of the proxy use 2 hops (or trust `CF-Connecting-IP` only from Cloudflare ranges). A wrong value makes per-IP limits spoofable (too low) or one global bucket (too high). Per-IP limits are also shared by Anthropic's egress range, so all Claude connectors count together.
 - **Swagger**: `/api/docs`
 - **ORM**: Prisma 6 → PostgreSQL 16; schema at `apps/api/prisma/schema.prisma`
-- All entities use soft-delete (`deletedAt` field) — except `account_balance_snapshots`, an append-only observation log (see Bank sync), and the demo user's rolling-window trim, a hard delete (see `demo/CLAUDE.md`)
+- All entities use soft-delete (`deletedAt` field) — except `account_balance_snapshots`, an append-only observation log (see Bank sync), and the demo user's rolling-window trim, a hard delete (see `demo/AGENTS.md`)
 - **Same-origin SPA**: when `WEB_DIST_DIR` holds a built web app (the Docker image sets it), `config/spa.ts` serves it with an SPA fallback. `/api`, `/.well-known` and missing file-like paths (`/_nuxt/*`, anything with an extension) are never answered by the SPA: they 404. Every response carries `frame-ancestors 'none'` and `X-Frame-Options: DENY`.
 - **Public URLs and CORS**: `PUBLIC_URL` is the one-origin shortcut (`config/public-url.ts`); `API_PUBLIC_URL` and `WEB_APP_URL` override it per service. CORS allows localhost dev origins plus `PUBLIC_URL` and `CORS_ORIGIN`.
 
@@ -37,7 +37,7 @@ The `bank-sync` module automates transaction import from Israeli banks via `isra
 
 ## OAuth (authorization server for MCP)
 
-The `oauth` module makes the API an OAuth 2.1 authorization server for the MCP resource (`/api/v1/mcp`). Details and security invariants: `src/oauth/CLAUDE.md`.
+The `oauth` module makes the API an OAuth 2.1 authorization server for the MCP resource (`/api/v1/mcp`). Details and security invariants: `src/oauth/AGENTS.md`.
 
 - **Endpoints**: `GET /.well-known/oauth-authorization-server` (RFC 8414; served at the host root through the global-prefix exclusion in `app.setup.ts`, as is `/.well-known/oauth-protected-resource/api/v1/mcp` from the `mcp` module), `POST /oauth/register` (RFC 7591 DCR, public clients only), `GET /oauth/authorize`, `POST /oauth/token`, `POST /oauth/revoke` (RFC 7009), plus JWT endpoints for the web app: `GET /oauth/requests/:id`, `POST /oauth/requests/:id/decision`, `GET/DELETE /oauth/connections`, `GET /oauth/mcp-config`.
 - **Model**: `authorize` stores a pending request server-side and redirects to the web consent page (`WEB_APP_URL/oauth/consent?request=...`). An approved decision creates a grant plus a single-use authorization code (PKCE S256 only). `token` exchanges code or refresh token for an opaque access token (1h) and refresh token. Errors are `{ error, error_description }` via `OAuthExceptionFilter`.
@@ -48,7 +48,7 @@ The `oauth` module makes the API an OAuth 2.1 authorization server for the MCP r
 
 ## MCP (LLM insights server)
 
-The `mcp` module exposes read-only tools over MCP for OAuth-authenticated users. Details, local verification recipe and how to add a tool: `src/mcp/CLAUDE.md`.
+The `mcp` module exposes read-only tools over MCP for OAuth-authenticated users. Details, local verification recipe and how to add a tool: `src/mcp/AGENTS.md`.
 
 - **Layers**: `mcp/tools` is the transport-independent registry (`ToolRegistry` + tool classes, no MCP SDK or HTTP imports); `mcp-server.factory.ts` adapts it to an `McpServer` bound to one user; `mcp/http` holds the controller, guards and protected-resource metadata. Tools are registered through the `MCP_TOOLS` token in `mcp.module.ts`.
 - **Transport**: stateless Streamable HTTP, `POST /api/v1/mcp` (server and transport per request, JSON responses); GET/DELETE return 405. Protected-resource metadata (RFC 9728) is served at the host root, outside the global prefix.
