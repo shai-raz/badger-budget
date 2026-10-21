@@ -181,7 +181,7 @@ The web app and API are served from the same origin by default, so the web app n
 
 Start the dev database with `docker compose -f docker-compose.dev.yml up -d`. It publishes PostgreSQL on port 5433. Then run `pnpm install` and `pnpm dev`. The dev web app runs on port 3001 and the API on port 3000.
 
-Project layout, commands and conventions are in [CLAUDE.md](./CLAUDE.md). Architecture notes are in [apps/api/ARCHITECTURE.md](./apps/api/ARCHITECTURE.md) and [apps/web/ARCHITECTURE.md](./apps/web/ARCHITECTURE.md).
+Project layout, commands and conventions are in [AGENTS.md](./AGENTS.md). Architecture notes are in [apps/api/ARCHITECTURE.md](./apps/api/ARCHITECTURE.md) and [apps/web/ARCHITECTURE.md](./apps/web/ARCHITECTURE.md).
 
 ## License
 
