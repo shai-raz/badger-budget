@@ -1,3 +1,10 @@
+<p align="center">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/brand/logo-dark.svg">
+        <img src="apps/web/public/brand/logo-light.svg" alt="Badger" width="240">
+    </picture>
+</p>
+
 # Badger Budget
 
 A personal budgeting and finance web app: accounts, transactions, categories, budgets, reports, and optional bank sync. It runs as one container with a bundled PostgreSQL database and nightly backups.

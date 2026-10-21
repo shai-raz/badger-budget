@@ -1,0 +1,50 @@
+<!-- Shown while the SPA bundle loads; Nuxt removes it once the app mounts. The head theme script has already set
+     `.dark` on <html>, so the backdrop and logo match the theme from the first frame. Colours mirror app.vue's
+     html background fallbacks; the two logo sets are explained in components/shared/BrandLogo.vue. -->
+<div class="badger-loader">
+    <img
+        class="badger-loader-logo badger-loader-light"
+        src="/brand/logo-light.svg"
+        alt="Badger"
+    />
+    <img
+        class="badger-loader-logo badger-loader-dark"
+        src="/brand/logo-dark.svg"
+        alt="Badger"
+    />
+</div>
+<style>
+    .badger-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+    }
+    html.dark .badger-loader {
+        background: #111111;
+    }
+    .badger-loader-logo {
+        width: min(40vw, 10rem);
+        height: auto;
+        animation: badger-loader-pulse 1.6s ease-in-out infinite;
+    }
+    .badger-loader-dark,
+    html.dark .badger-loader-light {
+        display: none;
+    }
+    html.dark .badger-loader-dark {
+        display: block;
+    }
+    @keyframes badger-loader-pulse {
+        50% {
+            opacity: 0.6;
+        }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .badger-loader-logo {
+            animation: none;
+        }
+    }
+</style>

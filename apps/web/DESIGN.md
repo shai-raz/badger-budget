@@ -47,6 +47,7 @@ Rules and tokens for the web UI. Read before any UI change. How the app is built
 
 ## Building blocks
 
+- **Brand logo** (`components/shared/BrandLogo.vue`): `horizontal` in the sidebar and drawer header, `stacked` on the auth and consent pages; sized by a height class. The `-light` files in `public/brand/` only work on light surfaces and the `-dark` ones only on dark, so the component renders both and `.dark` picks one. Never place one set alone.
 - **Section band** (`components/shared/SectionBand.vue`): every page section. Its heading, meta and "see all" link, and its loading, error and empty states; a section passes those props instead of drawing its own.
 - **Empty state** (`components/shared/EmptyState.vue`): the one empty state for a list or section, directly or through a band's `empty` slot.
 - **Entity avatar** (`components/shared/EntityAvatar.vue`): a category or account icon in its colour, with a `fallback` icon for a missing one.

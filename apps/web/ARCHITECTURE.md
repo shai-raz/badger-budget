@@ -10,7 +10,8 @@ Nuxt 4.5 SPA frontend (Vite 8 / Rolldown, Lightning CSS minification). `nuxt` is
 - **Charts**: Chart.js 4 + chartjs-plugin-datalabels
 - **Utilities**: VueUse (`@vueuse/nuxt`)
 - **Bank-sync passkey unlock**: lives in `useSyncUnlock` plus the pure `utils/syncPasskey*` modules (WebAuthn PRF → HKDF → AES-GCM wrapped PIN); the PIN is never persisted client-side.
-- **PWA**: `@vite-pwa/nuxt` — installable, SPA-fallback offline navigation (`/api`, `/.well-known` and `/oauth` excluded from the fallback)
+- **PWA**: `@vite-pwa/nuxt` — installable, SPA-fallback offline navigation (`/api`, `/.well-known` and `/oauth` excluded from the fallback). Icons in `public/` are the light logo's mark on white; the `any` icons sit on a white disc so they still read on the dark manifest `background_color` of the Android splash.
+- **Loading screen**: `app/spa-loading-template.html` shows the stacked logo, theme-matched, until the app mounts.
 - API base URL is relative (`/api/v1` by default), so the web talks to the API on its own origin. `NUXT_PUBLIC_API_BASE_URL` overrides it, but it is inlined at build time, so a change needs a web rebuild. In `pnpm dev:web`, `nitro.devProxy` in `nuxt.config.ts` forwards `/api` and `/.well-known` to the API on port 3000. There is no `apps/web/.env.example`.
 
 ## CSS layer order
