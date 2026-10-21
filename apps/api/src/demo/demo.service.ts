@@ -103,7 +103,7 @@ export class DemoService {
                 // convention. This trims the demo user's rolling window back to
                 // DEMO_WINDOW_MONTHS, and a soft delete would leave the old rows behind forever
                 // (they're never meant to come back), including any the user themselves
-                // soft-deleted. See src/demo/CLAUDE.md.
+                // soft-deleted. See src/demo/AGENTS.md.
                 const { count: trimmed } = await tx.transaction.deleteMany({
                     where: { userId, transactionDate: { lt: windowStart } },
                 });
@@ -148,7 +148,7 @@ export class DemoService {
                 if (synced) return null;
 
                 // Hard delete on purpose — same sanctioned exception to soft-delete as the window
-                // trim: demo data is regenerable. See src/demo/CLAUDE.md.
+                // trim: demo data is regenerable. See src/demo/AGENTS.md.
                 const { count: deleted } = await tx.transaction.deleteMany({ where: { userId } });
 
                 const ctx = await this.loadContext(tx, userId);

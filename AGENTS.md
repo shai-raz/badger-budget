@@ -1,4 +1,4 @@
-# [CLAUDE.md](http://CLAUDE.md)
+# AGENTS.md
 
 This file provides guidance to any agent when working with code in this repository.
 
@@ -76,9 +76,9 @@ Google Sheets integration reads only the `GOOGLE_SHEETS_*` env vars; no key file
 - `pnpm check-types` — passes for every package. Isolate one with `pnpm check-types --filter=web` / `--filter=api` (goes through turbo, so `^build` rebuilds shared packages first); avoid `pnpm --filter <pkg> check-types`, which skips that and can report phantom errors from a stale shared-package `dist/`. The API builds and watches with SWC, and Jest runs through `@swc/jest`; neither type-checks, and CI does not type-check the API, so `--filter=api` is the only type check it gets.
 - `pnpm lint` — `apps/web` is clean (0 warnings), enforced by `--max-warnings 0` and the CI `Web lint & type-check` job. `apps/api` still has ~196 pre-existing warnings; don't chase them. Never introduce new type errors or lint warnings anywhere.
 - `pnpm test` — Jest in `apps/api`, Vitest (`vitest run`) in `apps/web`.
-- For UI changes, also run the app (`pnpm dev:web` / `pnpm dev:api`) and exercise the feature in a browser — passing types/lint/tests doesn’t confirm the feature works. Sign in with the seeded demo account (`demo@demo.demo` / `demo123QWEasd`, from `apps/api/prisma/seed-demo.ts`; it exists only if `SEED_DEMO=true` is set in `apps/api/.env` when you seed) to get realistic data to test against — its transactions are kept current, topped up to today on each demo login (see `apps/api/src/demo/CLAUDE.md`).
+- For UI changes, also run the app (`pnpm dev:web` / `pnpm dev:api`) and exercise the feature in a browser — passing types/lint/tests doesn’t confirm the feature works. Sign in with the seeded demo account (`demo@demo.demo` / `demo123QWEasd`, from `apps/api/prisma/seed-demo.ts`; it exists only if `SEED_DEMO=true` is set in `apps/api/.env` when you seed) to get realistic data to test against — its transactions are kept current, topped up to today on each demo login (see `apps/api/src/demo/AGENTS.md`).
 
-### Keeping [CLAUDE.md](http://CLAUDE.md) / [ARCHITECTURE.md](http://ARCHITECTURE.md) current
+### Keeping AGENTS.md / ARCHITECTURE.md current
 
 These files (root and per-module) are living docs, not a one-time snapshot — you’re expected to edit them, not just read them:
 

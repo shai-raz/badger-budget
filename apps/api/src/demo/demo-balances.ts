@@ -139,14 +139,14 @@ interface BalanceWrite {
 /**
  * Refreshes all 5 demo balance tiles' `accounts.balance`/`balanceKind`/`balanceDate`/`cardFrame`/
  * `balanceUpdatedAt` — the same denormalized columns AccountBalanceService.recordBalances writes
- * for a real scraped balance (see accounts/CLAUDE.md), just computed here instead of scraped.
+ * for a real scraped balance (see accounts/AGENTS.md), just computed here instead of scraped.
  * Called on every demo login (not gated behind the transaction top-up watermark), so the numbers
  * stay current even on a day that doesn't add any new transactions.
  *
  * Bank/savings are derived from the bank account's own ledger (the only one with real transaction
  * history to derive from); the 3 card tiles are derived from the reused card's real current-cycle
  * spend, scaled by an unseeded random factor so the 3 card balances vary independently rather than
- * moving in lockstep. Unseeded like the rest of top-up generation (see CLAUDE.md) — real, if fake,
+ * moving in lockstep. Unseeded like the rest of top-up generation (see AGENTS.md) — real, if fake,
  * variety on every login, not a frozen snapshot.
  */
 export async function refreshDemoBalances(
