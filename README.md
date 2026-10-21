@@ -89,7 +89,15 @@ Point your proxy at the app's port 8080 and set:
 
 `TRUST_PROXY_HOPS` decides which address the app treats as the client's IP, and per-IP login rate limits depend on it. A value that is too high lets clients fake their IP in `X-Forwarded-For` and bypass the limits. A value that is too low counts all users as one proxy's address. The compose file defaults to `0`, which is right only when nothing sits in front of the app.
 
-### Coolify and other platforms
+### Coolify
+
+1. Choose **+ New → Public Repository**, enter `https://github.com/shai-raz/badger-budget` and branch `main`.
+2. Set **Build Pack** to **Docker Compose** and **Docker Compose Location** to `/deploy/coolify/docker-compose.yml`.
+3. Click **Deploy**, open the generated domain, and register the first account.
+
+This runs the published image with PostgreSQL and nightly backups, with nothing built on your server. Coolify generates the domain and the database password. To use your own domain, set it on the `app` service. To update, redeploy.
+
+### Other platforms
 
 Deploy from the root `Dockerfile` or the published image, with port `8080`, a persistent volume at `/data`, and `PUBLIC_URL` and `TRUST_PROXY_HOPS=1` set as above. Use `/api/v1/health` as the health check path. The image ships `wget`, so platform health checks that run `curl` or `wget` inside the container work. Pick `wget` if the platform asks which tool to use.
 
