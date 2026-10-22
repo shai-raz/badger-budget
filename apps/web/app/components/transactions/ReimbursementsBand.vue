@@ -22,6 +22,7 @@ const confirm = useConfirm();
 const { mutate: deleteReimbursement } = useDeleteReimbursement();
 const picker = useReimbursementPicker();
 const linkState = computed(() => linkActionState(props.transaction));
+const isDesktop = useIsDesktop();
 
 const isExpense = computed(() => props.transaction.type === "expense");
 const code = computed(() => props.transaction.currency.code);
@@ -92,7 +93,8 @@ const confirmUnlink = (link: ITransactionReimbursementLink) => {
                 class="inline-flex"
             >
                 <Button
-                    :label="linkState.label"
+                    :label="isDesktop ? linkState.label : 'Link'"
+                    :aria-label="linkState.label"
                     icon="pi pi-link"
                     size="small"
                     severity="secondary"
