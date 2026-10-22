@@ -31,7 +31,8 @@ export function parseTitle(title, body = "") {
         type,
         scope: scope ?? null,
         breaking: bang === "!" || BREAKING_BODY_RE.test(body),
-        subject,
+        // Collapse whitespace runs: Prettier does so inside Markdown paragraphs, which would break the CHANGELOG.md fixed point.
+        subject: subject.replace(/\s+/g, " ").trim(),
     };
 }
 

@@ -21,6 +21,12 @@ test("a conventional title parses into type, scope, breaking and subject", () =>
     });
 });
 
+test("the subject collapses whitespace runs and trims the edges", () => {
+    assert.equal(parseTitle("fix: a  b")?.subject, "a b");
+    assert.equal(parseTitle("fix:  leading")?.subject, "leading");
+    assert.equal(parseTitle("feat(web): x\t\ty  ")?.subject, "x y");
+});
+
 test("every listed type is accepted", () => {
     for (const type of TYPES) {
         assert.notEqual(parseTitle(`${type}: something`), null, type);

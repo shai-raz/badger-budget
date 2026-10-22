@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import * as prettier from "prettier";
 import { prependRelease, renderChangelogMarkdown, renderReleaseNotes } from "../src/changelog.mjs";
+import { parseTitle } from "../src/conventional.mjs";
 
 const REPO = "owner/badger";
 
@@ -98,6 +99,13 @@ const hostile = {
         { type: "feat", scope: null, breaking: false, subject: "1. numbered start", pr: null },
         { type: "feat", scope: null, breaking: false, subject: "+ plus start and # heading ~~x~~ a|b", pr: null },
         { type: "feat", scope: "web", breaking: false, subject: "back\\slash and a * b", pr: null },
+        {
+            type: "fix",
+            scope: null,
+            breaking: false,
+            subject: parseTitle("fix:  doubled  spaces\tand a tab ").subject,
+            pr: null,
+        },
     ],
 };
 
@@ -116,6 +124,7 @@ test("renderReleaseNotes escapes Markdown in subjects and scopes so they render 
             [
                 "- **api\\*:** \\_\\_init\\_\\_ crashes on \\*bold\\* input ([#40](https://github.com/owner/badger/pull/40))",
                 "- snake_case_name and R\\&D \\<beta\\> \\`code\\` \\[link\\](x)",
+                "- doubled spaces and a tab",
             ].join("\n"),
         ].join("\n\n"),
     ].join("\n\n");
