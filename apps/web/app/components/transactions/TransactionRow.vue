@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { ITransactionResponse } from "@badger/types";
 import { DEFAULT_CATEGORY_AVATAR_ICON, UNCATEGORIZED_CATEGORY } from "@badger/shared-data";
-import { formatDate, transactionSign, transactionAmountClass } from "./formatters";
+import { formatDate, transactionSign } from "./formatters";
 import { formatCurrency } from "~/utils/currency";
 import { normalizeHex } from "~/utils/color";
+import { displayAmount, incomeRemainderLine, reimbursementSubLine, rowAmountClass } from "~/utils/reimbursement";
 
 interface Props {
     transaction: ITransactionResponse;
@@ -43,6 +44,8 @@ const emit = defineEmits<{
 const category = computed(() => props.transaction.category);
 const categoryColor = computed(() => normalizeHex(category.value?.color) ?? UNCATEGORIZED_CATEGORY.color);
 const categoryName = computed(() => category.value?.name || UNCATEGORIZED_CATEGORY.name);
+const reimbursementLine = computed(() => reimbursementSubLine(props.transaction));
+const remainderLine = computed(() => incomeRemainderLine(props.transaction));
 
 const handleRowClick = () => {
     if (props.clickable) {
@@ -91,6 +94,13 @@ const handleMenuToggle = (event: Event) => {
                 >{{ formatDate(transaction.transactionDate) }} &middot;
                 {{ subLine === "date-category" ? categoryName : transaction.account.name }}
             </div>
+            <!-- Reimbursement link summary (expense: back so far; income: what it pays back) -->
+            <div
+                v-if="reimbursementLine"
+                class="truncate text-[12.5px] text-muted-color"
+            >
+                {{ reimbursementLine }}
+            </div>
         </div>
 
         <!-- Category pill (hidden below md to avoid crowding narrow rows) -->
@@ -104,11 +114,22 @@ const handleMenuToggle = (event: Event) => {
         <!-- Signed, color-coded amount. Reserves a 130px column on desktop so the
              amounts line up, but only as a minimum — large values grow the cell
              instead of being clipped. Mobile lets it size to content. -->
-        <div
-            class="shrink-0 text-right text-sm font-semibold tabular-nums md:min-w-[130px]"
-            :class="transactionAmountClass(transaction)"
-        >
-            {{ transactionSign(transaction) }}{{ formatCurrency(transaction.amount, transaction.currency.code) }}
+        <!-- Expenses show their net amount (after reimbursements); an income that pays back
+             expenses renders muted, with its remaining income share on a second line. -->
+        <div class="shrink-0 text-right tabular-nums md:min-w-[130px]">
+            <div
+                class="text-sm font-semibold"
+                :class="rowAmountClass(transaction)"
+            >
+                {{ transactionSign(transaction)
+                }}{{ formatCurrency(displayAmount(transaction), transaction.currency.code) }}
+            </div>
+            <div
+                v-if="remainderLine"
+                class="text-[11.5px] font-medium text-teal-500"
+            >
+                {{ remainderLine }}
+            </div>
         </div>
 
         <!-- Overflow menu (shown on both mobile and desktop; stops propagation so it doesn't trigger row navigation) -->
