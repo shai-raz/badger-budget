@@ -97,7 +97,22 @@ function isEarlierGroup(item, title) {
  * @returns {string}
  */
 function renderBullet(item, repo) {
-    const scope = item.scope ? `**${item.scope}:** ` : "";
+    const scope = item.scope ? `**${escapeMarkdown(item.scope)}:** ` : "";
     const pr = typeof item.pr === "number" ? ` ([#${item.pr}](https://github.com/${repo}/pull/${item.pr}))` : "";
-    return `- ${scope}${item.subject}${pr}`;
+    return `- ${scope}${escapeMarkdown(item.subject)}${pr}`;
+}
+
+/**
+ * Backslash-escapes the Markdown a commit subject can carry, so it renders as typed. The escapes are the ones
+ * Prettier keeps, so the committed CHANGELOG.md stays a fixed point of `prettier --write`. Underscores are escaped
+ * only at word edges, where they would start or end emphasis; `snake_case` stays readable.
+ * @param {string} text
+ * @returns {string}
+ */
+function escapeMarkdown(text) {
+    return text
+        .replace(/[\\`*[\]<>&~#|]/g, "\\$&")
+        .replace(/(?<![A-Za-z0-9])_|_(?![A-Za-z0-9])/g, "\\_")
+        .replace(/^[+-](?=\s|$)/, "\\$&")
+        .replace(/^(\d+)([.)])(?=\s|$)/, "$1\\$2");
 }
