@@ -169,6 +169,7 @@ describe("TransactionsService", () => {
             currency: { code: "USD" },
         });
         mockPrismaService.reimbursementAllocation.findMany.mockResolvedValue([]);
+        mockPrismaService.reimbursementAllocation.aggregate.mockResolvedValue({ _sum: { amount: null } });
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 TransactionsService,
@@ -887,6 +888,78 @@ describe("TransactionsService", () => {
             expect(result.count).toBe(2);
         });
 
+        describe("reimbursement netting", () => {
+            // The expense-side query filters `expense.AND`; the income-side query's `expense` is plain ACTIVE_SIDE.
+            const sideOf = (args: { where: { expense: object } }) =>
+                "AND" in args.where.expense ? "expense" : "income";
+            const mockAllocationSums = (expenseSide: number, incomeSide: number) =>
+                mockPrismaService.reimbursementAllocation.aggregate.mockImplementation(({ where }) =>
+                    Promise.resolve({
+                        _sum: { amount: decimal(sideOf({ where }) === "expense" ? expenseSide : incomeSide) },
+                    }),
+                );
+
+            it("subtracts the active reimbursements from expenses", async () => {
+                mockPrismaService.transaction.groupBy
+                    .mockResolvedValueOnce([
+                        {
+                            type: "expense",
+                            transferDirection: null,
+                            _sum: { amount: decimal(600) },
+                            _count: { _all: 2 },
+                        },
+                    ])
+                    .mockResolvedValueOnce([]);
+                mockPrismaService.transaction.findFirst.mockResolvedValue(null);
+                mockAllocationSums(300, 0);
+
+                const result = await service.getSummary("test-user", {});
+
+                expect(result).toMatchObject({ income: 0, expenses: 300, net: -300, count: 2 });
+            });
+
+            it("subtracts the allocated part from income and keeps the remainder", async () => {
+                mockPrismaService.transaction.groupBy
+                    .mockResolvedValueOnce([
+                        {
+                            type: "income",
+                            transferDirection: null,
+                            _sum: { amount: decimal(350) },
+                            _count: { _all: 1 },
+                        },
+                    ])
+                    .mockResolvedValueOnce([]);
+                mockPrismaService.transaction.findFirst.mockResolvedValue(null);
+                mockAllocationSums(0, 300);
+
+                const result = await service.getSummary("test-user", {});
+
+                expect(result).toMatchObject({ income: 50, expenses: 0, net: 50, count: 1 });
+            });
+
+            it("scopes both allocation queries by the row filters and keeps a type filter from widening them", async () => {
+                mockPrismaService.transaction.groupBy.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+                mockPrismaService.transaction.findFirst.mockResolvedValue(null);
+
+                await service.getSummary("test-user", { type: "income", categoryIds: ["cat-1"] });
+
+                const calls = mockPrismaService.reimbursementAllocation.aggregate.mock.calls.map(([args]) => args);
+                const expenseSide = calls.find((args) => sideOf(args) === "expense");
+                const incomeSide = calls.find((args) => sideOf(args) === "income");
+                // The expense side ANDs the row filters with type expense: the caller's type income can only narrow it to nothing.
+                expect(expenseSide.where.expense.AND).toEqual([
+                    expect.objectContaining({ userId: "test-user", hidden: false, type: "income" }),
+                    { type: "expense" },
+                ]);
+                expect(expenseSide.where.income).toEqual({ deletedAt: null, hidden: false });
+                expect(incomeSide.where.income.AND).toEqual([
+                    expect.objectContaining({ userId: "test-user", hidden: false, type: "income" }),
+                    { type: "income" },
+                ]);
+                expect(incomeSide.where.expense).toEqual({ deletedAt: null, hidden: false });
+            });
+        });
+
         describe("linked transfer legs", () => {
             const group = (type: string, dir: string | null, n: number, c = 1) => ({
                 type,
@@ -1210,6 +1283,41 @@ describe("TransactionsService", () => {
             expect(args.where.AND[1].OR[0]).toEqual({ description: { contains: "cof", mode: "insensitive" } });
             expect(args.orderBy).toEqual([{ amount: "asc" }, { id: "desc" }]);
         });
+
+        it("netAmount nets expenses and incomes by their active links, and keeps hidden rows and transfers gross", async () => {
+            const link = (n: string) => ({ amount: new Prisma.Decimal(n) });
+            mockPrismaService.transaction.findMany.mockResolvedValue([
+                { ...leanRow, id: "exp", amount: new Prisma.Decimal("600"), reimbursedBy: [link("150"), link("150")] },
+                { ...leanRow, id: "inc", type: "income", amount: new Prisma.Decimal("350"), reimburses: [link("300")] },
+                { ...leanRow, id: "hid", hidden: true, amount: new Prisma.Decimal("600"), reimbursedBy: [link("150")] },
+                {
+                    ...leanRow,
+                    id: "xfer",
+                    type: "transfer",
+                    amount: new Prisma.Decimal("80"),
+                    reimbursedBy: [link("150")],
+                },
+            ]);
+            mockPrismaService.transaction.count.mockResolvedValue(4);
+
+            const result = await service.searchLean("u1", {}, { skip: 0, take: 10 });
+
+            expect(result.rows.map((r) => [r.id, r.amount, r.netAmount])).toEqual([
+                ["exp", 600, 300],
+                ["inc", 350, 50],
+                ["hid", 600, 600],
+                ["xfer", 80, 80],
+            ]);
+            const args = mockPrismaService.transaction.findMany.mock.calls[0][0];
+            expect(args.select.reimbursedBy).toEqual({
+                where: { income: { deletedAt: null, hidden: false } },
+                select: { amount: true },
+            });
+            expect(args.select.reimburses).toEqual({
+                where: { expense: { deletedAt: null, hidden: false } },
+                select: { amount: true },
+            });
+        });
     });
 
     describe("aggregate", () => {
@@ -1332,6 +1440,157 @@ describe("TransactionsService", () => {
             ]);
             const rows = await service.aggregate("u1", filters, "merchant");
             expect(rows[0]).toMatchObject({ key: "Shufersal", label: "Shufersal", count: 2 });
+        });
+
+        describe("reimbursement netting", () => {
+            // Two 150 links: a March expense of 600 reimbursed by an April income of 350 (300 allocated).
+            const expenseLinks = [
+                {
+                    amount: new Prisma.Decimal("150"),
+                    expense: {
+                        type: "expense",
+                        transactionDate: new Date("2025-03-10"),
+                        categoryId: "c1",
+                        description: "Dinner",
+                        accountId: "a1",
+                        currencyId: "cur-ils",
+                        transferDirection: null,
+                    },
+                },
+                {
+                    amount: new Prisma.Decimal("150"),
+                    expense: {
+                        type: "expense",
+                        transactionDate: new Date("2025-03-10"),
+                        categoryId: "c1",
+                        description: "Dinner",
+                        accountId: "a1",
+                        currencyId: "cur-ils",
+                        transferDirection: null,
+                    },
+                },
+            ];
+            const incomeLinks = [
+                {
+                    amount: new Prisma.Decimal("150"),
+                    income: {
+                        type: "income",
+                        transactionDate: new Date("2025-04-05"),
+                        categoryId: "c2",
+                        description: "Refund",
+                        accountId: "a1",
+                        currencyId: "cur-ils",
+                        transferDirection: null,
+                    },
+                },
+                {
+                    amount: new Prisma.Decimal("150"),
+                    income: {
+                        type: "income",
+                        transactionDate: new Date("2025-04-05"),
+                        categoryId: "c2",
+                        description: "Refund",
+                        accountId: "a1",
+                        currencyId: "cur-ils",
+                        transferDirection: null,
+                    },
+                },
+            ];
+            const mockLinks = () =>
+                mockPrismaService.reimbursementAllocation.findMany.mockImplementation(({ where }) =>
+                    Promise.resolve("AND" in where.expense ? expenseLinks : incomeLinks),
+                );
+
+            it("month: the expense's gross leaves its own month and the income's leaves April", async () => {
+                mockPrismaService.transaction.groupBy.mockResolvedValue([
+                    {
+                        transactionDate: new Date("2025-03-10"),
+                        type: "expense",
+                        transferDirection: null,
+                        currencyId: "cur-ils",
+                        _sum: { amount: new Prisma.Decimal("600") },
+                        _count: { _all: 2 },
+                    },
+                    {
+                        transactionDate: new Date("2025-04-05"),
+                        type: "income",
+                        transferDirection: null,
+                        currencyId: "cur-ils",
+                        _sum: { amount: new Prisma.Decimal("350") },
+                        _count: { _all: 1 },
+                    },
+                ]);
+                mockLinks();
+
+                const rows = await service.aggregate("u1", filters, "month");
+
+                expect(rows).toContainEqual({
+                    key: "2025-03",
+                    label: "2025-03",
+                    type: "expense",
+                    transferDirection: null,
+                    currencyCode: "ILS",
+                    sum: 300,
+                    count: 2,
+                });
+                expect(rows).toContainEqual({
+                    key: "2025-04",
+                    label: "2025-04",
+                    type: "income",
+                    transferDirection: null,
+                    currencyCode: "ILS",
+                    sum: 50,
+                    count: 1,
+                });
+            });
+
+            it("category: each side is netted in its own category bucket", async () => {
+                mockPrismaService.transaction.groupBy.mockResolvedValue([
+                    {
+                        categoryId: "c1",
+                        type: "expense",
+                        transferDirection: null,
+                        currencyId: "cur-ils",
+                        _sum: { amount: new Prisma.Decimal("600") },
+                        _count: { _all: 2 },
+                    },
+                    {
+                        categoryId: "c2",
+                        type: "income",
+                        transferDirection: null,
+                        currencyId: "cur-ils",
+                        _sum: { amount: new Prisma.Decimal("350") },
+                        _count: { _all: 1 },
+                    },
+                ]);
+                mockPrismaService.category.findMany.mockResolvedValue([
+                    { id: "c1", name: "Food" },
+                    { id: "c2", name: "Refunds" },
+                ]);
+                mockLinks();
+
+                const rows = await service.aggregate("u1", filters, "category");
+
+                expect(rows.map((r) => [r.label, r.type, r.sum, r.count])).toEqual([
+                    ["Food", "expense", 300, 2],
+                    ["Refunds", "income", 50, 1],
+                ]);
+            });
+
+            it("scopes the allocation queries by the row filters and the type", async () => {
+                mockPrismaService.transaction.groupBy.mockResolvedValue([]);
+                mockLinks();
+
+                await service.aggregate("u1", { ...filters, type: "income" }, "month");
+
+                const calls = mockPrismaService.reimbursementAllocation.findMany.mock.calls.map(([args]) => args);
+                const expenseSide = calls.find((args) => "AND" in args.where.expense);
+                expect(expenseSide.where.expense.AND).toEqual([
+                    expect.objectContaining({ userId: "u1", type: "income" }),
+                    { type: "expense", hidden: false },
+                ]);
+                expect(expenseSide.where.income).toEqual({ deletedAt: null, hidden: false });
+            });
         });
     });
 
