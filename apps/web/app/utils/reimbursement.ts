@@ -1,5 +1,10 @@
-import type { ITransactionReimbursement, ITransactionReimbursementLink, ITransactionResponse } from "@badger/types";
-import { transactionAmountClass } from "../components/transactions/formatters";
+import type {
+    IReimbursementCandidate,
+    ITransactionReimbursement,
+    ITransactionReimbursementLink,
+    ITransactionResponse,
+} from "@badger/types";
+import { formatDate, transactionAmountClass } from "../components/transactions/formatters";
 import { formatCurrency } from "./currency";
 
 /**
@@ -162,4 +167,36 @@ export function linkRemovalWarning(
 export function linksRemovedSuffix(linksRemoved: number | undefined): string {
     if (!linksRemoved) return "";
     return ` · ${linksRemoved} reimbursement link${linksRemoved === 1 ? "" : "s"} removed`;
+}
+
+/** The reimbursement picker's source row is an expense (linking income to it) or an income (allocating it). */
+export type ReimbursementSourceType = IReimbursementCandidate["type"];
+
+/** Header caption for the picker's source: what it still has to reimburse or allocate. */
+export function remainingCaption(sourceType: ReimbursementSourceType, remaining: number, code: string): string {
+    const amount = formatCurrency(remaining, code);
+    return sourceType === "expense" ? `${amount} left to reimburse` : `${amount} left to allocate`;
+}
+
+/** Heading over the suggested group. The threshold is the source's remaining amount. */
+export function suggestedHeading(sourceType: ReimbursementSourceType, remaining: number, code: string): string {
+    const amount = formatCurrency(remaining, code);
+    return sourceType === "expense" ? `Suggested · incomes ≤ ${amount}` : `Suggested · expenses ≥ ${amount}`;
+}
+
+/** Divider label over the rest of the candidates: the opposite side of the source. */
+export function otherGroupLabel(sourceType: ReimbursementSourceType): string {
+    return sourceType === "expense" ? "Other incomes" : "Other expenses";
+}
+
+/** Secondary line under a candidate: `date · additional description · category`, skipping empty parts. */
+export function candidateMetaLine(
+    candidate: Pick<IReimbursementCandidate, "transactionDate" | "additionalDescription" | "category">,
+): string {
+    const parts = [
+        formatDate(candidate.transactionDate),
+        candidate.additionalDescription?.trim(),
+        candidate.category?.name,
+    ];
+    return parts.filter((part): part is string => !!part).join(" · ");
 }

@@ -62,6 +62,7 @@ Rules and tokens for the web UI. Read before any UI change. How the app is built
 - **Budget list** (`components/budgets/BudgetList.vue`): the list of budget rows, shared by Overview and the Budgets page.
 - **Progress bar** (`components/budgets/BudgetProgressBar.vue`): a budget's spend, coloured by level. The only budget bar.
 - **Period stepper** (`components/budgets/PeriodStepper.vue`): moves a budget list between periods. See [Period stepper](#period-stepper).
+- **Reimbursement candidate row** (`components/transactions/ReimbursementCandidateRow.vue`): one selectable transaction in the reimbursement picker. A `role="radio"` inside a radiogroup, with the description and amount on one line and a muted meta line under it. Selected = primary border and ring on a `surface-100` (dark `surface-800`) ground.
 
 Avatars use Lucide icons through `utils/avatarIcons.ts`. Other UI uses PrimeIcons.
 

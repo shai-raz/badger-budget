@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { ITransactionReimbursement, ITransactionReimbursementLink } from "@badger/types";
+import type { IReimbursementCandidate, ITransactionReimbursement, ITransactionReimbursementLink } from "@badger/types";
 import {
+    candidateMetaLine,
     defaultApplyAmount,
     displayAmount,
     incomeRemainderLine,
@@ -10,9 +11,12 @@ import {
     linkRemovalWarning,
     linksRemovedSuffix,
     maxLinkAmount,
+    otherGroupLabel,
+    remainingCaption,
     reimbursementSubLine,
     remainingToLink,
     rowAmountClass,
+    suggestedHeading,
     type ReimbursementTx,
 } from "./reimbursement";
 
@@ -549,5 +553,42 @@ describe("editDialogReimbursementLine", () => {
         expect(editDialogReimbursementLine({ currency: ILS, reimbursement: withLinks("income", 3, 300) })).toBe(
             "Reimburses 3 expenses",
         );
+    });
+});
+
+describe("candidateMetaLine", () => {
+    const candidate = (
+        overrides: Partial<Pick<IReimbursementCandidate, "additionalDescription" | "category">> = {},
+    ) => ({
+        transactionDate: new Date("2026-03-01T12:00:00Z"),
+        additionalDescription: "Team lunch",
+        category: { id: "cat-1", name: "Food", color: null, icon: null },
+        ...overrides,
+    });
+
+    it("joins date, additional description and category with a middle dot", () => {
+        expect(candidateMetaLine(candidate())).toBe("Mar 1, 2026 · Team lunch · Food");
+    });
+
+    it("skips an empty or blank additional description and a missing category", () => {
+        expect(candidateMetaLine(candidate({ additionalDescription: "   ", category: null }))).toBe("Mar 1, 2026");
+        expect(candidateMetaLine(candidate({ additionalDescription: null }))).toBe("Mar 1, 2026 · Food");
+    });
+});
+
+describe("picker headings", () => {
+    it("names the threshold by the source type", () => {
+        expect(suggestedHeading("expense", 300, "ILS")).toBe("Suggested · incomes ≤ ₪300.00");
+        expect(suggestedHeading("income", 200, "ILS")).toBe("Suggested · expenses ≥ ₪200.00");
+    });
+
+    it("labels the other group with the opposite side", () => {
+        expect(otherGroupLabel("expense")).toBe("Other incomes");
+        expect(otherGroupLabel("income")).toBe("Other expenses");
+    });
+
+    it("captions what the source still has to reimburse or allocate", () => {
+        expect(remainingCaption("expense", 300, "ILS")).toBe("₪300.00 left to reimburse");
+        expect(remainingCaption("income", 200, "ILS")).toBe("₪200.00 left to allocate");
     });
 });

@@ -4,6 +4,7 @@ import AppSidebar from "~/components/layout/AppSidebar.vue";
 import NavDrawer from "~/components/layout/NavDrawer.vue";
 import BudgetFormDialog from "~/components/budgets/BudgetFormDialog.vue";
 import CashFollowupToast from "~/components/transactions/CashFollowupToast.vue";
+import ReimbursementPickerDialog from "~/components/transactions/ReimbursementPickerDialog.vue";
 
 // `definePageMeta({ fullBleed: true })` opts a page out of the scroller's
 // mobile padding so its sections can span the full screen width (see below).
@@ -66,6 +67,7 @@ useHead({ bodyAttrs: { class: "app-layout-body" } });
         <AppBottomBar class="md:hidden" />
         <NavDrawer />
         <BudgetFormDialog />
+        <ReimbursementPickerDialog />
     </div>
 </template>
 

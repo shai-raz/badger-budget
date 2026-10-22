@@ -1,6 +1,8 @@
-import { useMutation, useQueryClient, type QueryClient } from "@tanstack/vue-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/vue-query";
+import { refDebounced } from "@vueuse/core";
 import { useToast } from "primevue/usetoast";
 import type { ICreateReimbursementAllocation } from "@badger/types";
+import type { Ref } from "vue";
 import { useApiClient } from "../useApiClient";
 import { getApiErrorMessage } from "../../utils/apiError";
 import { budgetKeys } from "../useBudgets";
@@ -27,6 +29,22 @@ export async function invalidateReimbursementAffected(queryClient: QueryClient):
         queryClient.invalidateQueries({ queryKey: reimbursementKeys.all }),
         queryClient.invalidateQueries({ queryKey: accountKeys.all }),
     ]);
+}
+
+/**
+ * Link candidates for the picker. `search` is debounced so each keystroke doesn't hit the API;
+ * `keepPreviousData` keeps the last list on screen while the next one loads.
+ */
+export function useReimbursementCandidates(transactionId: Ref<string | null>, search: Ref<string>) {
+    const apiClient = useApiClient();
+    const debouncedSearch = refDebounced(search, 250);
+
+    return useQuery({
+        queryKey: computed(() => reimbursementKeys.candidates(transactionId.value ?? "", debouncedSearch.value.trim())),
+        queryFn: () => apiClient.getReimbursementCandidates(transactionId.value ?? "", debouncedSearch.value),
+        enabled: computed(() => !!transactionId.value),
+        placeholderData: keepPreviousData,
+    });
 }
 
 export function useCreateReimbursement() {
