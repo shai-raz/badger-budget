@@ -116,7 +116,7 @@ export class TransactionsController {
 
     @Post(":id/mark-card-payoff")
     @ApiOperation({ summary: "Mark transaction as a card payoff and hide all matching transactions as transfers" })
-    @ApiResponse({ status: 200, description: "Pattern created and transactions updated" })
+    @ApiResponse({ status: 200, description: "Pattern created and transactions updated; response has linksRemoved" })
     @ApiResponse({ status: 404, description: "Transaction not found" })
     async markCardPayoffPattern(
         @Param("id") id: string,

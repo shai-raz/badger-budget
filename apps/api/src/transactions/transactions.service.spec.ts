@@ -1985,11 +1985,11 @@ describe("TransactionsService", () => {
 
             mockPrismaService.transaction.findFirst.mockResolvedValue({ id: "transaction-id", type: "expense" });
             mockCardPayoffPatternsService.create.mockResolvedValue(pattern);
-            mockCardPayoffPatternsService.applyPatternDescription.mockResolvedValue({ count: 4 });
+            mockCardPayoffPatternsService.applyPatternDescription.mockResolvedValue({ count: 4, linksRemoved: 2 });
 
             const result = await service.markAsCardPayoff("transaction-id", "test-user", "כ.א.ל חיוב");
 
-            expect(result).toEqual({ count: 4, pattern });
+            expect(result).toEqual({ count: 4, linksRemoved: 2, pattern });
             expect(mockCardPayoffPatternsService.create).toHaveBeenCalledWith("test-user", {
                 description: "כ.א.ל חיוב",
             });

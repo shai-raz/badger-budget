@@ -1124,6 +1124,7 @@ export class TransactionsService {
 
         return {
             count: result.count,
+            linksRemoved: result.linksRemoved,
             pattern,
         };
     }

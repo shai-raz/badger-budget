@@ -36,6 +36,7 @@ import type {
     IUpdateReimbursementAllocation,
     IReimbursementAllocationResponse,
     IReimbursementCandidatesResponse,
+    ICardPayoffLinkPreview,
 } from "@badger/types";
 
 export interface ApiClientConfig {
@@ -415,7 +416,10 @@ export class ApiClient {
     }
 
     async markTransactionAsCardPayoff(id: string, description: string) {
-        const response = await this.client.post(`/transactions/${id}/mark-card-payoff`, { description });
+        const response = await this.client.post<{ count: number; linksRemoved: number; pattern: ICardPayoffPattern }>(
+            `/transactions/${id}/mark-card-payoff`,
+            { description },
+        );
         return response.data;
     }
 
@@ -455,7 +459,21 @@ export class ApiClient {
     }
 
     async applyAllCardPayoffPatterns() {
-        const response = await this.client.post<{ count: number }>("/card-payoff-patterns/apply-all");
+        const response = await this.client.post<{ count: number; linksRemoved: number }>(
+            "/card-payoff-patterns/apply-all",
+        );
+        return response.data;
+    }
+
+    async getCardPayoffLinkPreview(description: string) {
+        const response = await this.client.get<ICardPayoffLinkPreview>("/card-payoff-patterns/link-preview", {
+            params: { description },
+        });
+        return response.data;
+    }
+
+    async getApplyAllCardPayoffLinkPreview() {
+        const response = await this.client.get<ICardPayoffLinkPreview>("/card-payoff-patterns/apply-all/link-preview");
         return response.data;
     }
 
