@@ -482,6 +482,22 @@ describe("BudgetsService", () => {
             expect(analyticsQuery.where.transactionDate.lte.toISOString()).toBe("2026-01-18T07:59:59.999Z");
         });
 
+        it("excludes hidden expenses from the period spend query", async () => {
+            mockPrismaService.budget.findFirst.mockResolvedValue({ ...mockBudget, period: "monthly" });
+            mockPrismaService.transaction.findMany.mockResolvedValue([]);
+
+            await service.getAnalytics("budget-id", "test-user");
+
+            expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        type: "expense",
+                        hidden: false,
+                    }),
+                }),
+            );
+        });
+
         it("should use FX conversion snapshot amount for cross-currency spend", async () => {
             const budget = {
                 ...mockBudget,

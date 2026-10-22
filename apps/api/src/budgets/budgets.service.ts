@@ -275,7 +275,8 @@ export class BudgetsService {
 
         const categoryIds = this.getBudgetCategoryIds(budget);
 
-        // Sum expense transactions within the window whose categories overlap this budget
+        // Sum expense transactions within the window whose categories overlap this budget.
+        // Hidden expenses are excluded, matching the transactions summary totals.
         const transactions = await this.db.transaction.findMany({
             where: {
                 userId,
@@ -283,6 +284,7 @@ export class BudgetsService {
                     in: categoryIds,
                 },
                 deletedAt: null,
+                hidden: false,
                 type: "expense",
                 transactionDate: {
                     gte: periodWindow.periodStart,

@@ -2,7 +2,7 @@
 
 Core ledger entries. Also owns FX conversion and the bank/sheet import pipeline (no controller of its own for the latter).
 
-- Three `type`s: `income`, `expense`, `transfer`. `hidden` and `transferDirection` (`in`/`out`) are independent flags, not derived from `type` — a transaction can be an expense that's also hidden, etc. Transfers are excluded from income/expense totals wherever spend is aggregated (reports, budgets).
+- Three `type`s: `income`, `expense`, `transfer`. `hidden` and `transferDirection` (`in`/`out`) are independent flags, not derived from `type` — a transaction can be an expense that's also hidden, etc. Transfers are excluded from income/expense totals wherever spend is aggregated (reports, budgets). Hidden expenses are excluded from those spend totals too (budgets, reports, MCP budget/spending tools), the same as the transactions summary.
 - `mark-card-payoff` and the `card-payoff-patterns` module retag transactions as hidden transfers by exact description match — see `card-payoff-patterns/AGENTS.md`.
 - `fx-conversion.service.ts`: `getRate()` is a read-only lookup (cache → provider fetch → throws if unresolvable); budgets and reports each decide differently how to handle a missing rate (see `budgets/AGENTS.md`). Provider is `freecurrencyapi.com`, gated by `FREE_CURRENCY_API_KEY`.
 - `transaction-import.service.ts` is the shared landing zone for rows coming from `bank-sync` (scraper) and `google-sheets` (spreadsheet sync) — both call into it rather than writing `Transaction` rows directly. Look here first when import behavior (dedup, category resolution, currency handling) seems wrong regardless of which source triggered it.

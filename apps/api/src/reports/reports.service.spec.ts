@@ -123,6 +123,7 @@ describe("ReportsService", () => {
                 where: expect.objectContaining({
                     userId: "user-id",
                     deletedAt: null,
+                    hidden: false,
                     type: "expense",
                     transactionDate: {
                         gte: new Date("2026-07-01"),

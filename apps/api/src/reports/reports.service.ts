@@ -114,6 +114,7 @@ export class ReportsService {
             where: {
                 userId,
                 deletedAt: null,
+                hidden: false,
                 type: "expense",
                 transactionDate: {
                     gte: start,

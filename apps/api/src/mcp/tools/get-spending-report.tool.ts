@@ -29,7 +29,7 @@ export class GetSpendingReportTool implements McpToolDefinition<typeof inputSche
     readonly title = "Get spending report";
     readonly description =
         "Spending report for a date range: total, transaction count and a per-category breakdown (sorted by amount, descending). " +
-        "Covers expenses only (not income), converted to the display currency. `comparison` is the previous period of equal length, " +
+        "Covers expenses only (not income, and not hidden expenses), converted to the display currency. `comparison` is the previous period of equal length, " +
         "with `changePercentage` (null when the previous total is 0) and `direction` (up, down or flat). " +
         "`percentage` per category is its share of the total (0-100). A categoryId of null is the Uncategorized bucket. " +
         "The call fails if an FX rate needed for the conversion is unavailable.";
