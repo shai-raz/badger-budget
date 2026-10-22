@@ -23,8 +23,27 @@ node packages/release/bin/release.mjs --repo shai-raz/badger-budget --dry-run
 To regenerate `CHANGELOG.md` from `apps/api/changelog.json` after editing the JSON by hand:
 
 ```bash
-node packages/release/bin/release.mjs --render-only
+node packages/release/bin/release.mjs --repo shai-raz/badger-budget --render-only
 ```
+
+## Recovering a release whose GitHub release failed
+
+The push is atomic, so a tag on main means the release commit landed too. If `Create the GitHub release` fails after
+that, the next run finds the tag and releases nothing, so create the GitHub release by hand from the newest entry in
+`apps/api/changelog.json` (run from a fresh checkout of main):
+
+```bash
+node --input-type=module --eval "
+import fs from 'node:fs';
+import { renderReleaseNotes } from './packages/release/src/changelog.mjs';
+const [latest] = JSON.parse(fs.readFileSync('apps/api/changelog.json', 'utf8')).releases;
+fs.writeFileSync('release-notes.md', renderReleaseNotes(latest, 'shai-raz/badger-budget'));
+console.log(latest.version);
+"
+gh release create vX.Y.Z --verify-tag --title vX.Y.Z --latest --notes-file release-notes.md
+```
+
+Replace `vX.Y.Z` with the version the script printed.
 
 ## Owner setup
 
