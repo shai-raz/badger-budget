@@ -737,11 +737,6 @@ export class TransactionsService {
     }
 
     /**
-     * Convert a Prisma `Decimal` (or a null/undefined empty-bucket sum) to a
-     * JS number. Handles both real `Decimal` objects (`.toNumber()`) and any
-     * stringifiable numeric.
-     */
-    /**
      * Per-row net for lean search: an active expense minus the income links that
      * reimburse it, or an active income minus the expense links it reimburses.
      * Transfers and hidden rows keep their gross amount.
@@ -760,6 +755,11 @@ export class TransactionsService {
         return netOf(amount, sumAllocations(links ?? []));
     }
 
+    /**
+     * Convert a Prisma `Decimal` (or a null/undefined empty-bucket sum) to a
+     * JS number. Handles both real `Decimal` objects (`.toNumber()`) and any
+     * stringifiable numeric.
+     */
     private decimalToNumber(value: unknown): number {
         if (value === null || value === undefined) {
             return 0;
