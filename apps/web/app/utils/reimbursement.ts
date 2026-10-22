@@ -178,6 +178,19 @@ export function linkRemovalWarning(
     return `${n} of these transactions are linked as reimbursements. Marking them removes those links, and the transactions they're linked to go back to full amounts.`;
 }
 
+/**
+ * Whether a card-payoff confirm must wait for its link preview, so the removal warning is seen first.
+ * An errored preview stops blocking, matching Apply all's best-effort fallback.
+ */
+export function awaitingLinkPreview(state: {
+    enabled: boolean;
+    isPending: boolean;
+    isFetching: boolean;
+    isError: boolean;
+}): boolean {
+    return state.enabled && !state.isError && (state.isPending || state.isFetching);
+}
+
 /** Toast suffix after a re-tag that removed links. Empty when none were removed. */
 export function linksRemovedSuffix(linksRemoved: number | undefined): string {
     if (!linksRemoved) return "";

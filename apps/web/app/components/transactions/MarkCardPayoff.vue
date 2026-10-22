@@ -3,7 +3,7 @@ import { computed } from "vue";
 import type { ITransactionResponse } from "@badger/types";
 import { useMarkCardPayoff } from "../../composables/transactions/useMarkCardPayoff";
 import { useCardPayoffLinkPreview } from "../../composables/card-payoff-patterns/useCardPayoffPatterns";
-import { linkRemovalWarning } from "../../utils/reimbursement";
+import { awaitingLinkPreview, linkRemovalWarning } from "../../utils/reimbursement";
 
 interface Props {
     visible: boolean;
@@ -20,14 +20,28 @@ const emit = defineEmits<{
 const { mutate: markAsCardPayoff, isPending } = useMarkCardPayoff();
 
 // Previews the links this re-tag would delete, for the description that will be submitted.
-const { data: linkPreview } = useCardPayoffLinkPreview(
+const {
+    data: linkPreview,
+    isPending: isPreviewPending,
+    isFetching: isPreviewFetching,
+    isError: isPreviewError,
+} = useCardPayoffLinkPreview(
     computed(() => props.transaction?.description ?? null),
     computed(() => props.visible),
 );
 const removalWarning = computed(() => linkRemovalWarning(linkPreview.value));
+// Confirm waits for the preview so the removal warning (AC17) is shown before the re-tag can run.
+const isAwaitingPreview = computed(() =>
+    awaitingLinkPreview({
+        enabled: props.visible && !!props.transaction?.description,
+        isPending: isPreviewPending.value,
+        isFetching: isPreviewFetching.value,
+        isError: isPreviewError.value,
+    }),
+);
 
 const handleConfirm = () => {
-    if (!props.transaction) return;
+    if (!props.transaction || isAwaitingPreview.value) return;
 
     markAsCardPayoff(
         {
@@ -103,6 +117,7 @@ const handleCancel = () => {
                 label="Mark as Card Payment"
                 severity="warning"
                 :loading="isPending"
+                :disabled="isAwaitingPreview"
                 autofocus
                 @click="handleConfirm"
             />

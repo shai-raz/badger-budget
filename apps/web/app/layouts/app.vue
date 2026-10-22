@@ -59,7 +59,7 @@ useHead({ bodyAttrs: { class: "app-layout-body" } });
                     <slot />
                     <Toast :breakpoints="toastBreakpoints" />
                     <CashFollowupToast />
-                    <ConfirmDialog />
+                    <ConfirmDialog :pt="{ message: { class: 'whitespace-pre-line' } }" />
                 </div>
             </div>
         </div>

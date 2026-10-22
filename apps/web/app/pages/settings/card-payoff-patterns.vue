@@ -21,6 +21,7 @@ const { data: patterns, isLoading, error } = useGetCardPayoffPatterns();
 const { mutate: deletePattern, isPending: isDeleting } = useDeleteCardPayoffPattern();
 const { mutate: applyAllPatterns, isPending: isApplying } = useApplyAllCardPayoffPatterns();
 const loadApplyAllLinkPreview = useApplyAllLinkPreviewLoader();
+const isPreviewing = ref(false);
 
 const handleDelete = (pattern: ICardPayoffPattern) => {
     if (pattern.isSystem) {
@@ -40,13 +41,17 @@ const handleDelete = (pattern: ICardPayoffPattern) => {
 };
 
 const handleApplyAll = async () => {
+    if (isPreviewing.value) return;
     const baseMessage =
         "This will apply all card payoff patterns to your existing transactions. Matching transactions will be marked as transfers and hidden from your transaction list.";
     let warning: string | null = null;
+    isPreviewing.value = true;
     try {
         warning = linkRemovalWarning(await loadApplyAllLinkPreview());
     } catch {
         // Preview is best-effort: fall back to the static message.
+    } finally {
+        isPreviewing.value = false;
     }
 
     confirm.require({
@@ -80,8 +85,8 @@ const getTypeSeverity = (isSystem: boolean): "info" | "success" => {
                 <LayoutHeaderButton
                     label="Apply all"
                     icon="pi pi-play"
-                    :loading="isApplying"
-                    :disabled="isLoading || !patterns || patterns.length === 0"
+                    :loading="isApplying || isPreviewing"
+                    :disabled="isLoading || !patterns || patterns.length === 0 || isPreviewing"
                     @click="handleApplyAll"
                 />
             </template>

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { IReimbursementCandidate, ITransactionReimbursement, ITransactionReimbursementLink } from "@badger/types";
 import {
+    awaitingLinkPreview,
     candidateMetaLine,
     defaultApplyAmount,
     displayAmount,
@@ -619,5 +620,26 @@ describe("picker headings", () => {
     it("captions what the source still has to reimburse or allocate", () => {
         expect(remainingCaption("expense", 300, "ILS")).toBe("₪300.00 left to reimburse");
         expect(remainingCaption("income", 200, "ILS")).toBe("₪200.00 left to allocate");
+    });
+});
+
+describe("awaitingLinkPreview", () => {
+    const idle = { enabled: true, isPending: false, isFetching: false, isError: false };
+
+    it("blocks confirm while the preview is loading for an open dialog", () => {
+        expect(awaitingLinkPreview({ ...idle, isPending: true })).toBe(true);
+        expect(awaitingLinkPreview({ ...idle, isFetching: true })).toBe(true);
+    });
+
+    it("releases confirm once the preview has settled", () => {
+        expect(awaitingLinkPreview(idle)).toBe(false);
+    });
+
+    it("does not block when the preview is disabled (dialog closed or no description)", () => {
+        expect(awaitingLinkPreview({ ...idle, enabled: false, isPending: true })).toBe(false);
+    });
+
+    it("releases confirm when the preview errors, falling back like Apply all", () => {
+        expect(awaitingLinkPreview({ ...idle, isPending: true, isError: true })).toBe(false);
     });
 });

@@ -20,7 +20,12 @@ const applyAmount = ref<number | null>(null);
 const apiError = ref<string | null>(null);
 const groupRef = ref<HTMLElement | null>(null);
 
-const { data, isFetching, isError } = useReimbursementCandidates(transactionId, search);
+// The layout keeps this dialog mounted, so only fetch while it is actually open.
+const { data, isFetching, isError } = useReimbursementCandidates(
+    transactionId,
+    search,
+    computed(() => state.value.visible),
+);
 const { mutateAsync, isPending } = useCreateReimbursement();
 
 // Keep-previous-data can briefly return the last transaction's list; only trust a response for this one.

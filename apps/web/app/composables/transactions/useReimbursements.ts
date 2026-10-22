@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClie
 import { refDebounced } from "@vueuse/core";
 import { useToast } from "primevue/usetoast";
 import type { ICreateReimbursementAllocation } from "@badger/types";
-import type { Ref } from "vue";
+import { computed, type Ref } from "vue";
 import { useApiClient } from "../useApiClient";
 import { getApiErrorMessage } from "../../utils/apiError";
 import { budgetKeys } from "../useBudgets";
@@ -33,17 +33,22 @@ export async function invalidateReimbursementAffected(queryClient: QueryClient):
 
 /**
  * Link candidates for the picker. `search` is debounced so each keystroke doesn't hit the API;
- * `keepPreviousData` keeps the last list on screen while the next one loads.
+ * `keepPreviousData` keeps the last list on screen while the next one loads. Only fetches while
+ * `open`, so a closed picker never refetches for its last transaction. `staleTime: 0` because
+ * ordinary transaction edits don't invalidate these keys, so each open re-checks.
  */
-export function useReimbursementCandidates(transactionId: Ref<string | null>, search: Ref<string>) {
+export function useReimbursementCandidates(transactionId: Ref<string | null>, search: Ref<string>, open: Ref<boolean>) {
     const apiClient = useApiClient();
     const debouncedSearch = refDebounced(search, 250);
+    // An emptied box must not wait out the debounce: a reopen would otherwise query with the previous search.
+    const query = computed(() => (search.value.trim() ? debouncedSearch.value.trim() : ""));
 
     return useQuery({
-        queryKey: computed(() => reimbursementKeys.candidates(transactionId.value ?? "", debouncedSearch.value.trim())),
-        queryFn: () => apiClient.getReimbursementCandidates(transactionId.value ?? "", debouncedSearch.value),
-        enabled: computed(() => !!transactionId.value),
+        queryKey: computed(() => reimbursementKeys.candidates(transactionId.value ?? "", query.value)),
+        queryFn: () => apiClient.getReimbursementCandidates(transactionId.value ?? "", query.value),
+        enabled: computed(() => open.value && !!transactionId.value),
         placeholderData: keepPreviousData,
+        staleTime: 0,
     });
 }
 
