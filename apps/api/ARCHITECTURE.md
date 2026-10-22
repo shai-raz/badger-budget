@@ -10,7 +10,7 @@ NestJS 11 REST API.
 - **Trust proxy**: `TRUST_PROXY_HOPS` (default 1) sets Express `trust proxy`, which decides `req.ip` and so every per-IP limit. With Cloudflare in front of the proxy use 2 hops (or trust `CF-Connecting-IP` only from Cloudflare ranges). A wrong value makes per-IP limits spoofable (too low) or one global bucket (too high). Per-IP limits are also shared by Anthropic's egress range, so all Claude connectors count together.
 - **Swagger**: `/api/docs`
 - **ORM**: Prisma 6 → PostgreSQL 16; schema at `apps/api/prisma/schema.prisma`
-- All entities use soft-delete (`deletedAt` field) — except `account_balance_snapshots`, an append-only observation log (see Bank sync), and the demo user's rolling-window trim, a hard delete (see `demo/AGENTS.md`)
+- All entities use soft-delete (`deletedAt` field) — except `account_balance_snapshots`, an append-only observation log (see Bank sync), `reimbursement_allocations` (an income→expense link that pays back part of an expense; hard-deleted, cascades with either transaction), and the demo user's rolling-window trim, a hard delete (see `demo/AGENTS.md`)
 - **Same-origin SPA**: when `WEB_DIST_DIR` holds a built web app (the Docker image sets it), `config/spa.ts` serves it with an SPA fallback. `/api`, `/.well-known` and missing file-like paths (`/_nuxt/*`, anything with an extension) are never answered by the SPA: they 404. Every response carries `frame-ancestors 'none'` and `X-Frame-Options: DENY`.
 - **Public URLs and CORS**: `PUBLIC_URL` is the one-origin shortcut (`config/public-url.ts`); `API_PUBLIC_URL` and `WEB_APP_URL` override it per service. CORS allows localhost dev origins plus `PUBLIC_URL` and `CORS_ORIGIN`.
 
@@ -24,7 +24,7 @@ Jest also transforms through `@swc/jest` (inline config in `apps/api/package.jso
 
 ## Feature modules
 
-`auth`, `accounts`, `budgets`, `categories`, `transactions`, `transaction-import` (CSV/bank import), `category-mapping-rules`, `card-payoff-patterns`, `currencies`, `google-sheets`, `reports`, `bank-sync`, `crypto`, `oauth`, `mcp`, `health` (public `GET /api/v1/health`, no guard: `SELECT 1` ping, 503 after 2s), `app-config` (public `GET /api/v1/config`, no guard: `{ registrationOpen, googleSheetsEnabled, fxEnabled }` flags, no secret values), `demo` (no controller — invoked from `AuthService`, not HTTP). Each follows NestJS module conventions (module → controller → service → DTOs), except `demo`. Each module's controller is the reference for its endpoints.
+`auth`, `accounts`, `budgets`, `categories`, `transactions`, `transaction-import` (CSV/bank import), `category-mapping-rules`, `card-payoff-patterns`, `reimbursements` (income → expense allocation CRUD and candidates picker; see its AGENTS.md), `currencies`, `google-sheets`, `reports`, `bank-sync`, `crypto`, `oauth`, `mcp`, `health` (public `GET /api/v1/health`, no guard: `SELECT 1` ping, 503 after 2s), `app-config` (public `GET /api/v1/config`, no guard: `{ registrationOpen, googleSheetsEnabled, fxEnabled }` flags, no secret values), `demo` (no controller — invoked from `AuthService`, not HTTP). Each follows NestJS module conventions (module → controller → service → DTOs), except `demo`. Each module's controller is the reference for its endpoints.
 
 ## Bank sync
 

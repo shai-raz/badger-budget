@@ -7,7 +7,7 @@
 - Tool results are compact JSON text only (no `outputSchema`/`structuredContent`); errors are `isError: true` text.
 - Tools (`tools/`): `list_accounts`, `list_categories`, `search_transactions`, `get_spending_report`, `get_budget_status`. All read-only, registered in `mcp.module.ts` via the `MCP_TOOLS` token; add a tool by adding its class to `TOOL_CLASSES` there.
 - Output conventions: columnar `{ columns, rows, rowCount, truncated, ... }` via `toColumnar`; missing values are `null`; amounts are plain positive numbers (direction comes from `type`); every money row carries its own `currency`, never sum across currencies. Output is an explicit allowlist, never a spread of a DB row (no `userId`, `externalId`, credentials).
-- `search_transactions` limits live in `tools/search-transactions.constants.ts`: `SEARCH_MAX_ROWS = 1000`, `SEARCH_MAX_CHARS = 60_000`, page size 200 (max 500), group limit 50 (max 500). Hidden transactions (card payoffs, internal transfers) are excluded unless `includeHidden: true`.
+- `search_transactions` limits live in `tools/search-transactions.constants.ts`: `SEARCH_MAX_ROWS = 1000`, `SEARCH_MAX_CHARS = 60_000`, page size 200 (max 500), group limit 50 (max 500). Hidden transactions (card payoffs, internal transfers) are excluded unless `includeHidden: true`. `amount` is gross and `netAmount` (a default column) is net of reimbursements; group sums are net.
 
 ## Adding a tool
 

@@ -39,6 +39,7 @@ const rows = [
         property,
         type: Date,
     })),
+    { dto: dtos.transaction.TransactionResponseDto, property: "reimbursement", type: Object },
     ...["icon", "color"].map((property) => ({ dto: dtos.account.AccountResponseDto, property, type: String })),
     { dto: dtos.category.CategoryResponseDto, property: "icon", type: String },
     ...["startDate", "endDate", "deletedAt"].map((property) => ({

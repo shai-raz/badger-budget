@@ -18,6 +18,16 @@ import {
 } from "./transfer-counterpart";
 import { FxConversionService } from "./fx-conversion.service";
 import { toAccountResponse } from "../accounts/account-response.mapper";
+import {
+    ACTIVE_SIDE,
+    fromCents,
+    netOf,
+    sumAllocations,
+    toCents,
+    toReimbursementSummary,
+} from "./reimbursement-netting";
+import { assertReimbursementEditAllowed } from "./reimbursement-edit-guard";
+import { lockReimbursements } from "./reimbursement-lock";
 
 /** Filters accepted by the transaction list endpoint (superset of legacy params). */
 export interface ListTransactionsFilters {
@@ -57,6 +67,8 @@ export interface TransactionLeanRow {
     type: string;
     transferDirection: string | null;
     amount: number;
+    /** `amount` net of active reimbursement links (expense: minus reimbursed; income: unallocated part). */
+    netAmount: number;
     currencyCode: string;
     originalAmount: number | null;
     originalCurrencyCode: string | null;
@@ -104,6 +116,17 @@ const AGGREGATE_FIELD: Record<TransactionAggregateGroupBy, string> = {
     account: "accountId",
 };
 
+/** The fields `aggregate` reads from the expense or income side of a reimbursement link to key its netting. */
+const NET_SIDE_SELECT = {
+    type: true,
+    transferDirection: true,
+    currencyId: true,
+    transactionDate: true,
+    categoryId: true,
+    description: true,
+    accountId: true,
+} as const;
+
 const DEFAULT_PAGE_SIZE = 50;
 const CATEGORY_UNCATEGORIZED = "uncategorized";
 
@@ -125,6 +148,42 @@ const transactionInclude = {
     },
     counterpartOf: {
         select: { id: true, description: true, accountId: true, account: { select: { name: true } } },
+    },
+    reimbursedBy: {
+        where: { income: { deletedAt: null } },
+        select: {
+            id: true,
+            amount: true,
+            income: {
+                select: {
+                    id: true,
+                    description: true,
+                    amount: true,
+                    transactionDate: true,
+                    hidden: true,
+                    deletedAt: true,
+                    reimburses: { select: { amount: true } },
+                },
+            },
+        },
+    },
+    reimburses: {
+        where: { expense: { deletedAt: null } },
+        select: {
+            id: true,
+            amount: true,
+            expense: {
+                select: {
+                    id: true,
+                    description: true,
+                    amount: true,
+                    transactionDate: true,
+                    hidden: true,
+                    deletedAt: true,
+                    reimbursedBy: { select: { amount: true } },
+                },
+            },
+        },
     },
 } satisfies Prisma.TransactionInclude;
 
@@ -151,11 +210,12 @@ export class TransactionsService {
      * always loads `account.currency`, so the cast here is safe.
      */
     private toTransactionResponse(row: TransactionRow): TransactionResponseDto {
-        const { counterpart, counterpartOf, ...rest } = row;
+        const { counterpart, counterpartOf, reimbursedBy, reimburses, ...rest } = row;
         return {
             ...rest,
             account: toAccountResponse(row.account),
             counterpartOfId: row.counterpartOfId,
+            reimbursement: toReimbursementSummary({ ...row, reimbursedBy, reimburses }),
             counterpart: counterpart
                 ? {
                       id: counterpart.id,
@@ -353,6 +413,10 @@ export class TransactionsService {
      * `transferred` in the all-accounts view, so a cross-currency pair can't
      * distort it and a same-currency pair stays neutral. With an `accountId`
      * filter they count as money leaving or entering that account.
+     *
+     * `income` and `expenses` are net of active reimbursement links: an
+     * expense's reimbursed part and an income's allocated part are subtracted
+     * (see `ACTIVE_SIDE`). `count` stays the number of rows.
      */
     async getSummary(userId: string, filters?: SummaryTransactionsFilters): Promise<TransactionsSummaryResponseDto> {
         const where = this.buildListWhere(userId, filters);
@@ -394,6 +458,23 @@ export class TransactionsService {
                 transferred += sign * sum;
             }
         }
+
+        // Net the reimbursement links. Each side is scoped by the same `where`
+        // (so a category or search filter applies to that row's own side), and
+        // the other side must be active. The `type` is ANDed in, never spread,
+        // so a caller's `type` filter can only narrow these queries.
+        const [asExpense, asIncome] = await Promise.all([
+            this.db.reimbursementAllocation.aggregate({
+                where: { expense: { AND: [where, { type: "expense" }] }, income: ACTIVE_SIDE },
+                _sum: { amount: true },
+            }),
+            this.db.reimbursementAllocation.aggregate({
+                where: { income: { AND: [where, { type: "income" }] }, expense: ACTIVE_SIDE },
+                _sum: { amount: true },
+            }),
+        ]);
+        expenses = fromCents(toCents(expenses) - toCents(this.decimalToNumber(asExpense._sum?.amount)));
+        income = fromCents(toCents(income) - toCents(this.decimalToNumber(asIncome._sum?.amount)));
 
         // Linked transfer legs (a source and its cash-wallet mirror) are backed
         // out of `transferred` in the all-accounts view: a same-currency pair is
@@ -474,6 +555,8 @@ export class TransactionsService {
                     category: { select: { name: true } },
                     account: { select: { name: true } },
                     budget: { select: { name: true } },
+                    reimbursedBy: { where: { income: ACTIVE_SIDE }, select: { amount: true } },
+                    reimburses: { where: { expense: ACTIVE_SIDE }, select: { amount: true } },
                 },
                 // id tiebreaker keeps offset pages stable (dates are date-only).
                 orderBy: [{ [sortBy]: sortOrder }, { id: "desc" }],
@@ -491,6 +574,7 @@ export class TransactionsService {
                 type: row.type,
                 transferDirection: row.transferDirection ?? null,
                 amount: this.decimalToNumber(row.amount),
+                netAmount: this.netAmountOf(row, this.decimalToNumber(row.amount)),
                 currencyCode: row.currency?.code,
                 originalAmount:
                     row.originalAmount === null || row.originalAmount === undefined
@@ -517,6 +601,10 @@ export class TransactionsService {
     /**
      * Grouped sums/counts. Never sums across type or currency: each row is one
      * (key, type, transferDirection, currency) bucket. No FX conversion.
+     *
+     * Expense and income sums are net of active reimbursement links, keyed by
+     * the linked row's own date/category/merchant/account (a month bucket uses
+     * the expense's or income's month, not the other side's).
      */
     async aggregate(
         userId: string,
@@ -543,14 +631,18 @@ export class TransactionsService {
             sum: number;
             count: number;
         }
+        const keyOf = (row: Record<string, unknown>): string | null =>
+            groupBy === "month"
+                ? (row.transactionDate as Date).toISOString().slice(0, 7)
+                : ((row[field] as string | null | undefined) ?? null);
+        const bucketId = (key: string | null, type: string, direction: string | null, currencyId: string) =>
+            JSON.stringify([key, type, direction, currencyId]);
+
         const buckets = new Map<string, Bucket>();
         for (const g of groups) {
-            const key: string | null =
-                groupBy === "month"
-                    ? (g.transactionDate as Date).toISOString().slice(0, 7)
-                    : ((g as unknown as Record<string, string | null>)[field] ?? null);
+            const key = keyOf(g as unknown as Record<string, unknown>);
             const direction: string | null = g.transferDirection ?? null;
-            const id = JSON.stringify([key, g.type, direction, g.currencyId]);
+            const id = bucketId(key, g.type, direction, g.currencyId);
             const bucket = buckets.get(id) ?? {
                 key,
                 type: g.type,
@@ -563,6 +655,35 @@ export class TransactionsService {
             bucket.count += g._count?._all ?? 0;
             buckets.set(id, bucket);
         }
+
+        // Net the reimbursement links: an expense's reimbursed part leaves the
+        // expense bucket, and an income's allocated part leaves the income
+        // bucket, each keyed by that side's own row. Counts are unchanged.
+        // Hidden rows stay gross, matching `searchLean`'s netAmount.
+        const [expenseLinks, incomeLinks] = await Promise.all([
+            this.db.reimbursementAllocation.findMany({
+                where: { expense: { AND: [where, { type: "expense", hidden: false }] }, income: ACTIVE_SIDE },
+                select: { amount: true, expense: { select: NET_SIDE_SELECT } },
+            }),
+            this.db.reimbursementAllocation.findMany({
+                where: { income: { AND: [where, { type: "income", hidden: false }] }, expense: ACTIVE_SIDE },
+                select: { amount: true, income: { select: NET_SIDE_SELECT } },
+            }),
+        ]);
+        const netOut = (side: Record<string, unknown>, amount: unknown) => {
+            const bucket = buckets.get(
+                bucketId(
+                    keyOf(side),
+                    side.type as string,
+                    (side.transferDirection as string | null) ?? null,
+                    side.currencyId as string,
+                ),
+            );
+            if (bucket) bucket.sum -= this.decimalToNumber(amount);
+        };
+        for (const link of expenseLinks) netOut(link.expense, link.amount);
+        for (const link of incomeLinks) netOut(link.income, link.amount);
+
         const merged = [...buckets.values()];
 
         const currencyIds = [...new Set(merged.map((b) => b.currencyId))];
@@ -613,6 +734,25 @@ export class TransactionsService {
 
         rows.sort((a, b) => b.sum - a.sum || a.label.localeCompare(b.label));
         return rows;
+    }
+
+    /**
+     * Per-row net for lean search: an active expense minus the income links that
+     * reimburse it, or an active income minus the expense links it reimburses.
+     * Transfers and hidden rows keep their gross amount.
+     */
+    private netAmountOf(
+        row: {
+            type: string;
+            hidden: boolean;
+            reimbursedBy?: { amount: unknown }[];
+            reimburses?: { amount: unknown }[];
+        },
+        amount: number,
+    ): number {
+        if ((row.type !== "expense" && row.type !== "income") || row.hidden) return amount;
+        const links = row.type === "expense" ? row.reimbursedBy : row.reimburses;
+        return netOf(amount, sumAllocations(links ?? []));
     }
 
     /**
@@ -825,6 +965,23 @@ export class TransactionsService {
         }
 
         const updatedRow: TransactionRow = await this.prisma.$transaction(async (tx) => {
+            // Lock before reading the sums: a link created after an unlocked read could push the allocated total past
+            // the new amount, or let a type/currency change slip past a link that was just written.
+            await lockReimbursements(tx, userId);
+            const [asExpense, asIncome] = await Promise.all([
+                tx.reimbursementAllocation.findMany({ where: { expenseId: id }, select: { amount: true } }),
+                tx.reimbursementAllocation.findMany({ where: { incomeId: id }, select: { amount: true } }),
+            ]);
+            assertReimbursementEditAllowed(
+                {
+                    type: current.type,
+                    amount: current.amount,
+                    currencyId: current.currencyId,
+                    allocatedAsExpense: sumAllocations(asExpense),
+                    allocatedAsIncome: sumAllocations(asIncome),
+                },
+                updateTransactionDto,
+            );
             // Synced rows can't change account/currency (locked), so only manual rows need the check.
             if (
                 !current.externalId &&
@@ -854,12 +1011,18 @@ export class TransactionsService {
             assertMirrorDeleteAllowed(await this.findMirrorSource(row.counterpartOfId));
         }
 
-        // Soft-delete the source; the derived mirror is hard-deleted with it.
-        const [deleted] = await this.prisma.$transaction([
-            this.prisma.transaction.update({ where: { id }, data: { deletedAt: new Date() } }),
-            this.prisma.transaction.deleteMany({ where: { counterpartOfId: id } }),
-        ]);
-        return deleted;
+        // Soft-delete the source; the derived mirror is hard-deleted with it. Soft delete never fires the
+        // allocation FK cascade, so linked reimbursement allocations are removed explicitly. The lock keeps a
+        // concurrent link from inserting an allocation on this row after the cleanup has run.
+        return this.prisma.$transaction(async (tx) => {
+            await lockReimbursements(tx, userId);
+            const deleted = await tx.transaction.update({ where: { id }, data: { deletedAt: new Date() } });
+            await tx.transaction.deleteMany({ where: { counterpartOfId: id } });
+            await tx.reimbursementAllocation.deleteMany({
+                where: { OR: [{ incomeId: id }, { expenseId: id }] },
+            });
+            return deleted;
+        });
     }
 
     private findMirrorSource(sourceId: string) {
@@ -961,6 +1124,7 @@ export class TransactionsService {
 
         return {
             count: result.count,
+            linksRemoved: result.linksRemoved,
             pattern,
         };
     }
