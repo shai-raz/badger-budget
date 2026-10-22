@@ -24,7 +24,7 @@ Jest also transforms through `@swc/jest` (inline config in `apps/api/package.jso
 
 ## Feature modules
 
-`auth`, `accounts`, `budgets`, `categories`, `transactions`, `transaction-import` (CSV/bank import), `category-mapping-rules`, `card-payoff-patterns`, `currencies`, `google-sheets`, `reports`, `bank-sync`, `crypto`, `oauth`, `mcp`, `health` (public `GET /api/v1/health`, no guard: `SELECT 1` ping, 503 after 2s), `app-config` (public `GET /api/v1/config`, no guard: `{ registrationOpen, googleSheetsEnabled, fxEnabled }` flags, no secret values), `demo` (no controller — invoked from `AuthService`, not HTTP). Each follows NestJS module conventions (module → controller → service → DTOs), except `demo`. Each module's controller is the reference for its endpoints.
+`auth`, `accounts`, `budgets`, `categories`, `transactions`, `transaction-import` (CSV/bank import), `category-mapping-rules`, `card-payoff-patterns`, `reimbursements` (income → expense allocation CRUD; see its AGENTS.md), `currencies`, `google-sheets`, `reports`, `bank-sync`, `crypto`, `oauth`, `mcp`, `health` (public `GET /api/v1/health`, no guard: `SELECT 1` ping, 503 after 2s), `app-config` (public `GET /api/v1/config`, no guard: `{ registrationOpen, googleSheetsEnabled, fxEnabled }` flags, no secret values), `demo` (no controller — invoked from `AuthService`, not HTTP). Each follows NestJS module conventions (module → controller → service → DTOs), except `demo`. Each module's controller is the reference for its endpoints.
 
 ## Bank sync
 

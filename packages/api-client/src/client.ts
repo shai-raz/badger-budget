@@ -32,6 +32,9 @@ import type {
     IOAuthConnection,
     IMcpConfig,
     IAppConfigResponse,
+    ICreateReimbursementAllocation,
+    IUpdateReimbursementAllocation,
+    IReimbursementAllocationResponse,
 } from "@badger/types";
 
 export interface ApiClientConfig {
@@ -457,6 +460,21 @@ export class ApiClient {
 
     async deleteCardPayoffPattern(id: string) {
         await this.client.delete(`/card-payoff-patterns/${id}`);
+    }
+
+    // Reimbursements
+    async createReimbursement(data: ICreateReimbursementAllocation) {
+        const response = await this.client.post<IReimbursementAllocationResponse>("/reimbursements", data);
+        return response.data;
+    }
+
+    async updateReimbursement(id: string, data: IUpdateReimbursementAllocation) {
+        const response = await this.client.patch<IReimbursementAllocationResponse>(`/reimbursements/${id}`, data);
+        return response.data;
+    }
+
+    async deleteReimbursement(id: string) {
+        await this.client.delete(`/reimbursements/${id}`);
     }
 
     // Currencies
