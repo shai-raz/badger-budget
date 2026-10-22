@@ -24,6 +24,11 @@ describe("TransactionsService", () => {
             deleteMany: jest.fn(),
             findUniqueOrThrow: jest.fn(),
         },
+        reimbursementAllocation: {
+            deleteMany: jest.fn(),
+            aggregate: jest.fn(),
+            findMany: jest.fn(),
+        },
         // Array form executes the batched operations; callback form runs against this same mock as the tx.
         $transaction: jest.fn((arg: unknown) =>
             typeof arg === "function" ? arg(mockPrismaService) : Promise.all(arg as Promise<unknown>[]),
@@ -69,6 +74,42 @@ describe("TransactionsService", () => {
         },
         counterpartOf: {
             select: { id: true, description: true, accountId: true, account: { select: { name: true } } },
+        },
+        reimbursedBy: {
+            where: { income: { deletedAt: null } },
+            select: {
+                id: true,
+                amount: true,
+                income: {
+                    select: {
+                        id: true,
+                        description: true,
+                        amount: true,
+                        transactionDate: true,
+                        hidden: true,
+                        deletedAt: true,
+                        reimburses: { select: { amount: true } },
+                    },
+                },
+            },
+        },
+        reimburses: {
+            where: { expense: { deletedAt: null } },
+            select: {
+                id: true,
+                amount: true,
+                expense: {
+                    select: {
+                        id: true,
+                        description: true,
+                        amount: true,
+                        transactionDate: true,
+                        hidden: true,
+                        deletedAt: true,
+                        reimbursedBy: { select: { amount: true } },
+                    },
+                },
+            },
         },
     };
 
@@ -345,7 +386,7 @@ describe("TransactionsService", () => {
 
             const result = await service.create("test-user", createDto);
 
-            expect(result).toEqual(mockTransaction);
+            expect(result).toEqual({ ...mockTransaction, reimbursement: null });
             expect(mockPrismaService.transaction.create).toHaveBeenCalledWith({
                 data: {
                     ...createDto,
@@ -396,7 +437,7 @@ describe("TransactionsService", () => {
 
             const result = await service.findAll("test-user");
 
-            expect(result).toEqual([mockTransaction]);
+            expect(result).toEqual([{ ...mockTransaction, reimbursement: null }]);
             expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith({
                 where: {
                     userId: "test-user",
@@ -615,7 +656,7 @@ describe("TransactionsService", () => {
                 endDate: "2025-12-31",
             });
 
-            expect(result).toEqual([mockTransaction]);
+            expect(result).toEqual([{ ...mockTransaction, reimbursement: null }]);
             expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith({
                 where: {
                     userId: "test-user",
@@ -647,7 +688,7 @@ describe("TransactionsService", () => {
             const result = await service.findAll("test-user", { page: 2, limit: 3 });
 
             expect(result).toEqual({
-                data: [mockTransaction],
+                data: [{ ...mockTransaction, reimbursement: null }],
                 total: 7,
                 page: 2,
                 pageSize: 3,
@@ -937,6 +978,7 @@ describe("TransactionsService", () => {
 
             expect(result).toEqual({
                 ...mockTransaction,
+                reimbursement: null,
                 applicableBudgets: [
                     {
                         id: "budget-id",
@@ -1001,6 +1043,53 @@ describe("TransactionsService", () => {
                 include: { budgetCategories: true },
                 orderBy: { createdAt: "asc" },
             });
+        });
+
+        it("returns the reimbursement summary from the expense's point of view for one income link", async () => {
+            mockPrismaService.transaction.findFirst.mockResolvedValue({
+                ...mockTransaction,
+                amount: 100,
+                reimbursedBy: [
+                    {
+                        id: "allocation-1",
+                        amount: 40,
+                        income: {
+                            id: "income-1",
+                            description: "Work refund",
+                            amount: 60,
+                            transactionDate: new Date("2025-12-20"),
+                            hidden: false,
+                            deletedAt: null,
+                            reimburses: [{ amount: 40 }],
+                        },
+                    },
+                ],
+                reimburses: [],
+            });
+            mockPrismaService.budget.findMany.mockResolvedValue([]);
+
+            const result = await service.findOne("transaction-id", "test-user");
+
+            expect(result.reimbursement).toEqual({
+                role: "expense",
+                allocatedTotal: 40,
+                allocatedActive: 40,
+                links: [
+                    {
+                        allocationId: "allocation-1",
+                        transactionId: "income-1",
+                        description: "Work refund",
+                        transactionAmount: 60,
+                        // Income 60 minus its only allocation (40) leaves 20.
+                        transactionRemaining: 20,
+                        transactionDate: new Date("2025-12-20"),
+                        amount: 40,
+                        active: true,
+                    },
+                ],
+            });
+            expect(result).not.toHaveProperty("reimbursedBy");
+            expect(result).not.toHaveProperty("reimburses");
         });
 
         it("should not compute applicable budgets for non-expense transactions", async () => {
@@ -1531,6 +1620,84 @@ describe("TransactionsService", () => {
         });
     });
 
+    describe("update reimbursement guard", () => {
+        const manual = { ...mockTransaction, externalId: null };
+
+        beforeEach(() => {
+            mockPrismaService.transaction.update.mockResolvedValue(mockTransaction);
+            mockPrismaService.budget.findMany.mockResolvedValue([]);
+        });
+
+        it("rejects lowering the amount of a linked expense below its allocated total", async () => {
+            mockPrismaService.transaction.findFirst.mockResolvedValue({
+                ...manual,
+                reimbursedBy: [{ amount: 40 }],
+                reimburses: [],
+            });
+
+            await expect(service.update("transaction-id", "test-user", { amount: 39 })).rejects.toThrow(
+                BadRequestException,
+            );
+            expect(mockPrismaService.transaction.update).not.toHaveBeenCalled();
+        });
+
+        it("allows setting a linked expense's amount to exactly its allocated total", async () => {
+            mockPrismaService.transaction.findFirst.mockResolvedValue({
+                ...manual,
+                reimbursedBy: [{ amount: 40 }],
+                reimburses: [],
+            });
+
+            await service.update("transaction-id", "test-user", { amount: 40 });
+
+            expect(mockPrismaService.transaction.update).toHaveBeenCalled();
+        });
+
+        it("rejects turning a linked income into a transfer", async () => {
+            mockPrismaService.transaction.findFirst.mockResolvedValue({
+                ...manual,
+                type: "income",
+                reimbursedBy: [],
+                reimburses: [{ amount: 30 }],
+            });
+
+            await expect(
+                service.update("transaction-id", "test-user", {
+                    type: "transfer",
+                    transferDirection: "in",
+                } as UpdateTransactionDto),
+            ).rejects.toThrow(BadRequestException);
+            expect(mockPrismaService.transaction.update).not.toHaveBeenCalled();
+        });
+
+        it("allows a hidden toggle on a linked row", async () => {
+            mockPrismaService.transaction.findFirst.mockResolvedValue({
+                ...manual,
+                reimbursedBy: [{ amount: 40 }],
+                reimburses: [],
+            });
+
+            await service.update("transaction-id", "test-user", { hidden: true });
+
+            expect(mockPrismaService.transaction.update).toHaveBeenCalledWith({
+                where: { id: "transaction-id" },
+                data: { hidden: true },
+            });
+        });
+
+        it("does not guard an unlinked row", async () => {
+            mockPrismaService.transaction.findFirst.mockResolvedValue({
+                ...manual,
+                reimbursedBy: [],
+                reimburses: [],
+            });
+
+            await service.update("transaction-id", "test-user", { amount: 1, currencyId: "currency-id" });
+
+            expect(mockPrismaService.transaction.update).toHaveBeenCalled();
+        });
+    });
+
     describe("markAsCardPayoff", () => {
         it("should create a pattern and retag matching transactions via the patterns service", async () => {
             const pattern = { id: "pattern-id", description: "כ.א.ל חיוב" };
@@ -1625,6 +1792,17 @@ describe("TransactionsService", () => {
             expect(mockPrismaService.transaction.update).toHaveBeenCalledWith({
                 where: { id: "transaction-id" },
                 data: { deletedAt: expect.any(Date) },
+            });
+        });
+
+        it("removes the row's reimbursement allocations on either side in the same write", async () => {
+            mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction);
+            mockPrismaService.transaction.update.mockResolvedValue({ ...mockTransaction, deletedAt: new Date() });
+
+            await service.remove("transaction-id", "test-user");
+
+            expect(mockPrismaService.reimbursementAllocation.deleteMany).toHaveBeenCalledWith({
+                where: { OR: [{ incomeId: "transaction-id" }, { expenseId: "transaction-id" }] },
             });
         });
     });

@@ -18,6 +18,8 @@ import {
 } from "./transfer-counterpart";
 import { FxConversionService } from "./fx-conversion.service";
 import { toAccountResponse } from "../accounts/account-response.mapper";
+import { sumAllocations, toReimbursementSummary } from "./reimbursement-netting";
+import { assertReimbursementEditAllowed } from "./reimbursement-edit-guard";
 
 /** Filters accepted by the transaction list endpoint (superset of legacy params). */
 export interface ListTransactionsFilters {
@@ -126,6 +128,42 @@ const transactionInclude = {
     counterpartOf: {
         select: { id: true, description: true, accountId: true, account: { select: { name: true } } },
     },
+    reimbursedBy: {
+        where: { income: { deletedAt: null } },
+        select: {
+            id: true,
+            amount: true,
+            income: {
+                select: {
+                    id: true,
+                    description: true,
+                    amount: true,
+                    transactionDate: true,
+                    hidden: true,
+                    deletedAt: true,
+                    reimburses: { select: { amount: true } },
+                },
+            },
+        },
+    },
+    reimburses: {
+        where: { expense: { deletedAt: null } },
+        select: {
+            id: true,
+            amount: true,
+            expense: {
+                select: {
+                    id: true,
+                    description: true,
+                    amount: true,
+                    transactionDate: true,
+                    hidden: true,
+                    deletedAt: true,
+                    reimbursedBy: { select: { amount: true } },
+                },
+            },
+        },
+    },
 } satisfies Prisma.TransactionInclude;
 
 type TransactionRow = Prisma.TransactionGetPayload<{ include: typeof transactionInclude }>;
@@ -151,11 +189,12 @@ export class TransactionsService {
      * always loads `account.currency`, so the cast here is safe.
      */
     private toTransactionResponse(row: TransactionRow): TransactionResponseDto {
-        const { counterpart, counterpartOf, ...rest } = row;
+        const { counterpart, counterpartOf, reimbursedBy, reimburses, ...rest } = row;
         return {
             ...rest,
             account: toAccountResponse(row.account),
             counterpartOfId: row.counterpartOfId,
+            reimbursement: toReimbursementSummary({ ...row, reimbursedBy, reimburses }),
             counterpart: counterpart
                 ? {
                       id: counterpart.id,
@@ -749,6 +788,8 @@ export class TransactionsService {
             originalCurrencyId: string | null;
             counterpartOfId: string | null;
             counterpart: ExistingMirror | null;
+            reimbursedBy?: { amount: Prisma.Decimal | number | string }[];
+            reimburses?: { amount: Prisma.Decimal | number | string }[];
         }
     > {
         const transaction = await this.db.transaction.findFirst({
@@ -771,6 +812,8 @@ export class TransactionsService {
                 originalCurrencyId: true,
                 counterpartOfId: true,
                 counterpart: { select: { id: true, accountId: true, amount: true } },
+                reimbursedBy: { select: { amount: true } },
+                reimburses: { select: { amount: true } },
             },
         });
 
@@ -791,6 +834,16 @@ export class TransactionsService {
             assertMirrorEditAllowed(updateTransactionDto, await this.findMirrorSource(current.counterpartOfId));
         }
         assertSyncedEditAllowed(current, updateTransactionDto);
+        assertReimbursementEditAllowed(
+            {
+                type: current.type,
+                amount: current.amount,
+                currencyId: current.currencyId,
+                allocatedAsExpense: sumAllocations(current.reimbursedBy ?? []),
+                allocatedAsIncome: sumAllocations(current.reimburses ?? []),
+            },
+            updateTransactionDto,
+        );
 
         const updateData: any = { ...updateTransactionDto };
         if (current.externalId) {
@@ -854,10 +907,14 @@ export class TransactionsService {
             assertMirrorDeleteAllowed(await this.findMirrorSource(row.counterpartOfId));
         }
 
-        // Soft-delete the source; the derived mirror is hard-deleted with it.
+        // Soft-delete the source; the derived mirror is hard-deleted with it. Soft delete never fires the
+        // allocation FK cascade, so linked reimbursement allocations are removed explicitly.
         const [deleted] = await this.prisma.$transaction([
             this.prisma.transaction.update({ where: { id }, data: { deletedAt: new Date() } }),
             this.prisma.transaction.deleteMany({ where: { counterpartOfId: id } }),
+            this.prisma.reimbursementAllocation.deleteMany({
+                where: { OR: [{ incomeId: id }, { expenseId: id }] },
+            }),
         ]);
         return deleted;
     }
