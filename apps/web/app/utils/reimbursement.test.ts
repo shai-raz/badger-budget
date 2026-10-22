@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { IReimbursementCandidate, ITransactionReimbursement, ITransactionReimbursementLink } from "@badger/types";
 import {
     candidateMetaLine,
@@ -7,6 +7,7 @@ import {
     incomeRemainderLine,
     isAllocatedIncome,
     linkActionState,
+    linkMenuItem,
     editDialogReimbursementLine,
     linkRemovalWarning,
     linksRemovedSuffix,
@@ -350,6 +351,34 @@ describe("linkActionState", () => {
     it("stays enabled while a partial amount is still linkable", () => {
         const expense = tx({ reimbursement: reimbursement({ allocatedTotal: 450, allocatedActive: 450 }) });
         expect(linkActionState(expense).disabled).toBe(false);
+    });
+});
+
+describe("linkMenuItem", () => {
+    it("is null for a transfer or mirror row", () => {
+        const open = () => {};
+        expect(linkMenuItem(tx({ type: "transfer", transferDirection: "out" }), open)).toBeNull();
+        expect(
+            linkMenuItem(tx({ type: "transfer", transferDirection: "in", counterpartOfId: "src" }), open),
+        ).toBeNull();
+    });
+
+    it("runs the open callback for an enabled expense", () => {
+        const open = vi.fn();
+        const item = linkMenuItem(tx(), open);
+        expect(item).toMatchObject({ label: "Link reimbursement", icon: "pi pi-link" });
+        expect(item).not.toHaveProperty("disabled");
+        item?.command();
+        expect(open).toHaveBeenCalledOnce();
+    });
+
+    it("carries the disabled state and tooltip for a fully reimbursed expense", () => {
+        const expense = tx({ reimbursement: reimbursement({ allocatedTotal: 600, allocatedActive: 600 }) });
+        expect(linkMenuItem(expense, () => {})).toMatchObject({
+            label: "Link reimbursement",
+            disabled: true,
+            tooltip: "Fully reimbursed",
+        });
     });
 });
 

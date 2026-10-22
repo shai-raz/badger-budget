@@ -17,7 +17,9 @@ import {
 import { budgetPeriodLabel } from "~/utils/budget";
 import { formatCurrency } from "~/utils/currency";
 import { useGetTransaction, useDeleteTransaction } from "~/composables/transactions/useTransactions";
+import { useReimbursementPicker } from "~/composables/transactions/useReimbursementPicker";
 import { useTransferActions, MIRROR_ACTION_TOOLTIP } from "~/composables/transactions/useTransferActions";
+import { linkMenuItem } from "~/utils/reimbursement";
 
 definePageMeta({
     layout: "app",
@@ -50,9 +52,16 @@ const openApplyRuleFromEdit = async (tx: ITransactionResponse) => {
 };
 
 const { menuItems: transferMenuItems } = useTransferActions(transaction);
+const picker = useReimbursementPicker();
 
 const isMirror = computed(() => !!transaction.value?.counterpartOfId);
 const mirrorLock = computed(() => (isMirror.value ? { disabled: true, tooltip: MIRROR_ACTION_TOOLTIP } : {}));
+
+const linkMenuItems = computed<MenuItem[]>(() => {
+    const tx = transaction.value;
+    const item = tx ? linkMenuItem(tx, () => picker.open(tx.id)) : null;
+    return item ? [item] : [];
+});
 
 const menuItems = computed<MenuItem[]>(() => [
     {
@@ -71,6 +80,7 @@ const menuItems = computed<MenuItem[]>(() => [
         },
         ...mirrorLock.value,
     },
+    ...linkMenuItems.value,
     ...transferMenuItems.value,
     { separator: true },
     {

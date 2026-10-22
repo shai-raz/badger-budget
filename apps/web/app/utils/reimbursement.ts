@@ -143,6 +143,21 @@ export function linkActionState(tx: ReimbursementTx & { counterpartOfId: string 
     return { visible: true, label, disabled: false };
 }
 
+/**
+ * Overflow-menu entry for the link picker, shared by the row and detail menus.
+ * Null when the row has no link action; disabled entries carry their tooltip.
+ */
+export function linkMenuItem(tx: ReimbursementTx & { counterpartOfId: string | null }, open: () => void) {
+    const state = linkActionState(tx);
+    if (!state.visible) return null;
+    return {
+        label: state.label,
+        icon: "pi pi-link",
+        command: open,
+        ...(state.disabled ? { disabled: true, tooltip: state.tooltip } : {}),
+    };
+}
+
 /** Default amount when applying a link: whichever side has less left. Cents-exact. */
 export function defaultApplyAmount(sourceRemaining: number, candidateRemaining: number): number {
     return fromCents(Math.max(0, Math.min(toCents(sourceRemaining), toCents(candidateRemaining))));

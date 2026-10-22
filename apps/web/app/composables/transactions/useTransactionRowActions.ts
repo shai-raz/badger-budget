@@ -1,5 +1,7 @@
 import type { ITransactionResponse } from "@badger/types";
 import { useTransferActions, MIRROR_ACTION_TOOLTIP } from "./useTransferActions";
+import { useReimbursementPicker } from "./useReimbursementPicker";
+import { linkMenuItem } from "../../utils/reimbursement";
 
 /**
  * Shared row-actions chrome for transaction lists: the overflow menu model plus
@@ -15,6 +17,14 @@ export function useTransactionRowActions() {
     const menu = ref();
 
     const { menuItems: transferMenuItems } = useTransferActions(selectedTransaction);
+    const picker = useReimbursementPicker();
+
+    /** Link / mark-as-reimbursement item; empty for transfers and cash-wallet mirrors. */
+    const linkMenuItems = computed(() => {
+        const tx = selectedTransaction.value;
+        const item = tx ? linkMenuItem(tx, () => picker.open(tx.id)) : null;
+        return item ? [item] : [];
+    });
 
     const menuItems = computed(() => {
         const lock = selectedTransaction.value?.counterpartOfId
@@ -42,6 +52,7 @@ export function useTransactionRowActions() {
                 },
                 ...lock,
             },
+            ...linkMenuItems.value,
             ...transferMenuItems.value,
         ];
     });

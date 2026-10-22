@@ -5,9 +5,10 @@ import { useConfirm } from "primevue/useconfirm";
 import { reimbursementReceiptLines } from "../../utils/reimbursementReceipt";
 import ReimbursementAmountDialog from "./ReimbursementAmountDialog.vue";
 import { formatDate } from "./formatters";
+import { useReimbursementPicker } from "../../composables/transactions/useReimbursementPicker";
 import { useDeleteReimbursement } from "../../composables/transactions/useReimbursements";
 import { formatCurrency } from "../../utils/currency";
-import { displayAmount } from "../../utils/reimbursement";
+import { displayAmount, linkActionState } from "../../utils/reimbursement";
 
 /**
  * Detail-page band for an expense ("Reimbursements") or an income ("Pays back").
@@ -19,6 +20,8 @@ const props = defineProps<{
 
 const confirm = useConfirm();
 const { mutate: deleteReimbursement } = useDeleteReimbursement();
+const picker = useReimbursementPicker();
+const linkState = computed(() => linkActionState(props.transaction));
 
 const isExpense = computed(() => props.transaction.type === "expense");
 const code = computed(() => props.transaction.currency.code);
@@ -80,6 +83,25 @@ const confirmUnlink = (link: ITransactionReimbursementLink) => {
 
 <template>
     <SharedSectionBand :title="isExpense ? 'Reimbursements' : 'Pays back'">
+        <template
+            v-if="linkState.visible"
+            #header-extra
+        >
+            <span
+                v-tooltip.top="linkState.tooltip"
+                class="inline-flex"
+            >
+                <Button
+                    :label="linkState.label"
+                    icon="pi pi-link"
+                    size="small"
+                    severity="secondary"
+                    outlined
+                    :disabled="linkState.disabled"
+                    @click="picker.open(transaction.id)"
+                />
+            </span>
+        </template>
         <div class="flex flex-col px-4 pb-4 md:px-0 md:pb-0">
             <p
                 v-if="links.length === 0"
