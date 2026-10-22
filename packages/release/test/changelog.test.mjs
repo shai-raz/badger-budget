@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
+import * as prettier from "prettier";
 import { prependRelease, renderChangelogMarkdown, renderReleaseNotes } from "../src/changelog.mjs";
 
 const REPO = "owner/badger";
@@ -79,4 +81,51 @@ test("renderReleaseNotes renders one release without the version heading", () =>
         renderReleaseNotes(oldest, REPO),
         "### Performance\n\n- speed up charts ([#12](https://github.com/owner/badger/pull/12))\n",
     );
+});
+
+const hostile = {
+    version: "0.4.0",
+    date: "2026-10-24",
+    items: [
+        { type: "fix", scope: "api*", breaking: false, subject: "__init__ crashes on *bold* input", pr: 40 },
+        {
+            type: "fix",
+            scope: null,
+            breaking: false,
+            subject: "snake_case_name and R&D <beta> `code` [link](x)",
+            pr: null,
+        },
+        { type: "feat", scope: null, breaking: false, subject: "1. numbered start", pr: null },
+        { type: "feat", scope: null, breaking: false, subject: "+ plus start and # heading ~~x~~ a|b", pr: null },
+        { type: "feat", scope: "web", breaking: false, subject: "back\\slash and a * b", pr: null },
+    ],
+};
+
+test("renderReleaseNotes escapes Markdown in subjects and scopes so they render as typed", () => {
+    const expected = [
+        [
+            "### Features",
+            [
+                "- 1\\. numbered start",
+                "- \\+ plus start and \\# heading \\~\\~x\\~\\~ a\\|b",
+                "- **web:** back\\\\slash and a \\* b",
+            ].join("\n"),
+        ].join("\n\n"),
+        [
+            "### Bug fixes",
+            [
+                "- **api\\*:** \\_\\_init\\_\\_ crashes on \\*bold\\* input ([#40](https://github.com/owner/badger/pull/40))",
+                "- snake_case_name and R\\&D \\<beta\\> \\`code\\` \\[link\\](x)",
+            ].join("\n"),
+        ].join("\n\n"),
+    ].join("\n\n");
+
+    assert.equal(renderReleaseNotes(hostile, REPO), expected + "\n");
+});
+
+test("the rendered changelog is a Prettier fixed point, so the release commit passes prettier --write", async () => {
+    const rendered = renderChangelogMarkdown({ releases: [hostile, oldest] }, REPO);
+    const config = await prettier.resolveConfig(fileURLToPath(new URL("../../../CHANGELOG.md", import.meta.url)));
+    const formatted = await prettier.format(rendered, { ...config, filepath: "CHANGELOG.md" });
+    assert.equal(formatted, rendered);
 });
