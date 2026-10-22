@@ -508,6 +508,10 @@ describe("BudgetsService", () => {
                             where: { targetCurrencyId: "usd" },
                             take: 1,
                         },
+                        reimbursedBy: {
+                            where: { income: { deletedAt: null, hidden: false } },
+                            select: { amount: true },
+                        },
                     },
                 }),
             );
@@ -532,6 +536,77 @@ describe("BudgetsService", () => {
             const result = await service.getAnalytics("budget-id", "test-user");
 
             expect(result.totalSpent).toBe(0);
+        });
+
+        it("should subtract active income reimbursements from the expense", async () => {
+            mockPrismaService.budget.findFirst.mockResolvedValue({ ...mockBudget, amount: 1000 });
+            mockPrismaService.transaction.findMany.mockResolvedValue([
+                {
+                    amount: 600,
+                    hidden: false,
+                    type: "expense",
+                    currencyId: "currency-id",
+                    reimbursedBy: [{ amount: 300 }],
+                },
+            ]);
+
+            const result = await service.getAnalytics("budget-id", "test-user");
+
+            expect(result.totalSpent).toBe(300);
+            expect(result.transactionCount).toBe(1);
+        });
+
+        it("should count a fully reimbursed expense as zero spent but still as a transaction", async () => {
+            mockPrismaService.budget.findFirst.mockResolvedValue({ ...mockBudget, amount: 1000 });
+            mockPrismaService.transaction.findMany.mockResolvedValue([
+                {
+                    amount: 200,
+                    hidden: false,
+                    type: "expense",
+                    currencyId: "currency-id",
+                    reimbursedBy: [{ amount: 200 }],
+                },
+            ]);
+
+            const result = await service.getAnalytics("budget-id", "test-user");
+
+            expect(result.totalSpent).toBe(0);
+            expect(result.transactionCount).toBe(1);
+        });
+
+        it("should scale a cross-currency snapshot by the net share of the expense", async () => {
+            mockPrismaService.budget.findFirst.mockResolvedValue({ ...mockBudget, currencyId: "ils" });
+            mockPrismaService.transaction.findMany.mockResolvedValue([
+                {
+                    amount: 100,
+                    hidden: false,
+                    type: "expense",
+                    currencyId: "usd",
+                    conversions: [{ convertedAmount: 370 }],
+                    reimbursedBy: [{ amount: 50 }],
+                },
+            ]);
+
+            const result = await service.getAnalytics("budget-id", "test-user");
+
+            expect(result.totalSpent).toBe(185);
+        });
+
+        it("should keep the gross amount of a hidden expense even when it has reimbursements", async () => {
+            mockPrismaService.budget.findFirst.mockResolvedValue({ ...mockBudget, amount: 1000 });
+            mockPrismaService.transaction.findMany.mockResolvedValue([
+                {
+                    amount: 600,
+                    hidden: true,
+                    type: "expense",
+                    currencyId: "currency-id",
+                    reimbursedBy: [{ amount: 300 }],
+                },
+            ]);
+
+            const result = await service.getAnalytics("budget-id", "test-user");
+
+            expect(result.totalSpent).toBe(600);
         });
 
         it("should calculate weekly budget period correctly", async () => {
@@ -855,6 +930,10 @@ describe("BudgetsService", () => {
                         conversions: {
                             where: { targetCurrencyId: "usd" },
                             take: 1,
+                        },
+                        reimbursedBy: {
+                            where: { income: { deletedAt: null, hidden: false } },
+                            select: { amount: true },
                         },
                     },
                 }),

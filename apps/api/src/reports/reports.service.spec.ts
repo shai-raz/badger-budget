@@ -52,13 +52,20 @@ describe("ReportsService", () => {
             color: string;
             icon: string | null;
         } | null,
-        overrides: Partial<{ currencyId: string; transactionDate: Date }> = {},
+        overrides: Partial<{
+            currencyId: string;
+            transactionDate: Date;
+            hidden: boolean;
+            reimbursedBy: { amount: number }[];
+        }> = {},
     ) => ({
         amount,
         currencyId: overrides.currencyId ?? ilsCurrency.id,
         transactionDate: overrides.transactionDate ?? new Date("2026-07-10"),
+        hidden: overrides.hidden ?? false,
         categoryId: category?.id ?? null,
         category,
+        reimbursedBy: overrides.reimbursedBy ?? [],
     });
 
     beforeEach(async () => {
@@ -149,6 +156,38 @@ describe("ReportsService", () => {
             percentage: 25,
             transactionCount: 1,
         });
+    });
+
+    it("nets active income reimbursements out of the expense's category bucket", async () => {
+        mockPrismaService.transaction.findMany
+            .mockResolvedValueOnce([txn(600, groceries, { reimbursedBy: [{ amount: 250 }] }), txn(100, groceries)])
+            .mockResolvedValueOnce([]);
+
+        const result = await service.getSpendingReport("user-id", query);
+
+        expect(result.total).toBe(450);
+        expect(result.categories[0]).toEqual(expect.objectContaining({ amount: 450, transactionCount: 2 }));
+    });
+
+    it("counts a fully reimbursed expense as zero spent but still as a transaction", async () => {
+        mockPrismaService.transaction.findMany
+            .mockResolvedValueOnce([txn(200, groceries, { reimbursedBy: [{ amount: 200 }] })])
+            .mockResolvedValueOnce([]);
+
+        const result = await service.getSpendingReport("user-id", query);
+
+        expect(result.total).toBe(0);
+        expect(result.transactionCount).toBe(1);
+    });
+
+    it("keeps the gross amount of hidden expenses even when they have reimbursements", async () => {
+        mockPrismaService.transaction.findMany
+            .mockResolvedValueOnce([txn(600, groceries, { hidden: true, reimbursedBy: [{ amount: 250 }] })])
+            .mockResolvedValueOnce([]);
+
+        const result = await service.getSpendingReport("user-id", query);
+
+        expect(result.total).toBe(600);
     });
 
     it("converts foreign-currency amounts via the FX rate", async () => {
