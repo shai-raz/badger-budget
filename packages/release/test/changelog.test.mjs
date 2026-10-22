@@ -106,6 +106,8 @@ const hostile = {
             subject: parseTitle("fix:  doubled  spaces\tand a tab ").subject,
             pr: null,
         },
+        { type: "fix", scope: "a b", breaking: false, subject: "spaced scope", pr: null },
+        { type: "feat", scope: null, breaking: false, subject: "é_x and naïve_ café", pr: null },
     ],
 };
 
@@ -117,6 +119,7 @@ test("renderReleaseNotes escapes Markdown in subjects and scopes so they render 
                 "- 1\\. numbered start",
                 "- \\+ plus start and \\# heading \\~\\~x\\~\\~ a\\|b",
                 "- **web:** back\\\\slash and a \\* b",
+                "- é_x and naïve\\_ café",
             ].join("\n"),
         ].join("\n\n"),
         [
@@ -125,6 +128,7 @@ test("renderReleaseNotes escapes Markdown in subjects and scopes so they render 
                 "- **api\\*:** \\_\\_init\\_\\_ crashes on \\*bold\\* input ([#40](https://github.com/owner/badger/pull/40))",
                 "- snake_case_name and R\\&D \\<beta\\> \\`code\\` \\[link\\](x)",
                 "- doubled spaces and a tab",
+                "- **a b:** spaced scope",
             ].join("\n"),
         ].join("\n\n"),
     ].join("\n\n");

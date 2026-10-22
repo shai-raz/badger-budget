@@ -29,11 +29,20 @@ export function parseTitle(title, body = "") {
     const [, type, , scope, bang, subject] = match;
     return {
         type,
-        scope: scope ?? null,
+        // Same normalisation as the subject: Prettier collapses whitespace inside the rendered `**scope:**` too.
+        scope: normaliseWhitespace(scope) || null,
         breaking: bang === "!" || BREAKING_BODY_RE.test(body),
         // Collapse whitespace runs: Prettier does so inside Markdown paragraphs, which would break the CHANGELOG.md fixed point.
-        subject: subject.replace(/\s+/g, " ").trim(),
+        subject: normaliseWhitespace(subject),
     };
+}
+
+/**
+ * @param {string | undefined} text
+ * @returns {string}
+ */
+function normaliseWhitespace(text) {
+    return (text ?? "").replace(/\s+/g, " ").trim();
 }
 
 /**
