@@ -144,6 +144,16 @@ export function linkActionState(tx: ReimbursementTx & { counterpartOfId: string 
 }
 
 /**
+ * Accessible name for the band's link button. Below md the visible text is
+ * "Link", so the name must contain it (WCAG 2.5.3, Label in Name); at md+ the
+ * visible label is already the name, so no override is set.
+ */
+export function bandLinkAccessibleName(label: string, isDesktop: boolean): string | undefined {
+    if (isDesktop) return undefined;
+    return label.startsWith("Link") ? label : `Link: ${label}`;
+}
+
+/**
  * Overflow-menu entry for the link picker, shared by the row and detail menus.
  * Null when the row has no link action; disabled entries carry their tooltip.
  */

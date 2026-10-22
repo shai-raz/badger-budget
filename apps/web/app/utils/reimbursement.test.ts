@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { IReimbursementCandidate, ITransactionReimbursement, ITransactionReimbursementLink } from "@badger/types";
 import {
     awaitingLinkPreview,
+    bandLinkAccessibleName,
     candidateMetaLine,
     defaultApplyAmount,
     displayAmount,
@@ -352,6 +353,23 @@ describe("linkActionState", () => {
     it("stays enabled while a partial amount is still linkable", () => {
         const expense = tx({ reimbursement: reimbursement({ allocatedTotal: 450, allocatedActive: 450 }) });
         expect(linkActionState(expense).disabled).toBe(false);
+    });
+});
+
+describe("bandLinkAccessibleName", () => {
+    it("adds no override at md and up, where the visible label is the name", () => {
+        expect(bandLinkAccessibleName("Mark as reimbursement", true)).toBeUndefined();
+        expect(bandLinkAccessibleName("Link reimbursement", true)).toBeUndefined();
+    });
+
+    it("keeps the label below md when it already starts with the visible Link", () => {
+        expect(bandLinkAccessibleName("Link reimbursement", false)).toBe("Link reimbursement");
+    });
+
+    it("prefixes the income label below md so the name contains the visible Link", () => {
+        const name = bandLinkAccessibleName("Mark as reimbursement", false);
+        expect(name).toBe("Link: Mark as reimbursement");
+        expect(name?.startsWith("Link")).toBe(true);
     });
 });
 

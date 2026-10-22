@@ -8,7 +8,7 @@ import { formatDate } from "./formatters";
 import { useReimbursementPicker } from "../../composables/transactions/useReimbursementPicker";
 import { useDeleteReimbursement } from "../../composables/transactions/useReimbursements";
 import { formatCurrency } from "../../utils/currency";
-import { displayAmount, linkActionState } from "../../utils/reimbursement";
+import { bandLinkAccessibleName, displayAmount, linkActionState } from "../../utils/reimbursement";
 
 /**
  * Detail-page band for an expense ("Reimbursements") or an income ("Pays back").
@@ -23,6 +23,7 @@ const { mutate: deleteReimbursement } = useDeleteReimbursement();
 const picker = useReimbursementPicker();
 const linkState = computed(() => linkActionState(props.transaction));
 const isDesktop = useIsDesktop();
+const linkButtonName = computed(() => bandLinkAccessibleName(linkState.value.label, isDesktop.value));
 
 const isExpense = computed(() => props.transaction.type === "expense");
 const code = computed(() => props.transaction.currency.code);
@@ -94,7 +95,7 @@ const confirmUnlink = (link: ITransactionReimbursementLink) => {
             >
                 <Button
                     :label="isDesktop ? linkState.label : 'Link'"
-                    :aria-label="linkState.label"
+                    :aria-label="linkButtonName"
                     icon="pi pi-link"
                     size="small"
                     severity="secondary"
