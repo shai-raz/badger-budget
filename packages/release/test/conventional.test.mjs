@@ -27,6 +27,12 @@ test("the subject collapses whitespace runs and trims the edges", () => {
     assert.equal(parseTitle("feat(web): x\t\ty  ")?.subject, "x y");
 });
 
+test("the scope collapses whitespace runs and a blank scope becomes null", () => {
+    assert.equal(parseTitle("fix(a  b): x")?.scope, "a b");
+    assert.equal(parseTitle("fix( api\tweb ): x")?.scope, "api web");
+    assert.equal(parseTitle("fix( ): x")?.scope, null);
+});
+
 test("every listed type is accepted", () => {
     for (const type of TYPES) {
         assert.notEqual(parseTitle(`${type}: something`), null, type);
