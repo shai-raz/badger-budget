@@ -213,9 +213,10 @@ function writeGithubOutputs(outputs) {
 }
 
 /**
- * @param {Options} options
+ * @param {string[]} argv
  */
-async function main(options) {
+async function main(argv) {
+    const options = parseArgs(argv);
     if (options.renderOnly) {
         writeChangelogMarkdown(options.root, options.repo, readChangelog(options.root));
         console.log(`Rendered ${CHANGELOG_MD} from ${CHANGELOG_JSON}.`);
@@ -263,7 +264,7 @@ async function main(options) {
     writeGithubOutputs({ released: "true", version, notes_file: options.notesFile });
 }
 
-main(parseArgs(process.argv.slice(2))).catch((error) => {
+main(process.argv.slice(2)).catch((error) => {
     console.error(`release: ${error.message}`);
     process.exitCode = 1;
 });
