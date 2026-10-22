@@ -103,10 +103,10 @@ function renderBullet(item, repo) {
 }
 
 /**
- * Backslash-escapes the Markdown a commit subject can carry, so it renders as typed. The escapes are the ones
- * Prettier keeps, so the committed CHANGELOG.md stays a fixed point of `prettier --write`. Underscores are escaped
+ * Backslash-escapes the Markdown a commit subject can carry, so GitHub renders it as typed. Underscores are escaped
  * only at word edges, where they would start or end emphasis; `snake_case` stays readable. The word-edge test is
- * Unicode-aware, so `é_x_é` is left alone just as Prettier leaves it.
+ * Unicode-aware, so `é_x_é` is not escaped, because CommonMark does not treat an intraword underscore as emphasis.
+ * CHANGELOG.md is excluded from Prettier, so these escapes only need to render correctly, not survive a reformat.
  * @param {string} text
  * @returns {string}
  */

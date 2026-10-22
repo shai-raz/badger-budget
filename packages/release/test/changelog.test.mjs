@@ -1,7 +1,5 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fileURLToPath } from "node:url";
-import * as prettier from "prettier";
 import { prependRelease, renderChangelogMarkdown, renderReleaseNotes } from "../src/changelog.mjs";
 import { parseTitle } from "../src/conventional.mjs";
 
@@ -134,11 +132,4 @@ test("renderReleaseNotes escapes Markdown in subjects and scopes so they render 
     ].join("\n\n");
 
     assert.equal(renderReleaseNotes(hostile, REPO), expected + "\n");
-});
-
-test("the rendered changelog is a Prettier fixed point, so the release commit passes prettier --write", async () => {
-    const rendered = renderChangelogMarkdown({ releases: [hostile, oldest] }, REPO);
-    const config = await prettier.resolveConfig(fileURLToPath(new URL("../../../CHANGELOG.md", import.meta.url)));
-    const formatted = await prettier.format(rendered, { ...config, filepath: "CHANGELOG.md" });
-    assert.equal(formatted, rendered);
 });

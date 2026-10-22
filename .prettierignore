@@ -16,3 +16,4 @@ coverage
 # Generated / not Prettier's business
 apps/api/prisma/migrations
 *.min.*
+CHANGELOG.md
