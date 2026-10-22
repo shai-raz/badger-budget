@@ -7,6 +7,7 @@ import type {
 } from "@badger/types";
 import { PrismaService } from "../prisma/prisma.service";
 import { fromCents, toCents } from "../transactions/reimbursement-netting";
+import { lockReimbursements } from "../transactions/reimbursement-lock";
 import { CreateReimbursementAllocationDto } from "./dto/create-reimbursement-allocation.dto";
 import { UpdateReimbursementAllocationDto } from "./dto/update-reimbursement-allocation.dto";
 import { mergeNearest, parseSearchAmount } from "./candidate-helpers";
@@ -52,7 +53,7 @@ export class ReimbursementsService {
 
     async create(userId: string, dto: CreateReimbursementAllocationDto): Promise<IReimbursementAllocationResponse> {
         return this.prisma.$transaction(async (tx) => {
-            await this.lockUser(tx, userId);
+            await lockReimbursements(tx, userId);
 
             const [income, expense] = await Promise.all([
                 tx.transaction.findFirst({
@@ -100,7 +101,7 @@ export class ReimbursementsService {
         dto: UpdateReimbursementAllocationDto,
     ): Promise<IReimbursementAllocationResponse> {
         return this.prisma.$transaction(async (tx) => {
-            await this.lockUser(tx, userId);
+            await lockReimbursements(tx, userId);
 
             const allocation = await tx.reimbursementAllocation.findFirst({
                 where: { id, userId },
@@ -357,11 +358,6 @@ export class ReimbursementsService {
     private async sumAllocations(tx: TxClient, where: Prisma.ReimbursementAllocationWhereInput): Promise<number> {
         const result = await tx.reimbursementAllocation.aggregate({ where, _sum: { amount: true } });
         return toCents(result._sum.amount ?? 0);
-    }
-
-    /** Per-user advisory lock held until commit. $executeRaw, not $queryRaw: Prisma can't deserialize the void result. */
-    private async lockUser(tx: TxClient, userId: string): Promise<void> {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reimbursement:${userId}`}))`;
     }
 }
 

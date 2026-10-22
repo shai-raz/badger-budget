@@ -33,6 +33,7 @@ describe("TransactionsService", () => {
         $transaction: jest.fn((arg: unknown) =>
             typeof arg === "function" ? arg(mockPrismaService) : Promise.all(arg as Promise<unknown>[]),
         ),
+        $executeRaw: jest.fn(),
         budget: {
             findMany: jest.fn(),
         },
@@ -167,6 +168,7 @@ describe("TransactionsService", () => {
             currencyId: "currency-id",
             currency: { code: "USD" },
         });
+        mockPrismaService.reimbursementAllocation.findMany.mockResolvedValue([]);
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 TransactionsService,
@@ -1623,17 +1625,21 @@ describe("TransactionsService", () => {
     describe("update reimbursement guard", () => {
         const manual = { ...mockTransaction, externalId: null };
 
+        /** Allocation rows the guard reads inside the transaction, by the side this row sits on. */
+        const mockAllocations = ({ asExpense = [], asIncome = [] }: { asExpense?: number[]; asIncome?: number[] }) => {
+            mockPrismaService.reimbursementAllocation.findMany.mockImplementation(({ where }) =>
+                Promise.resolve((where.expenseId !== undefined ? asExpense : asIncome).map((amount) => ({ amount }))),
+            );
+        };
+
         beforeEach(() => {
             mockPrismaService.transaction.update.mockResolvedValue(mockTransaction);
             mockPrismaService.budget.findMany.mockResolvedValue([]);
         });
 
         it("rejects lowering the amount of a linked expense below its allocated total", async () => {
-            mockPrismaService.transaction.findFirst.mockResolvedValue({
-                ...manual,
-                reimbursedBy: [{ amount: 40 }],
-                reimburses: [],
-            });
+            mockPrismaService.transaction.findFirst.mockResolvedValue(manual);
+            mockAllocations({ asExpense: [40] });
 
             await expect(service.update("transaction-id", "test-user", { amount: 39 })).rejects.toThrow(
                 BadRequestException,
@@ -1642,11 +1648,8 @@ describe("TransactionsService", () => {
         });
 
         it("allows setting a linked expense's amount to exactly its allocated total", async () => {
-            mockPrismaService.transaction.findFirst.mockResolvedValue({
-                ...manual,
-                reimbursedBy: [{ amount: 40 }],
-                reimburses: [],
-            });
+            mockPrismaService.transaction.findFirst.mockResolvedValue(manual);
+            mockAllocations({ asExpense: [40] });
 
             await service.update("transaction-id", "test-user", { amount: 40 });
 
@@ -1654,12 +1657,8 @@ describe("TransactionsService", () => {
         });
 
         it("rejects turning a linked income into a transfer", async () => {
-            mockPrismaService.transaction.findFirst.mockResolvedValue({
-                ...manual,
-                type: "income",
-                reimbursedBy: [],
-                reimburses: [{ amount: 30 }],
-            });
+            mockPrismaService.transaction.findFirst.mockResolvedValue({ ...manual, type: "income" });
+            mockAllocations({ asIncome: [30] });
 
             await expect(
                 service.update("transaction-id", "test-user", {
@@ -1671,11 +1670,8 @@ describe("TransactionsService", () => {
         });
 
         it("allows a hidden toggle on a linked row", async () => {
-            mockPrismaService.transaction.findFirst.mockResolvedValue({
-                ...manual,
-                reimbursedBy: [{ amount: 40 }],
-                reimburses: [],
-            });
+            mockPrismaService.transaction.findFirst.mockResolvedValue(manual);
+            mockAllocations({ asExpense: [40] });
 
             await service.update("transaction-id", "test-user", { hidden: true });
 
@@ -1686,15 +1682,41 @@ describe("TransactionsService", () => {
         });
 
         it("does not guard an unlinked row", async () => {
-            mockPrismaService.transaction.findFirst.mockResolvedValue({
-                ...manual,
-                reimbursedBy: [],
-                reimburses: [],
-            });
+            mockPrismaService.transaction.findFirst.mockResolvedValue(manual);
+            mockAllocations({});
 
             await service.update("transaction-id", "test-user", { amount: 1, currencyId: "currency-id" });
 
             expect(mockPrismaService.transaction.update).toHaveBeenCalled();
+        });
+
+        it("reads the allocation sums inside the transaction, so a link added after the row was loaded still blocks the edit", async () => {
+            // The row was loaded before the link committed; only the in-transaction read sees the 40.
+            mockPrismaService.transaction.findFirst.mockResolvedValue(manual);
+            mockAllocations({ asExpense: [40] });
+
+            await expect(service.update("transaction-id", "test-user", { amount: 39 })).rejects.toThrow(
+                BadRequestException,
+            );
+            expect(mockPrismaService.$transaction).toHaveBeenCalledWith(expect.any(Function));
+            expect(mockPrismaService.transaction.update).not.toHaveBeenCalled();
+        });
+
+        it("takes the reimbursement lock before reading the allocation sums", async () => {
+            mockPrismaService.transaction.findFirst.mockResolvedValue(manual);
+            mockAllocations({ asExpense: [40] });
+
+            await service.update("transaction-id", "test-user", { amount: 40 });
+
+            expect(mockPrismaService.$executeRaw).toHaveBeenCalledTimes(1);
+            // The lock key is interpolated as a parameter, so the value sits in the template's args.
+            const [strings, ...values] = mockPrismaService.$executeRaw.mock.calls[0];
+            expect(strings.join("?")).toContain("pg_advisory_xact_lock(hashtext(");
+            expect(values).toEqual(["reimbursement:test-user"]);
+            const lockOrder = mockPrismaService.$executeRaw.mock.invocationCallOrder[0];
+            expect(mockPrismaService.reimbursementAllocation.findMany.mock.invocationCallOrder[0]).toBeGreaterThan(
+                lockOrder,
+            );
         });
     });
 
@@ -1804,6 +1826,23 @@ describe("TransactionsService", () => {
             expect(mockPrismaService.reimbursementAllocation.deleteMany).toHaveBeenCalledWith({
                 where: { OR: [{ incomeId: "transaction-id" }, { expenseId: "transaction-id" }] },
             });
+        });
+
+        it("takes the reimbursement lock before soft-deleting and clearing allocations", async () => {
+            mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction);
+            mockPrismaService.transaction.update.mockResolvedValue({ ...mockTransaction, deletedAt: new Date() });
+
+            await service.remove("transaction-id", "test-user");
+
+            expect(mockPrismaService.$executeRaw).toHaveBeenCalledTimes(1);
+            const [strings, ...values] = mockPrismaService.$executeRaw.mock.calls[0];
+            expect(strings.join("?")).toContain("pg_advisory_xact_lock(hashtext(");
+            expect(values).toEqual(["reimbursement:test-user"]);
+            const lockOrder = mockPrismaService.$executeRaw.mock.invocationCallOrder[0];
+            expect(mockPrismaService.transaction.update.mock.invocationCallOrder[0]).toBeGreaterThan(lockOrder);
+            expect(mockPrismaService.reimbursementAllocation.deleteMany.mock.invocationCallOrder[0]).toBeGreaterThan(
+                lockOrder,
+            );
         });
     });
 

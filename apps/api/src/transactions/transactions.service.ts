@@ -20,6 +20,7 @@ import { FxConversionService } from "./fx-conversion.service";
 import { toAccountResponse } from "../accounts/account-response.mapper";
 import { sumAllocations, toReimbursementSummary } from "./reimbursement-netting";
 import { assertReimbursementEditAllowed } from "./reimbursement-edit-guard";
+import { lockReimbursements } from "./reimbursement-lock";
 
 /** Filters accepted by the transaction list endpoint (superset of legacy params). */
 export interface ListTransactionsFilters {
@@ -788,8 +789,6 @@ export class TransactionsService {
             originalCurrencyId: string | null;
             counterpartOfId: string | null;
             counterpart: ExistingMirror | null;
-            reimbursedBy?: { amount: Prisma.Decimal | number | string }[];
-            reimburses?: { amount: Prisma.Decimal | number | string }[];
         }
     > {
         const transaction = await this.db.transaction.findFirst({
@@ -812,8 +811,6 @@ export class TransactionsService {
                 originalCurrencyId: true,
                 counterpartOfId: true,
                 counterpart: { select: { id: true, accountId: true, amount: true } },
-                reimbursedBy: { select: { amount: true } },
-                reimburses: { select: { amount: true } },
             },
         });
 
@@ -834,16 +831,6 @@ export class TransactionsService {
             assertMirrorEditAllowed(updateTransactionDto, await this.findMirrorSource(current.counterpartOfId));
         }
         assertSyncedEditAllowed(current, updateTransactionDto);
-        assertReimbursementEditAllowed(
-            {
-                type: current.type,
-                amount: current.amount,
-                currencyId: current.currencyId,
-                allocatedAsExpense: sumAllocations(current.reimbursedBy ?? []),
-                allocatedAsIncome: sumAllocations(current.reimburses ?? []),
-            },
-            updateTransactionDto,
-        );
 
         const updateData: any = { ...updateTransactionDto };
         if (current.externalId) {
@@ -878,6 +865,23 @@ export class TransactionsService {
         }
 
         const updatedRow: TransactionRow = await this.prisma.$transaction(async (tx) => {
+            // Lock before reading the sums: a link created after an unlocked read could push the allocated total past
+            // the new amount, or let a type/currency change slip past a link that was just written.
+            await lockReimbursements(tx, userId);
+            const [asExpense, asIncome] = await Promise.all([
+                tx.reimbursementAllocation.findMany({ where: { expenseId: id }, select: { amount: true } }),
+                tx.reimbursementAllocation.findMany({ where: { incomeId: id }, select: { amount: true } }),
+            ]);
+            assertReimbursementEditAllowed(
+                {
+                    type: current.type,
+                    amount: current.amount,
+                    currencyId: current.currencyId,
+                    allocatedAsExpense: sumAllocations(asExpense),
+                    allocatedAsIncome: sumAllocations(asIncome),
+                },
+                updateTransactionDto,
+            );
             // Synced rows can't change account/currency (locked), so only manual rows need the check.
             if (
                 !current.externalId &&
@@ -908,15 +912,17 @@ export class TransactionsService {
         }
 
         // Soft-delete the source; the derived mirror is hard-deleted with it. Soft delete never fires the
-        // allocation FK cascade, so linked reimbursement allocations are removed explicitly.
-        const [deleted] = await this.prisma.$transaction([
-            this.prisma.transaction.update({ where: { id }, data: { deletedAt: new Date() } }),
-            this.prisma.transaction.deleteMany({ where: { counterpartOfId: id } }),
-            this.prisma.reimbursementAllocation.deleteMany({
+        // allocation FK cascade, so linked reimbursement allocations are removed explicitly. The lock keeps a
+        // concurrent link from inserting an allocation on this row after the cleanup has run.
+        return this.prisma.$transaction(async (tx) => {
+            await lockReimbursements(tx, userId);
+            const deleted = await tx.transaction.update({ where: { id }, data: { deletedAt: new Date() } });
+            await tx.transaction.deleteMany({ where: { counterpartOfId: id } });
+            await tx.reimbursementAllocation.deleteMany({
                 where: { OR: [{ incomeId: id }, { expenseId: id }] },
-            }),
-        ]);
-        return deleted;
+            });
+            return deleted;
+        });
     }
 
     private findMirrorSource(sourceId: string) {
