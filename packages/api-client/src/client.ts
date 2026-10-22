@@ -35,6 +35,7 @@ import type {
     ICreateReimbursementAllocation,
     IUpdateReimbursementAllocation,
     IReimbursementAllocationResponse,
+    IReimbursementCandidatesResponse,
 } from "@badger/types";
 
 export interface ApiClientConfig {
@@ -475,6 +476,14 @@ export class ApiClient {
 
     async deleteReimbursement(id: string) {
         await this.client.delete(`/reimbursements/${id}`);
+    }
+
+    async getReimbursementCandidates(transactionId: string, search?: string) {
+        const term = search?.trim();
+        const response = await this.client.get<IReimbursementCandidatesResponse>("/reimbursements/candidates", {
+            params: term ? { transactionId, search: term } : { transactionId },
+        });
+        return response.data;
     }
 
     // Currencies

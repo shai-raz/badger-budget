@@ -2,11 +2,13 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { ReimbursementsService } from "./reimbursements.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { AmountRuleSource, REIMBURSEMENT_SUGGESTION_SOURCES } from "./suggestion-sources";
 
 const USER = "user-1";
 const OTHER_USER = "user-2";
 const CURRENCY = "cur-ils";
 const CREATED_AT = new Date("2026-10-01T00:00:00Z");
+const TXN_DATE = new Date("2026-10-10T00:00:00Z");
 
 type Row = {
     id: string;
@@ -16,6 +18,10 @@ type Row = {
     amount: number;
     hidden: boolean;
     deletedAt: Date | null;
+    transactionDate: Date;
+    description: string;
+    additionalDescription: string | null;
+    category: { id: string; name: string; color: string; icon: string | null } | null;
 };
 
 type Allocation = { id: string; userId: string; incomeId: string; expenseId: string; amount: number };
@@ -29,6 +35,58 @@ describe("ReimbursementsService", () => {
 
     let transactions: Row[];
     let allocations: Allocation[];
+
+    /**
+     * Evaluates the subset of Prisma `where` the candidates query sends, against the in-memory rows. Unknown keys
+     * compare by equality, which covers userId, type, currencyId, hidden and deletedAt.
+     */
+    const matchesWhere = (t: Row, where: Record<string, unknown>): boolean =>
+        Object.entries(where).every(([key, cond]) => {
+            switch (key) {
+                case "AND":
+                    return (cond as Record<string, unknown>[]).every((w) => matchesWhere(t, w));
+                case "OR":
+                    return (cond as Record<string, unknown>[]).some((w) => matchesWhere(t, w));
+                case "NOT":
+                    return !matchesWhere(t, cond as Record<string, unknown>);
+                case "id":
+                    return typeof cond === "object" ? t.id !== (cond as { not: string }).not : t.id === cond;
+                case "reimbursedBy": {
+                    const { incomeId } = (cond as { none: { incomeId: string } }).none;
+                    return !allocations.some((a) => a.expenseId === t.id && a.incomeId === incomeId);
+                }
+                case "reimburses": {
+                    const { expenseId } = (cond as { none: { expenseId: string } }).none;
+                    return !allocations.some((a) => a.incomeId === t.id && a.expenseId === expenseId);
+                }
+                case "description":
+                case "additionalDescription":
+                    return String(t[key] ?? "")
+                        .toLowerCase()
+                        .includes(String((cond as { contains: string }).contains).toLowerCase());
+                case "category": {
+                    const { contains } = (cond as { name: { contains: string } }).name;
+                    return (t.category?.name ?? "").toLowerCase().includes(contains.toLowerCase());
+                }
+                case "amount":
+                case "transactionDate":
+                    return rangeMatches(key === "amount" ? t.amount : t.transactionDate.getTime(), cond);
+                default:
+                    return t[key as keyof Row] === cond;
+            }
+        });
+
+    const rangeMatches = (value: number, cond: unknown): boolean => {
+        const num = (x: unknown) => (x instanceof Date ? x.getTime() : Number(x));
+        if (typeof cond !== "object" || cond === null) return value === num(cond);
+        const c = cond as Record<string, unknown>;
+        return (
+            (c.gte === undefined || value >= num(c.gte)) &&
+            (c.lte === undefined || value <= num(c.lte)) &&
+            (c.gt === undefined || value > num(c.gt)) &&
+            (c.lt === undefined || value < num(c.lt))
+        );
+    };
 
     const sumWhere = (where: AllocationWhere) => {
         const excludedId = typeof where.id === "object" ? where.id.not : undefined;
@@ -53,8 +111,41 @@ describe("ReimbursementsService", () => {
                         t.userId === where.userId &&
                         (where.deletedAt === null ? t.deletedAt === null : true),
                 );
-                return row ? { ...row } : null;
+                return row ? { ...row, currency: { code: "ILS" } } : null;
             }),
+            findMany: jest.fn(
+                ({
+                    where,
+                    orderBy,
+                    take,
+                }: {
+                    where: Record<string, unknown>;
+                    orderBy: Array<Record<string, "asc" | "desc">>;
+                    take: number;
+                }) => {
+                    const [byDate, byId] = orderBy;
+                    const dateSign = byDate.transactionDate === "asc" ? 1 : -1;
+                    const idSign = (byId?.id ?? "asc") === "asc" ? 1 : -1;
+                    return transactions
+                        .filter((t) => matchesWhere(t, where))
+                        .sort(
+                            (a, b) =>
+                                dateSign * (a.transactionDate.getTime() - b.transactionDate.getTime()) ||
+                                idSign * a.id.localeCompare(b.id),
+                        )
+                        .slice(0, take)
+                        .map((t) => ({
+                            id: t.id,
+                            type: t.type,
+                            description: t.description,
+                            additionalDescription: t.additionalDescription,
+                            amount: t.amount,
+                            transactionDate: t.transactionDate,
+                            currency: { code: "ILS" },
+                            category: t.category,
+                        }));
+                },
+            ),
         },
         reimbursementAllocation: {
             findFirst: jest.fn(({ where }: { where: { id: string; userId: string } }) => {
@@ -87,6 +178,16 @@ describe("ReimbursementsService", () => {
                 allocations = allocations.filter((a) => !(a.id === where.id && a.userId === where.userId));
                 return { count: before - allocations.length };
             }),
+            groupBy: jest.fn(
+                ({ by, where }: { by: Array<"incomeId" | "expenseId">; where: Record<string, { in: string[] }> }) => {
+                    const key = by[0];
+                    const sums = new Map<string, number>();
+                    for (const a of allocations) {
+                        if (where[key].in.includes(a[key])) sums.set(a[key], (sums.get(a[key]) ?? 0) + a.amount);
+                    }
+                    return [...sums].map(([id, amount]) => ({ [key]: id, _sum: { amount } }));
+                },
+            ),
         },
     };
 
@@ -98,6 +199,10 @@ describe("ReimbursementsService", () => {
         amount: 500,
         hidden: false,
         deletedAt: null,
+        transactionDate: TXN_DATE,
+        description: "Income",
+        additionalDescription: null,
+        category: null,
         ...overrides,
     });
 
@@ -109,6 +214,10 @@ describe("ReimbursementsService", () => {
         amount: 600,
         hidden: false,
         deletedAt: null,
+        transactionDate: TXN_DATE,
+        description: "Expense",
+        additionalDescription: null,
+        category: null,
         ...overrides,
     });
 
@@ -117,7 +226,11 @@ describe("ReimbursementsService", () => {
         allocations = [];
 
         const module: TestingModule = await Test.createTestingModule({
-            providers: [ReimbursementsService, { provide: PrismaService, useValue: mockPrismaService }],
+            providers: [
+                ReimbursementsService,
+                { provide: PrismaService, useValue: mockPrismaService },
+                { provide: REIMBURSEMENT_SUGGESTION_SOURCES, useValue: [new AmountRuleSource()] },
+            ],
         }).compile();
 
         service = module.get<ReimbursementsService>(ReimbursementsService);
@@ -337,6 +450,138 @@ describe("ReimbursementsService", () => {
 
         it("returns 404 when nothing matches", async () => {
             await expect(service.remove(USER, "missing")).rejects.toThrow(NotFoundException);
+        });
+    });
+
+    describe("getCandidates", () => {
+        const ids = (rows: { id: string }[]) => rows.map((r) => r.id);
+        const candidateWheres = () =>
+            mockPrismaService.transaction.findMany.mock.calls.map((call) => JSON.stringify(call[0].where));
+
+        it("suggests expenses at least as large as an income, with equal amounts included", async () => {
+            transactions.push(
+                expense({ id: "expense-equal", amount: 500 }),
+                expense({ id: "expense-small", amount: 300 }),
+            );
+
+            const result = await service.getCandidates(USER, "income-1");
+
+            expect(ids(result.suggested)).toContain("expense-equal");
+            expect(ids(result.other)).toContain("expense-small");
+            const wheres = candidateWheres().join(" ");
+            expect(wheres).toContain('"amount":{"gte":500}');
+            expect(wheres).not.toMatch(/"amount":\{"gt"/);
+            expect(wheres).toContain('"NOT"');
+        });
+
+        it("suggests incomes no larger than an expense", async () => {
+            transactions.push(income({ id: "income-small", amount: 400 }), income({ id: "income-big", amount: 700 }));
+
+            const result = await service.getCandidates(USER, "expense-1");
+
+            expect(ids(result.suggested)).toContain("income-small");
+            expect(ids(result.other)).toContain("income-big");
+            const wheres = candidateWheres().join(" ");
+            expect(wheres).toContain('"amount":{"lte":600}');
+            expect(wheres).not.toMatch(/"amount":\{"lt"/);
+        });
+
+        it("excludes a candidate already linked to the source", async () => {
+            transactions.push(expense({ id: "expense-linked", amount: 700 }));
+            allocations = [
+                { id: "alloc-1", userId: USER, incomeId: "income-1", expenseId: "expense-linked", amount: 100 },
+            ];
+
+            const result = await service.getCandidates(USER, "income-1");
+
+            expect([...ids(result.suggested), ...ids(result.other)]).not.toContain("expense-linked");
+        });
+
+        it("drops a fully allocated candidate and reports the remaining balance of the others", async () => {
+            transactions.push(
+                expense({ id: "expense-full", amount: 400 }),
+                expense({ id: "expense-part", amount: 600 }),
+            );
+            allocations = [
+                { id: "a-full", userId: USER, incomeId: "income-2", expenseId: "expense-full", amount: 400 },
+                { id: "a-part", userId: USER, incomeId: "income-2", expenseId: "expense-part", amount: 150 },
+            ];
+
+            const result = await service.getCandidates(USER, "income-1");
+
+            const all = [...result.suggested, ...result.other];
+            expect(ids(all)).not.toContain("expense-full");
+            expect(all.find((c) => c.id === "expense-part")).toMatchObject({ amount: 600, remaining: 450 });
+        });
+
+        it("reports the source remaining after its own allocations", async () => {
+            allocations = [{ id: "a-1", userId: USER, incomeId: "income-1", expenseId: "expense-2", amount: 120 }];
+
+            const result = await service.getCandidates(USER, "income-1");
+
+            expect(result.source).toMatchObject({ id: "income-1", type: "income", amount: 500, remaining: 380 });
+            expect(ids([...result.suggested, ...result.other])).not.toContain("expense-2");
+        });
+
+        it("orders candidates by distance from the source date across before and after windows", async () => {
+            const at = (id: string, date: string) =>
+                expense({ id, amount: 700, transactionDate: new Date(`${date}T00:00:00Z`) });
+            transactions.push(
+                at("e-after-far", "2026-11-01"),
+                at("e-before-far", "2026-09-01"),
+                at("e-after-near", "2026-10-12"),
+                at("e-before-near", "2026-10-09"),
+            );
+
+            const result = await service.getCandidates(USER, "income-1");
+
+            // Distances from 2026-10-10: 1, 2, 22 (after-far) and 39 (before-far) days.
+            const ordered = ids(result.suggested).filter((id) => id.startsWith("e-"));
+            expect(ordered).toEqual(["e-before-near", "e-after-near", "e-after-far", "e-before-far"]);
+        });
+
+        it("adds text matches and the amount equality for an amount search", async () => {
+            transactions.push(
+                expense({ id: "expense-1200", amount: 1200, description: "Shop" }),
+                expense({ id: "expense-taizu", amount: 800, description: "Taizu dinner" }),
+            );
+
+            const result = await service.getCandidates(USER, "income-1", "₪1,200");
+
+            expect(ids(result.suggested)).toEqual(["expense-1200"]);
+            expect(candidateWheres().join(" ")).toContain('{"amount":1200}');
+        });
+
+        it("matches text only for a non-numeric search", async () => {
+            transactions.push(
+                expense({ id: "expense-1200", amount: 1200, description: "Shop" }),
+                expense({ id: "expense-taizu", amount: 800, description: "Taizu dinner" }),
+            );
+
+            const result = await service.getCandidates(USER, "income-1", "taizu");
+
+            expect(ids(result.suggested)).toEqual(["expense-taizu"]);
+            expect(candidateWheres().join(" ")).not.toContain('{"amount":1200}');
+        });
+
+        it("returns 404 when the source is not owned by the user", async () => {
+            transactions.push(income({ id: "income-other", userId: OTHER_USER }));
+
+            await expect(service.getCandidates(USER, "income-other")).rejects.toThrow(NotFoundException);
+        });
+
+        it("rejects a transfer source", async () => {
+            transactions.push(expense({ id: "transfer-1", type: "transfer" }));
+
+            await expect(service.getCandidates(USER, "transfer-1")).rejects.toThrow(BadRequestException);
+        });
+
+        it("rejects a hidden source", async () => {
+            transactions.push(income({ id: "income-hidden", hidden: true }));
+
+            await expect(service.getCandidates(USER, "income-hidden")).rejects.toThrow(
+                "Unhide this transaction to link reimbursements.",
+            );
         });
     });
 });
