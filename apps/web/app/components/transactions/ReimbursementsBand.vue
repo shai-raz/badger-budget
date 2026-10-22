@@ -2,6 +2,7 @@
 import type { ITransactionReimbursementLink, ITransactionResponse } from "@badger/types";
 import type { MenuItem } from "primevue/menuitem";
 import { useConfirm } from "primevue/useconfirm";
+import { reimbursementReceiptLines } from "../../utils/reimbursementReceipt";
 import ReimbursementAmountDialog from "./ReimbursementAmountDialog.vue";
 import { formatDate } from "./formatters";
 import { useDeleteReimbursement } from "../../composables/transactions/useReimbursements";
@@ -26,11 +27,12 @@ const allocated = computed(() => props.transaction.reimbursement?.allocatedActiv
 const counted = computed(() => Number((props.transaction.amount - allocated.value).toFixed(2)));
 const appliedWord = computed(() => (isExpense.value ? "applied" : "allocated"));
 
-const figures = computed(() => [
-    { label: "Paid", value: formatCurrency(props.transaction.amount, code.value) },
-    { label: "Paid back", value: formatCurrency(allocated.value, code.value) },
-    { label: "Your share", value: formatCurrency(displayAmount(props.transaction), code.value) },
-]);
+const receiptLines = computed(() => reimbursementReceiptLines(props.transaction));
+const receiptTotal = computed(() =>
+    isExpense.value
+        ? { label: "Your share", value: formatCurrency(displayAmount(props.transaction), code.value) }
+        : { label: "Counts as income", value: formatCurrency(counted.value, code.value) },
+);
 
 const menu = ref();
 const selectedLink = ref<ITransactionReimbursementLink | null>(null);
@@ -79,20 +81,6 @@ const confirmUnlink = (link: ITransactionReimbursementLink) => {
 <template>
     <SharedSectionBand :title="isExpense ? 'Reimbursements' : 'Pays back'">
         <div class="flex flex-col px-4 pb-4 md:px-0 md:pb-0">
-            <dl
-                v-if="isExpense"
-                class="m-0 grid grid-cols-3 gap-3 pb-4"
-            >
-                <div
-                    v-for="figure in figures"
-                    :key="figure.label"
-                    class="flex min-w-0 flex-col gap-1"
-                >
-                    <dt class="text-xs text-muted-color">{{ figure.label }}</dt>
-                    <dd class="m-0 font-semibold tabular-nums">{{ figure.value }}</dd>
-                </div>
-            </dl>
-
             <p
                 v-if="links.length === 0"
                 class="m-0 text-sm text-muted-color"
@@ -125,26 +113,53 @@ const confirmUnlink = (link: ITransactionReimbursementLink) => {
                             <template v-if="!link.active">&middot; inactive (hidden)</template>
                         </div>
                     </div>
-                    <div class="font-semibold tabular-nums">{{ formatCurrency(link.amount, code) }}</div>
-                    <Button
-                        icon="pi pi-ellipsis-v"
-                        text
-                        rounded
-                        severity="secondary"
-                        aria-label="Link actions"
-                        aria-haspopup="true"
-                        @click="openMenu($event, link)"
-                    />
+                    <div class="shrink-0 font-semibold tabular-nums">{{ formatCurrency(link.amount, code) }}</div>
+                    <div class="flex w-10 shrink-0 justify-center">
+                        <Button
+                            icon="pi pi-ellipsis-v"
+                            text
+                            rounded
+                            severity="secondary"
+                            aria-label="Link actions"
+                            aria-haspopup="true"
+                            @click="openMenu($event, link)"
+                        />
+                    </div>
                 </li>
             </ul>
 
-            <p
-                v-if="!isExpense"
-                class="m-0 border-t border-surface-200 pt-3 text-sm dark:border-surface-700"
+            <div
+                v-if="receiptLines"
+                class="border-t border-surface-200 pt-3 dark:border-surface-700"
             >
-                Counts as income:
-                <span class="font-semibold tabular-nums">{{ formatCurrency(counted, code) }}</span>
-            </p>
+                <div class="flex gap-3 md:ml-auto md:w-[45%] md:min-w-[16rem] md:max-w-sm">
+                    <dl class="m-0 flex min-w-0 flex-1 flex-col gap-1 text-sm">
+                        <div
+                            v-for="line in receiptLines"
+                            :key="line.label"
+                            class="flex items-baseline justify-between gap-3"
+                        >
+                            <dt class="text-muted-color">{{ line.label }}</dt>
+                            <dd
+                                class="m-0 tabular-nums"
+                                :class="line.valueClass"
+                            >
+                                {{ line.value }}
+                            </dd>
+                        </div>
+                        <div
+                            class="mt-1 flex items-baseline justify-between gap-3 border-t border-surface-200 pt-2 dark:border-surface-700"
+                        >
+                            <dt class="font-semibold">{{ receiptTotal.label }}</dt>
+                            <dd class="m-0 text-base font-semibold tabular-nums">{{ receiptTotal.value }}</dd>
+                        </div>
+                    </dl>
+                    <span
+                        class="w-10 shrink-0"
+                        aria-hidden="true"
+                    />
+                </div>
+            </div>
         </div>
 
         <Menu
