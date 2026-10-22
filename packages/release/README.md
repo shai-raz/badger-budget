@@ -26,6 +26,9 @@ To regenerate `CHANGELOG.md` from `apps/api/changelog.json` after editing the JS
 node packages/release/bin/release.mjs --repo shai-raz/badger-budget --render-only
 ```
 
+`CHANGELOG.md` is excluded from Prettier (`.prettierignore`), and `release.yml` does not reformat it. The Markdown
+escapes in `src/changelog.mjs` only have to render titles as typed on GitHub.
+
 ## Recovering a release whose GitHub release failed
 
 The push is atomic, so a tag on main means the release commit landed too. If `Create the GitHub release` fails after

@@ -97,7 +97,7 @@ jobs:
               env:
                   VERSION: ${{ steps.plan.outputs.version }}
               run: |
-                  pnpm exec prettier --write CHANGELOG.md apps/api/changelog.json package.json apps/api/package.json apps/web/package.json
+                  pnpm exec prettier --write apps/api/changelog.json package.json apps/api/package.json apps/web/package.json
                   git config user.name "github-actions[bot]"
                   git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
                   git add CHANGELOG.md apps/api/changelog.json package.json apps/api/package.json apps/web/package.json
