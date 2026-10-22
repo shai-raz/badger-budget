@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import type { ITransactionResponse } from "@badger/types";
 import { useMarkCardPayoff } from "../../composables/transactions/useMarkCardPayoff";
+import { useCardPayoffLinkPreview } from "../../composables/card-payoff-patterns/useCardPayoffPatterns";
+import { linkRemovalWarning } from "../../utils/reimbursement";
 
 interface Props {
     visible: boolean;
@@ -15,6 +18,13 @@ const emit = defineEmits<{
 }>();
 
 const { mutate: markAsCardPayoff, isPending } = useMarkCardPayoff();
+
+// Previews the links this re-tag would delete, for the description that will be submitted.
+const { data: linkPreview } = useCardPayoffLinkPreview(
+    computed(() => props.transaction?.description ?? null),
+    computed(() => props.visible),
+);
+const removalWarning = computed(() => linkRemovalWarning(linkPreview.value));
 
 const handleConfirm = () => {
     if (!props.transaction) return;
@@ -74,6 +84,12 @@ const handleCancel = () => {
                     </p>
                 </div>
             </div>
+            <Message
+                v-if="removalWarning"
+                severity="warn"
+                :closable="false"
+                >{{ removalWarning }}</Message
+            >
         </div>
 
         <template #footer>

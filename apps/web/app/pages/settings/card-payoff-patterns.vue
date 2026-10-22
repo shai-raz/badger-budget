@@ -3,7 +3,9 @@ import {
     useGetCardPayoffPatterns,
     useDeleteCardPayoffPattern,
     useApplyAllCardPayoffPatterns,
+    useApplyAllLinkPreviewLoader,
 } from "../../composables/card-payoff-patterns/useCardPayoffPatterns";
+import { linkRemovalWarning } from "../../utils/reimbursement";
 import { useConfirm } from "primevue/useconfirm";
 import type { ICardPayoffPattern } from "@badger/types";
 
@@ -18,6 +20,7 @@ const isDesktop = useIsDesktop();
 const { data: patterns, isLoading, error } = useGetCardPayoffPatterns();
 const { mutate: deletePattern, isPending: isDeleting } = useDeleteCardPayoffPattern();
 const { mutate: applyAllPatterns, isPending: isApplying } = useApplyAllCardPayoffPatterns();
+const loadApplyAllLinkPreview = useApplyAllLinkPreviewLoader();
 
 const handleDelete = (pattern: ICardPayoffPattern) => {
     if (pattern.isSystem) {
@@ -36,10 +39,18 @@ const handleDelete = (pattern: ICardPayoffPattern) => {
     });
 };
 
-const handleApplyAll = () => {
+const handleApplyAll = async () => {
+    const baseMessage =
+        "This will apply all card payoff patterns to your existing transactions. Matching transactions will be marked as transfers and hidden from your transaction list.";
+    let warning: string | null = null;
+    try {
+        warning = linkRemovalWarning(await loadApplyAllLinkPreview());
+    } catch {
+        // Preview is best-effort: fall back to the static message.
+    }
+
     confirm.require({
-        message:
-            "This will apply all card payoff patterns to your existing transactions. Matching transactions will be marked as transfers and hidden from your transaction list.",
+        message: warning ? `${baseMessage}\n\n${warning}` : baseMessage,
         header: "Apply all patterns",
         icon: "pi pi-info-circle",
         rejectLabel: "Cancel",
