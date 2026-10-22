@@ -6,6 +6,7 @@ import { useConfirm } from "primevue/useconfirm";
 import EditTransactionDialog from "~/components/transactions/EditTransactionDialog.vue";
 import ApplyCategoryRuleDialog from "~/components/transactions/ApplyCategoryRuleDialog.vue";
 import MarkCardPayoff from "~/components/transactions/MarkCardPayoff.vue";
+import ReimbursementsBand from "~/components/transactions/ReimbursementsBand.vue";
 import {
     formatDate,
     transactionSign,
@@ -318,6 +319,11 @@ const handleDelete = () => {
                 <!-- Attachments -->
                 <TransactionsAttachmentsCard :transaction="transaction" />
             </div>
+
+            <ReimbursementsBand
+                v-if="transaction.type === 'expense' || transaction.type === 'income'"
+                :transaction="transaction"
+            />
         </div>
 
         <EditTransactionDialog

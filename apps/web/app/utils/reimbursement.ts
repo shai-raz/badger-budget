@@ -1,4 +1,4 @@
-import type { ITransactionResponse } from "@badger/types";
+import type { ITransactionReimbursement, ITransactionReimbursementLink, ITransactionResponse } from "@badger/types";
 import { transactionAmountClass } from "../components/transactions/formatters";
 import { formatCurrency } from "./currency";
 
@@ -68,6 +68,36 @@ export function incomeRemainderLine(tx: ReimbursementTx): string | null {
  */
 export function remainingToLink(tx: ReimbursementTx): number {
     return fromCents(Math.max(0, toCents(tx.amount) - toCents(tx.reimbursement?.allocatedTotal ?? 0)));
+}
+
+/**
+ * Largest amount an existing link can take: its own amount plus the smaller of
+ * this row's remaining room and the other side's remaining balance.
+ */
+export function maxLinkAmount(
+    tx: ReimbursementTx,
+    link: Pick<ITransactionReimbursementLink, "amount" | "transactionRemaining">,
+): number {
+    const room = Math.min(toCents(remainingToLink(tx)), toCents(link.transactionRemaining));
+    return fromCents(toCents(link.amount) + Math.max(0, room));
+}
+
+/**
+ * Read-only line in the edit dialog for a row with links: the expense's paid-back
+ * total, or how many expenses an income reimburses. Null when there are no links.
+ */
+export function editDialogReimbursementLine(tx: {
+    currency: { code: string };
+    reimbursement: ITransactionReimbursement | null;
+}): string | null {
+    const reimbursement = tx.reimbursement;
+    if (!reimbursement || reimbursement.links.length === 0) return null;
+
+    if (reimbursement.role === "expense") {
+        return `Reimbursed ${formatCurrency(reimbursement.allocatedActive, tx.currency.code)}`;
+    }
+    const n = reimbursement.links.length;
+    return `Reimburses ${n === 1 ? "1 expense" : `${n} expenses`}`;
 }
 
 export interface LinkActionState {

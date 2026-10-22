@@ -6,8 +6,10 @@ import {
     incomeRemainderLine,
     isAllocatedIncome,
     linkActionState,
+    editDialogReimbursementLine,
     linkRemovalWarning,
     linksRemovedSuffix,
+    maxLinkAmount,
     reimbursementSubLine,
     remainingToLink,
     rowAmountClass,
@@ -467,5 +469,75 @@ describe("spec examples", () => {
         expect(displayAmount(expense)).toBe(600);
         expect(reimbursementSubLine(expense)).toBeNull();
         expect(remainingToLink(expense)).toBe(450);
+    });
+});
+
+describe("maxLinkAmount", () => {
+    it("is the link's own amount plus the room left on this row", () => {
+        const expense = tx({
+            amount: 600,
+            reimbursement: reimbursement({
+                allocatedTotal: 300,
+                allocatedActive: 300,
+                links: [link({ amount: 150 }), link({ allocationId: "b", amount: 150 })],
+            }),
+        });
+        // Room on the expense: 600 - 300 = 300. The other side has 450 left, so 300 is the limit.
+        expect(maxLinkAmount(expense, link({ amount: 150, transactionRemaining: 450 }))).toBe(450);
+    });
+
+    it("is capped by the other side's remaining balance when that is smaller", () => {
+        const expense = tx({
+            amount: 600,
+            reimbursement: reimbursement({ allocatedTotal: 150, allocatedActive: 150, links: [link({ amount: 150 })] }),
+        });
+        // Room on the expense: 450. The other side only has 40 left beyond this link.
+        expect(maxLinkAmount(expense, link({ amount: 150, transactionRemaining: 40 }))).toBe(190);
+    });
+
+    it("never drops below the link's own amount", () => {
+        const expense = tx({
+            amount: 100,
+            reimbursement: reimbursement({ allocatedTotal: 100, allocatedActive: 100, links: [link({ amount: 100 })] }),
+        });
+        expect(maxLinkAmount(expense, link({ amount: 100, transactionRemaining: 0 }))).toBe(100);
+    });
+
+    it("stays cents-exact", () => {
+        const expense = tx({
+            amount: 0.3,
+            reimbursement: reimbursement({ allocatedTotal: 0.1, allocatedActive: 0.1, links: [link({ amount: 0.1 })] }),
+        });
+        expect(maxLinkAmount(expense, link({ amount: 0.1, transactionRemaining: 1 }))).toBe(0.3);
+    });
+});
+
+describe("editDialogReimbursementLine", () => {
+    const withLinks = (role: "expense" | "income", count: number, allocatedActive: number) =>
+        reimbursement({
+            role,
+            allocatedTotal: allocatedActive,
+            allocatedActive,
+            links: Array.from({ length: count }, (_, i) => link({ allocationId: `a${i}` })),
+        });
+
+    it("is null when the row has no links", () => {
+        expect(editDialogReimbursementLine({ currency: ILS, reimbursement: null })).toBeNull();
+        expect(editDialogReimbursementLine({ currency: ILS, reimbursement: withLinks("expense", 0, 0) })).toBeNull();
+    });
+
+    it("shows the paid-back total on an expense", () => {
+        expect(editDialogReimbursementLine({ currency: ILS, reimbursement: withLinks("expense", 2, 300) })).toBe(
+            "Reimbursed ₪300.00",
+        );
+    });
+
+    it("counts expenses on an income, singular and plural", () => {
+        expect(editDialogReimbursementLine({ currency: ILS, reimbursement: withLinks("income", 1, 150) })).toBe(
+            "Reimburses 1 expense",
+        );
+        expect(editDialogReimbursementLine({ currency: ILS, reimbursement: withLinks("income", 3, 300) })).toBe(
+            "Reimburses 3 expenses",
+        );
     });
 });
