@@ -532,6 +532,16 @@ describe("editDialogReimbursementLine", () => {
         );
     });
 
+    it("counts a hidden expense's links at their full total, not the active total", () => {
+        const hidden = reimbursement({
+            role: "expense",
+            allocatedTotal: 300,
+            allocatedActive: 0,
+            links: [link({ allocationId: "a0" })],
+        });
+        expect(editDialogReimbursementLine({ currency: ILS, reimbursement: hidden })).toBe("Reimbursed ₪300.00");
+    });
+
     it("counts expenses on an income, singular and plural", () => {
         expect(editDialogReimbursementLine({ currency: ILS, reimbursement: withLinks("income", 1, 150) })).toBe(
             "Reimburses 1 expense",

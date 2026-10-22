@@ -94,7 +94,7 @@ export function editDialogReimbursementLine(tx: {
     if (!reimbursement || reimbursement.links.length === 0) return null;
 
     if (reimbursement.role === "expense") {
-        return `Reimbursed ${formatCurrency(reimbursement.allocatedActive, tx.currency.code)}`;
+        return `Reimbursed ${formatCurrency(reimbursement.allocatedTotal, tx.currency.code)}`;
     }
     const n = reimbursement.links.length;
     return `Reimburses ${n === 1 ? "1 expense" : `${n} expenses`}`;
