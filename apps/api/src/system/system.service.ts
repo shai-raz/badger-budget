@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import type { ISystemInfo } from "@badger/types";
 import { RunningVersion, readApiPackageVersion, resolveRunningVersion } from "./running-version";
 import { UpdateCheckResult, UpdateCheckService } from "./update-check.service";
-import { isUpdateAvailable } from "./version";
+import { isComparable, isUpdateAvailable } from "./version";
 
 @Injectable()
 export class SystemService {
@@ -45,6 +45,7 @@ export class SystemService {
             commit: this.running.commit,
             latest: latestVersion,
             updateAvailable: isUpdateAvailable(this.running.version, latestVersion),
+            updateComparable: isComparable(this.running.version),
             checkedAt: checkedAt?.toISOString() ?? null,
             updateCheckEnabled: this.updateCheck.isEnabled(),
             releaseUrl: latest?.url ?? null,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useToast } from "primevue/usetoast";
-import { lastCheckedLabel, shortCommit } from "../../utils/about";
+import { lastCheckedLabel, shortCommit, updateStatusLabel } from "../../utils/about";
 
 interface HttpError {
     response?: { data?: { message?: string } };
@@ -12,6 +12,7 @@ const checkMutation = useCheckForUpdates();
 
 const commit = computed(() => shortCommit(info.value?.commit ?? null));
 const lastChecked = computed(() => (info.value ? lastCheckedLabel(info.value) : ""));
+const statusLabel = computed(() => (info.value ? updateStatusLabel(info.value) : null));
 
 const handleCheck = async () => {
     try {
@@ -84,11 +85,11 @@ const handleCheck = async () => {
                     >
                 </p>
                 <p
-                    v-else-if="info?.checkedAt"
+                    v-else-if="statusLabel"
                     class="text-sm text-muted-color"
                     role="status"
                 >
-                    You're up to date
+                    {{ statusLabel }}
                 </p>
             </div>
         </div>

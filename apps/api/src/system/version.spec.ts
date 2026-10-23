@@ -1,4 +1,17 @@
-import { baseVersion, compareBase, isUpdateAvailable, normalizeVersion, parseVersion } from "./version";
+import { baseVersion, compareBase, isComparable, isUpdateAvailable, normalizeVersion, parseVersion } from "./version";
+
+describe("isComparable", () => {
+    it("is true for release and git-describe builds", () => {
+        expect(isComparable("0.3.1")).toBe(true);
+        expect(isComparable("v0.3.1-3-gabc1234")).toBe(true);
+    });
+
+    it("is false for dev, unknown and unparsable builds", () => {
+        expect(isComparable("0.3.0-dev")).toBe(false);
+        expect(isComparable(null)).toBe(false);
+        expect(isComparable("garbage")).toBe(false);
+    });
+});
 
 describe("parseVersion", () => {
     it("parses release, git-describe ahead and dev builds", () => {

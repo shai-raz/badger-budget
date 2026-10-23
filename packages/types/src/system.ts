@@ -7,6 +7,8 @@ export interface ISystemInfo {
     /** Latest release version without the leading v, e.g. "0.4.0". */
     latest: string | null;
     updateAvailable: boolean;
+    /** False for -dev and unknown builds, which never get update notices. */
+    updateComparable: boolean;
     /** ISO time of the last successful check. */
     checkedAt: string | null;
     updateCheckEnabled: boolean;
