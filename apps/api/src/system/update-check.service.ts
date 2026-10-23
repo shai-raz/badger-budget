@@ -61,6 +61,8 @@ export class UpdateCheckService implements OnApplicationBootstrap {
     /** Checks now, unless any check ran in the last FORCE_COOLDOWN_MS (server-wide). */
     async forceCheck(): Promise<UpdateCheckResult> {
         if (!this.isEnabled()) return { latest: null, checkedAt: null };
+        // A refresh already in flight counts as this check: wait for its result instead of returning the old snapshot.
+        if (this.inFlight) await this.inFlight;
         const sinceAttempt = this.lastAttemptAt === null ? Infinity : Date.now() - this.lastAttemptAt;
         if (sinceAttempt >= FORCE_COOLDOWN_MS) await this.refresh();
         return this.snapshot();

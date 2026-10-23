@@ -161,6 +161,25 @@ describe("UpdateCheckService", () => {
             expect(second.checkedAt).toEqual(first.checkedAt);
         });
 
+        it("waits for an in-flight refresh instead of returning the stale snapshot", async () => {
+            let resolveFetch!: (response: Response) => void;
+            fetchMock.mockReturnValueOnce(
+                new Promise<Response>((resolve) => {
+                    resolveFetch = resolve;
+                }),
+            );
+            const service = build();
+
+            const refresh = service.getLatest();
+            const forced = service.forceCheck();
+            resolveFetch(releaseResponse());
+            const [, result] = await Promise.all([refresh, forced]);
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            expect(result.latest?.version).toBe("0.4.0");
+            expect(result.checkedAt).toEqual(new Date("2026-10-23T12:00:00Z"));
+        });
+
         it("respects the cooldown after a failed attempt too", async () => {
             fetchMock.mockRejectedValueOnce(new Error("down"));
             const service = build();
