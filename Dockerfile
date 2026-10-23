@@ -99,6 +99,13 @@ COPY --from=build /app/apps/api/dist-seed ./apps/api/dist-seed
 COPY --from=build /app/apps/web/.output/public ./web
 COPY docker/entrypoint.sh ./docker/entrypoint.sh
 
+# Set by CI (docker-publish.yml) from `git describe --tags` and the commit SHA. Builds without them (local, Coolify)
+# leave both empty and the API reports "<apps/api package.json version>-dev".
+ARG APP_VERSION=
+ARG GIT_SHA=
+ENV APP_VERSION=${APP_VERSION} \
+    GIT_SHA=${GIT_SHA}
+
 # Only the data volume is created and owned here; the rest of /app stays root-owned and read-only.
 RUN mkdir -p /data && chown node:node /data
 USER node
