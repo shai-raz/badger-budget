@@ -23,6 +23,8 @@ model User {
   currencyBackfilledAt DateTime? @map("currency_backfilled_at") @db.Timestamp(6)
   // Last day through which demo transactions were generated (demo user only; null for everyone else; see src/demo).
   demoDataThrough      DateTime? @map("demo_data_through") @db.Date
+  // Last app version whose What's New the user has seen; null = never stamped. Only ever raised (see system/changelog.ts).
+  lastSeenVersion      String?   @map("last_seen_version") @db.VarChar(64)
   createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
   deletedAt            DateTime? @map("deleted_at") @db.Timestamp(6)

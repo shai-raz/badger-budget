@@ -93,6 +93,7 @@ COPY --from=build /app/packages/utils/dist ./node_modules/@badger/utils/dist
 
 # API: compiled app, compiled seed (run with plain node), and the Prisma schema and migrations.
 COPY --from=build /app/apps/api/package.json ./apps/api/package.json
+COPY --from=build /app/apps/api/changelog.json ./apps/api/changelog.json
 COPY --from=build /app/apps/api/prisma ./apps/api/prisma
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/dist-seed ./apps/api/dist-seed
