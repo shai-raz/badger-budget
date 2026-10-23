@@ -9,8 +9,8 @@ import {
 
 // Mobile-only menu, opened by LayoutPageHeader's hamburger. The logo heads it, the list holds the items the
 // bottom bar doesn't (Categories, Settings), the update item that opens UpdateDialog while a release is pending,
-// and always "What's new" (WhatsNewDialog). The footer holds the theme switch and the signed-in user with logout, mirroring the sidebar's
-// bottom. Desktop has the sidebar, so the drawer never shows there.
+// and always "What's new" (WhatsNewDialog). The footer holds the theme switch and the signed-in user with
+// logout, mirroring the sidebar's bottom. Desktop has the sidebar, so the drawer never shows there.
 const { open, closeDrawer } = useNavDrawer();
 const isDesktop = useIsDesktop();
 const route = useRoute();
