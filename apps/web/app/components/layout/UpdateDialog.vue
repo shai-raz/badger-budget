@@ -43,7 +43,7 @@ const handleCheck = async () => {
         class="dialog-compact max-w-[95vw]"
         modal
         :draggable="false"
-        header="Update available"
+        :header="upToDate ? 'No update available' : 'Update available'"
         :style="{ width: '28rem' }"
     >
         <div
@@ -82,6 +82,7 @@ const handleCheck = async () => {
         <template #footer>
             <div class="flex w-full flex-wrap items-center justify-between gap-2">
                 <Button
+                    v-if="!upToDate"
                     label="Dismiss for this version"
                     severity="secondary"
                     text
@@ -91,6 +92,7 @@ const handleCheck = async () => {
                     label="Check again"
                     icon="pi pi-refresh"
                     severity="secondary"
+                    class="ml-auto"
                     :loading="checkMutation.isPending.value"
                     @click="handleCheck"
                 />
