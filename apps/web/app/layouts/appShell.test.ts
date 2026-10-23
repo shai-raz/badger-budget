@@ -165,8 +165,25 @@ describe("app shell viewport contract", () => {
 
     it("gives PageHeader the back and menu buttons, the single title and resolves leading via the pure util", () => {
         expect(pageHeader).toContain('aria-label="Back"');
-        expect(pageHeader).toContain('aria-label="Open menu"');
+        expect(pageHeader).toContain("hamburgerLabel(updateVisible)");
         expect(pageHeader).toContain("resolveHeaderLeading");
         expect(pageHeader).toContain("<h1");
+    });
+
+    // The update item lives in the sidebar bottom group and the drawer list, and opens the layout-mounted dialog.
+    it("renders the update nav item from NAV_ACTIONS in the sidebar and drawer, opening UpdateDialog", () => {
+        expect(sidebar).toContain("NAV_ACTIONS.update");
+        expect(sidebar).toContain("openDialog()");
+        expect(sidebar).toContain("mt-auto");
+        expect(navDrawer).toContain("NAV_ACTIONS.update");
+        expect(navDrawer).toContain("closeDrawer();");
+        expect(navDrawer).toContain("openDialog();");
+        expect(layout).toContain("<UpdateDialog />");
+    });
+
+    it("badges the hamburger with a decorative dot only while the update notice is visible", () => {
+        expect(pageHeader).toContain("useUpdateNotice");
+        expect(pageHeader).toContain('v-if="updateVisible"');
+        expect(pageHeader).toContain('aria-hidden="true"');
     });
 });
