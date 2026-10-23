@@ -793,16 +793,17 @@ export class TransactionsService {
      * Budgets this transaction counts toward: budgets linked to the
      * transaction's category (via budget_categories) whose lifecycle window
      * contains the transaction date, plus the directly linked budget, if any.
-     * Only expenses count toward budgets.
+     * Only visible expenses count toward budgets: hidden ones are excluded from spend, as in the summary.
      */
     private async findApplicableBudgets(transaction: {
         userId: string;
         type: string;
+        hidden: boolean;
         categoryId: string | null;
         budgetId: string | null;
         transactionDate: Date;
     }) {
-        if (transaction.type !== "expense") {
+        if (transaction.type !== "expense" || transaction.hidden) {
             return [];
         }
 

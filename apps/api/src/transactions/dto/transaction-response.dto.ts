@@ -137,7 +137,7 @@ export class TransactionResponseDto implements ITransactionResponse {
         type: [BudgetResponseDto],
         required: false,
         description:
-            "Budgets this transaction counts toward, derived from the transaction's category via budget-category links (plus the directly linked budget, if any). Only populated on the single-transaction detail endpoint.",
+            "Budgets this transaction counts toward, derived from the transaction's category via budget-category links (plus the directly linked budget, if any). Empty for hidden transactions, which don't count toward spend. Only populated on the single-transaction detail endpoint.",
     })
     applicableBudgets?: BudgetResponseDto[];
 }

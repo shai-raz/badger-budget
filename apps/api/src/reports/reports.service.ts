@@ -31,7 +31,6 @@ interface ExpenseRow {
     amount: unknown;
     currencyId: string;
     transactionDate: Date;
-    hidden: boolean;
     categoryId: string | null;
     category: {
         id: string;
@@ -117,6 +116,7 @@ export class ReportsService {
             where: {
                 userId,
                 deletedAt: null,
+                hidden: false,
                 type: "expense",
                 transactionDate: {
                     gte: start,
@@ -127,7 +127,6 @@ export class ReportsService {
                 amount: true,
                 currencyId: true,
                 transactionDate: true,
-                hidden: true,
                 categoryId: true,
                 category: {
                     select: { id: true, name: true, color: true, icon: true },
@@ -205,8 +204,8 @@ export class ReportsService {
                 // resolveRates covered every pair; this is a programming error.
                 throw new Error(`Missing FX rate for ${txn.currencyId} on ${toIsoDateString(txn.transactionDate)}`);
             }
-            // Net of active income reimbursements; hidden expenses keep their gross amount.
-            const allocated = txn.hidden ? 0 : sumAllocations(txn.reimbursedBy);
+            // Net of active income reimbursements.
+            const allocated = sumAllocations(txn.reimbursedBy);
             const converted = netOf(txn.amount, allocated) * rate;
 
             const bucketKey = txn.categoryId ?? "__uncategorized__";

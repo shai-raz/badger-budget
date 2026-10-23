@@ -276,7 +276,8 @@ export class BudgetsService {
 
         const categoryIds = this.getBudgetCategoryIds(budget);
 
-        // Sum expense transactions within the window whose categories overlap this budget
+        // Sum expense transactions within the window whose categories overlap this budget.
+        // Hidden expenses are excluded, matching the transactions summary totals.
         const transactions = await this.db.transaction.findMany({
             where: {
                 userId,
@@ -284,6 +285,7 @@ export class BudgetsService {
                     in: categoryIds,
                 },
                 deletedAt: null,
+                hidden: false,
                 type: "expense",
                 transactionDate: {
                     gte: periodWindow.periodStart,
@@ -317,22 +319,21 @@ export class BudgetsService {
     }
 
     /**
-     * The expense's share that counts against the budget: its amount minus active income reimbursements
-     * (hidden expenses keep their gross amount). Cross-currency snapshots hold the gross amount converted,
+     * The expense's share that counts against the budget: its amount minus active income reimbursements.
+     * Cross-currency snapshots hold the gross amount converted,
      * so they are scaled by the net share.
      */
     private resolveBudgetAmount(
         transaction: {
             amount: number;
             currencyId: string;
-            hidden?: boolean;
             conversions?: Array<{ convertedAmount: number }>;
             reimbursedBy?: Array<{ amount: unknown }>;
         },
         budgetCurrencyId: string,
     ) {
         const gross = Number(transaction.amount);
-        const allocated = transaction.hidden ? 0 : sumAllocations(transaction.reimbursedBy ?? []);
+        const allocated = sumAllocations(transaction.reimbursedBy ?? []);
         const net = netOf(gross, allocated);
 
         if (transaction.currencyId === budgetCurrencyId) {

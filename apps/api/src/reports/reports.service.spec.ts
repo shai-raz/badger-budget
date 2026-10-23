@@ -55,14 +55,12 @@ describe("ReportsService", () => {
         overrides: Partial<{
             currencyId: string;
             transactionDate: Date;
-            hidden: boolean;
             reimbursedBy: { amount: number }[];
         }> = {},
     ) => ({
         amount,
         currencyId: overrides.currencyId ?? ilsCurrency.id,
         transactionDate: overrides.transactionDate ?? new Date("2026-07-10"),
-        hidden: overrides.hidden ?? false,
         categoryId: category?.id ?? null,
         category,
         reimbursedBy: overrides.reimbursedBy ?? [],
@@ -130,6 +128,7 @@ describe("ReportsService", () => {
                 where: expect.objectContaining({
                     userId: "user-id",
                     deletedAt: null,
+                    hidden: false,
                     type: "expense",
                     transactionDate: {
                         gte: new Date("2026-07-01"),
@@ -178,16 +177,6 @@ describe("ReportsService", () => {
 
         expect(result.total).toBe(0);
         expect(result.transactionCount).toBe(1);
-    });
-
-    it("keeps the gross amount of hidden expenses even when they have reimbursements", async () => {
-        mockPrismaService.transaction.findMany
-            .mockResolvedValueOnce([txn(600, groceries, { hidden: true, reimbursedBy: [{ amount: 250 }] })])
-            .mockResolvedValueOnce([]);
-
-        const result = await service.getSpendingReport("user-id", query);
-
-        expect(result.total).toBe(600);
     });
 
     it("converts foreign-currency amounts via the FX rate", async () => {
