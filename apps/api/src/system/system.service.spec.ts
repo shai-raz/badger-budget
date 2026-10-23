@@ -46,6 +46,7 @@ describe("SystemService", () => {
             commit: null,
             latest: "0.4.0",
             updateAvailable: true,
+            updateComparable: true,
             checkedAt: "2026-10-23T10:00:00.000Z",
             updateCheckEnabled: true,
             releaseUrl: "https://example.test/releases/v0.4.0",
@@ -65,6 +66,7 @@ describe("SystemService", () => {
 
         expect(info.version).toMatch(/-dev$/);
         expect(info.updateAvailable).toBe(false);
+        expect(info.updateComparable).toBe(false);
     });
 
     it("reports no latest release and no update when the check is disabled", async () => {

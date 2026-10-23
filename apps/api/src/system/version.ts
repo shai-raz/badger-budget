@@ -38,6 +38,12 @@ export function baseVersion(v: string | null | undefined): string | null {
     return parsed ? parsed.base.join(".") : null;
 }
 
+/** True for a release or a build ahead of one; false for -dev and unknown builds, which never get update notices. */
+export function isComparable(running: string | null): boolean {
+    const parsed = parseVersion(running);
+    return parsed !== null && parsed.kind !== "dev";
+}
+
 /**
  * True only when a plain release newer than the running build's base is available. Dev and unknown builds never
  * report an update, and neither does a latest value that is not a plain release.

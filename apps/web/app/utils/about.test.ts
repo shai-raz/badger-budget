@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { ISystemInfo } from "@badger/types";
-import { lastCheckedLabel, shortCommit } from "./about";
+import { lastCheckedLabel, shortCommit, updateStatusLabel } from "./about";
 
 const baseInfo: ISystemInfo = {
     version: "0.3.1",
     commit: "abc1234def5678901234567890abcdef12345678",
     latest: null,
     updateAvailable: false,
+    updateComparable: true,
     checkedAt: null,
     updateCheckEnabled: true,
     releaseUrl: null,
@@ -44,5 +45,35 @@ describe("lastCheckedLabel", () => {
 
     it("reads just now for a check run within the last minute", () => {
         expect(lastCheckedLabel({ ...baseInfo, checkedAt: "2026-10-23T11:59:30.000Z" }, now)).toBe("Checked just now");
+    });
+});
+
+describe("updateStatusLabel", () => {
+    it("says up to date for a comparable build that has checked", () => {
+        expect(updateStatusLabel({ ...baseInfo, checkedAt: "2026-10-23T11:00:00.000Z" })).toBe("You're up to date");
+    });
+
+    it("says update notices are off for a dev build, never up to date", () => {
+        expect(
+            updateStatusLabel({
+                ...baseInfo,
+                version: "0.3.0-dev",
+                updateComparable: false,
+                checkedAt: "2026-10-23T11:00:00.000Z",
+            }),
+        ).toBe("Development build: update notices are off");
+    });
+
+    it("says nothing when the check is disabled or no check has succeeded yet", () => {
+        expect(
+            updateStatusLabel({ ...baseInfo, updateCheckEnabled: false, checkedAt: "2026-10-23T11:00:00.000Z" }),
+        ).toBeNull();
+        expect(updateStatusLabel(baseInfo)).toBeNull();
+    });
+
+    it("says nothing when an update is available", () => {
+        expect(
+            updateStatusLabel({ ...baseInfo, updateAvailable: true, checkedAt: "2026-10-23T11:00:00.000Z" }),
+        ).toBeNull();
     });
 });
