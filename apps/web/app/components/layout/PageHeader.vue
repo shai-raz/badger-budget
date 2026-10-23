@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { MenuItem } from "primevue/menuitem";
 import { resolveHeaderLeading } from "../../utils/pageHeader";
+import { hamburgerLabel } from "../../utils/updateNotice";
 
 /**
  * Page header for every app-layout page. It renders into #page-top-bar, full width above the scroller.
@@ -31,6 +32,8 @@ const props = withDefaults(defineProps<Props>(), {
 const router = useRouter();
 const isDesktop = useIsDesktop();
 const { openDrawer } = useNavDrawer();
+// Hamburger badge: a pending release, shown only on the menu leading (top-level pages below md).
+const { visible: updateVisible } = useUpdateNotice();
 const leading = computed(() => resolveHeaderLeading({ hasParent: !!props.backTo, isDesktop: isDesktop.value }));
 
 const goBack = () => {
@@ -57,16 +60,24 @@ const menu = ref<{ toggle: (event: Event) => void } | null>(null);
                     class="-ml-2 shrink-0"
                     @click="goBack"
                 />
-                <Button
+                <span
                     v-else-if="leading === 'menu'"
-                    icon="pi pi-bars"
-                    text
-                    rounded
-                    severity="secondary"
-                    aria-label="Open menu"
-                    class="-ml-2 shrink-0"
-                    @click="openDrawer"
-                />
+                    class="relative -ml-2 shrink-0"
+                >
+                    <Button
+                        icon="pi pi-bars"
+                        text
+                        rounded
+                        severity="secondary"
+                        :aria-label="hamburgerLabel(updateVisible)"
+                        @click="openDrawer"
+                    />
+                    <span
+                        v-if="updateVisible"
+                        aria-hidden="true"
+                        class="pointer-events-none absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-surface-0 dark:ring-surface-900"
+                    />
+                </span>
 
                 <h1 class="min-w-0 flex-1 truncate text-xl font-semibold">{{ title }}</h1>
 

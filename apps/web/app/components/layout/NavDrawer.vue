@@ -1,9 +1,16 @@
 <script setup lang="ts">
-import { DRAWER_ITEMS, NAV_ACTIVE_LINK_CLASS, NAV_LINK_CLASS, isActiveRoute } from "../../utils/navigation";
+import {
+    DRAWER_ITEMS,
+    NAV_ACTIONS,
+    NAV_ACTIVE_LINK_CLASS,
+    NAV_LINK_CLASS,
+    isActiveRoute,
+} from "../../utils/navigation";
 
 // Mobile-only menu, opened by LayoutPageHeader's hamburger. The logo heads it, the list holds the items the
-// bottom bar doesn't (Categories, Settings), and the footer holds the theme switch and the signed-in user with
-// logout, mirroring the sidebar's bottom. Desktop has the sidebar, so the drawer never shows there.
+// bottom bar doesn't (Categories, Settings) and, while a release is pending, the update item that opens
+// UpdateDialog. The footer holds the theme switch and the signed-in user with logout, mirroring the sidebar's
+// bottom. Desktop has the sidebar, so the drawer never shows there.
 const { open, closeDrawer } = useNavDrawer();
 const isDesktop = useIsDesktop();
 const route = useRoute();
@@ -12,6 +19,13 @@ const authStore = useAuthStore();
 const logout = useLogout();
 const user = computed(() => authStore.user);
 const themeSwitchId = useId();
+const { visible: updateVisible } = useUpdateNotice();
+const { openDialog } = useUpdateDialog();
+
+const openUpdateDialog = () => {
+    closeDrawer();
+    openDialog();
+};
 
 // Any navigation (including tapping the current page's link) closes the drawer.
 watch(() => route.fullPath, closeDrawer);
@@ -40,7 +54,7 @@ watch(isDesktop, (desktop) => {
 
         <nav
             aria-label="Menu"
-            class="flex flex-col py-1"
+            class="flex h-full flex-col py-1"
         >
             <NuxtLink
                 v-for="item in DRAWER_ITEMS"
@@ -53,6 +67,22 @@ watch(isDesktop, (desktop) => {
                 <span :class="item.icon" />
                 <span>{{ item.label }}</span>
             </NuxtLink>
+            <!-- Pinned to the bottom of the list, directly above the footer's divider, as in the sidebar. -->
+            <div class="mt-auto">
+                <button
+                    v-if="updateVisible"
+                    v-ripple
+                    type="button"
+                    :class="[NAV_LINK_CLASS, 'w-[calc(100%-0.5rem)] border-0 bg-transparent text-left']"
+                    @click="openUpdateDialog"
+                >
+                    <span
+                        :class="[NAV_ACTIONS.update.icon, 'text-primary']"
+                        aria-hidden="true"
+                    />
+                    <span>{{ NAV_ACTIONS.update.label }}</span>
+                </button>
+            </div>
         </nav>
 
         <template #footer>

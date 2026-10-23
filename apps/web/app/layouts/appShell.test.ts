@@ -19,6 +19,7 @@ const themePreset = read("../theme/preset.ts");
 const transactionForm = read("../components/transactions/TransactionForm.vue");
 const pageHeader = read("../components/layout/PageHeader.vue");
 const navDrawer = read("../components/layout/NavDrawer.vue");
+const updateDialog = read("../components/layout/UpdateDialog.vue");
 const budgetFormDialog = read("../components/budgets/BudgetFormDialog.vue");
 
 describe("app shell viewport contract", () => {
@@ -165,8 +166,38 @@ describe("app shell viewport contract", () => {
 
     it("gives PageHeader the back and menu buttons, the single title and resolves leading via the pure util", () => {
         expect(pageHeader).toContain('aria-label="Back"');
-        expect(pageHeader).toContain('aria-label="Open menu"');
+        expect(pageHeader).toContain("hamburgerLabel(updateVisible)");
         expect(pageHeader).toContain("resolveHeaderLeading");
         expect(pageHeader).toContain("<h1");
+    });
+
+    // The update item lives in the sidebar bottom group and the drawer list, and opens the layout-mounted dialog.
+    it("renders the update nav item from NAV_ACTIONS in the sidebar and drawer, opening UpdateDialog", () => {
+        expect(sidebar).toContain("NAV_ACTIONS.update");
+        expect(sidebar).toContain("openDialog()");
+        expect(sidebar).toContain("mt-auto");
+        expect(navDrawer).toContain("NAV_ACTIONS.update");
+        expect(navDrawer).toContain("closeDrawer();");
+        expect(navDrawer).toContain("openDialog();");
+        expect(layout).toContain("<UpdateDialog />");
+    });
+
+    // The drawer nav fills the drawer's content height so the update item's mt-auto group sits directly above
+    // the footer divider, matching the sidebar.
+    it("pins the drawer's update item to the bottom of a full-height nav, above the footer divider", () => {
+        expect(navDrawer).toMatch(/<nav[^>]*class="flex h-full flex-col/);
+        expect(navDrawer).toContain('<div class="mt-auto">');
+    });
+
+    // After a manual check finds nothing newer, the header and footer stop offering an update.
+    it("retitles UpdateDialog and drops Dismiss once the check is up to date", () => {
+        expect(updateDialog).toContain("upToDate ? 'No update available' : 'Update available'");
+        expect(updateDialog).toMatch(/v-if="!upToDate"\s+label="Dismiss for this version"/);
+    });
+
+    it("badges the hamburger with a decorative dot only while the update notice is visible", () => {
+        expect(pageHeader).toContain("useUpdateNotice");
+        expect(pageHeader).toContain('v-if="updateVisible"');
+        expect(pageHeader).toContain('aria-hidden="true"');
     });
 });
