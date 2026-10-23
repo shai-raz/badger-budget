@@ -156,3 +156,33 @@ export function budgetWindowLabel(
     }
     return showYear ? `${range}, ${year}` : range;
 }
+
+/**
+ * Transactions that count toward a budget's spend for the shown period: expenses in the budget's
+ * categories inside its window. Hidden expenses are excluded, as the API's spend totals are.
+ */
+export function budgetPeriodTransactions<
+    T extends {
+        type: string;
+        hidden: boolean;
+        categoryId: string | null;
+        transactionDate: Date | string;
+    },
+>(
+    transactions: readonly T[],
+    analytics: { categories: { id: string }[]; periodStart: Date | string; periodEnd: Date | string },
+): T[] {
+    const categoryIds = new Set(analytics.categories.map((category) => category.id));
+    const periodStart = toDate(analytics.periodStart);
+    const periodEnd = toDate(analytics.periodEnd);
+
+    return transactions.filter((transaction) => {
+        if (transaction.type !== "expense" || transaction.hidden || !transaction.categoryId) {
+            return false;
+        }
+        const transactionDate = toDate(transaction.transactionDate);
+        return (
+            categoryIds.has(transaction.categoryId) && transactionDate >= periodStart && transactionDate <= periodEnd
+        );
+    });
+}

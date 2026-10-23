@@ -1179,6 +1179,40 @@ describe("TransactionsService", () => {
             expect(mockPrismaService.budget.findMany).not.toHaveBeenCalled();
         });
 
+        it("should not return applicable budgets for a hidden expense", async () => {
+            mockPrismaService.transaction.findFirst.mockResolvedValue({
+                ...mockTransaction,
+                hidden: true,
+            });
+
+            const result = await service.findOne("transaction-id", "test-user");
+
+            expect(result.applicableBudgets).toEqual([]);
+            expect(mockPrismaService.budget.findMany).not.toHaveBeenCalled();
+        });
+
+        it("should still return applicable budgets for a visible expense", async () => {
+            mockPrismaService.transaction.findFirst.mockResolvedValue({
+                ...mockTransaction,
+                hidden: false,
+            });
+            mockPrismaService.budget.findMany.mockResolvedValue([
+                {
+                    id: "budget-id",
+                    name: "Monthly Budget",
+                    period: "monthly",
+                    budgetCategories: [{ categoryId: "category-id" }],
+                },
+            ]);
+
+            const result = await service.findOne("transaction-id", "test-user");
+
+            expect(result.applicableBudgets).toEqual([
+                { id: "budget-id", name: "Monthly Budget", period: "monthly", categoryIds: ["category-id"] },
+            ]);
+            expect(mockPrismaService.budget.findMany).toHaveBeenCalled();
+        });
+
         it("should return empty applicable budgets when transaction has no category or budget", async () => {
             mockPrismaService.transaction.findFirst.mockResolvedValue({
                 ...mockTransaction,

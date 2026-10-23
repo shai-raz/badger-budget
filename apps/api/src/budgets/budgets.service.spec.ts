@@ -482,6 +482,22 @@ describe("BudgetsService", () => {
             expect(analyticsQuery.where.transactionDate.lte.toISOString()).toBe("2026-01-18T07:59:59.999Z");
         });
 
+        it("excludes hidden expenses from the period spend query", async () => {
+            mockPrismaService.budget.findFirst.mockResolvedValue({ ...mockBudget, period: "monthly" });
+            mockPrismaService.transaction.findMany.mockResolvedValue([]);
+
+            await service.getAnalytics("budget-id", "test-user");
+
+            expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        type: "expense",
+                        hidden: false,
+                    }),
+                }),
+            );
+        });
+
         it("should use FX conversion snapshot amount for cross-currency spend", async () => {
             const budget = {
                 ...mockBudget,
@@ -590,23 +606,6 @@ describe("BudgetsService", () => {
             const result = await service.getAnalytics("budget-id", "test-user");
 
             expect(result.totalSpent).toBe(185);
-        });
-
-        it("should keep the gross amount of a hidden expense even when it has reimbursements", async () => {
-            mockPrismaService.budget.findFirst.mockResolvedValue({ ...mockBudget, amount: 1000 });
-            mockPrismaService.transaction.findMany.mockResolvedValue([
-                {
-                    amount: 600,
-                    hidden: true,
-                    type: "expense",
-                    currencyId: "currency-id",
-                    reimbursedBy: [{ amount: 300 }],
-                },
-            ]);
-
-            const result = await service.getAnalytics("budget-id", "test-user");
-
-            expect(result.totalSpent).toBe(600);
         });
 
         it("should calculate weekly budget period correctly", async () => {
