@@ -44,6 +44,7 @@ model User {
   balanceSnapshots     AccountBalanceSnapshot[]
   oauthAuthorizationRequests OAuthAuthorizationRequest[]
   oauthGrants          OAuthGrant[]
+  reimbursementAllocations ReimbursementAllocation[]
 
   @@index([email])
   @@index([googleId])
@@ -229,6 +230,8 @@ model Transaction {
   originalCurrency Currency? @relation("transaction_original_currency", fields: [originalCurrencyId], references: [id])
   conversions      TransactionConversion[]
   attachments      TransactionAttachment[]
+  reimburses       ReimbursementAllocation[] @relation("ReimbursementIncome") // allocations where this row is the income
+  reimbursedBy     ReimbursementAllocation[] @relation("ReimbursementExpense") // allocations where this row is the expense
 
   @@index([userId])
   @@index([accountId])
@@ -263,6 +266,27 @@ model TransactionAttachment {
   @@index([transactionId, deletedAt])
   @@index([userId])
   @@map("transaction_attachments")
+}
+
+// Income -> expense link: this income pays back `amount` of that expense. Hard-deleted (no deletedAt).
+// Totals subtract only links where both sides are active (see transactions/reimbursement-netting.ts).
+model ReimbursementAllocation {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  incomeId  String   @map("income_id") @db.Uuid
+  expenseId String   @map("expense_id") @db.Uuid
+  amount    Decimal  @db.Decimal(12, 2)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  income  Transaction @relation("ReimbursementIncome", fields: [incomeId], references: [id], onDelete: Cascade)
+  expense Transaction @relation("ReimbursementExpense", fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@unique([incomeId, expenseId])
+  @@index([expenseId])
+  @@index([userId])
+  @@map("reimbursement_allocations")
 }
 
 model BudgetCategory {

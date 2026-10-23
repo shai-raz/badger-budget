@@ -64,7 +64,8 @@ export class GetBudgetStatusTool implements McpToolDefinition<typeof inputSchema
     readonly description =
         "Status of the user's budgets for a period, as columnar rows: budget amount, amount spent, remaining and percentage used. " +
         "Spending counts expense transactions in the budget's categories, excluding hidden ones, converted to the budget currency " +
-        "(a transaction with no available conversion counts as 0). Period windows are UTC. " +
+        "(a transaction with no available conversion counts as 0). Spending is net of linked reimbursements " +
+        "(income the user linked to an expense reduces that expense). Period windows are UTC. " +
         "`existsInPeriod` is false when the viewed period falls outside the budget's start/end dates. " +
         "`categories` lists the names of the budget's categories; `accountName` is null when the budget is not tied to an account.";
     readonly inputSchema = inputSchema;

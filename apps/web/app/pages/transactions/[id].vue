@@ -6,6 +6,7 @@ import { useConfirm } from "primevue/useconfirm";
 import EditTransactionDialog from "~/components/transactions/EditTransactionDialog.vue";
 import ApplyCategoryRuleDialog from "~/components/transactions/ApplyCategoryRuleDialog.vue";
 import MarkCardPayoff from "~/components/transactions/MarkCardPayoff.vue";
+import ReimbursementsBand from "~/components/transactions/ReimbursementsBand.vue";
 import {
     formatDate,
     transactionSign,
@@ -16,7 +17,9 @@ import {
 import { budgetPeriodLabel } from "~/utils/budget";
 import { formatCurrency } from "~/utils/currency";
 import { useGetTransaction, useDeleteTransaction } from "~/composables/transactions/useTransactions";
+import { useReimbursementPicker } from "~/composables/transactions/useReimbursementPicker";
 import { useTransferActions, MIRROR_ACTION_TOOLTIP } from "~/composables/transactions/useTransferActions";
+import { linkMenuItem } from "~/utils/reimbursement";
 
 definePageMeta({
     layout: "app",
@@ -49,9 +52,16 @@ const openApplyRuleFromEdit = async (tx: ITransactionResponse) => {
 };
 
 const { menuItems: transferMenuItems } = useTransferActions(transaction);
+const picker = useReimbursementPicker();
 
 const isMirror = computed(() => !!transaction.value?.counterpartOfId);
 const mirrorLock = computed(() => (isMirror.value ? { disabled: true, tooltip: MIRROR_ACTION_TOOLTIP } : {}));
+
+const linkMenuItems = computed<MenuItem[]>(() => {
+    const tx = transaction.value;
+    const item = tx ? linkMenuItem(tx, () => picker.open(tx.id)) : null;
+    return item ? [item] : [];
+});
 
 const menuItems = computed<MenuItem[]>(() => [
     {
@@ -70,6 +80,7 @@ const menuItems = computed<MenuItem[]>(() => [
         },
         ...mirrorLock.value,
     },
+    ...linkMenuItems.value,
     ...transferMenuItems.value,
     { separator: true },
     {
@@ -214,109 +225,118 @@ const handleDelete = () => {
             </Message>
 
             <div class="flex flex-col gap-3 md:grid md:grid-cols-[1.55fr_1fr] md:items-start md:gap-6">
-                <SharedSectionBand title="Details">
-                    <div class="flex flex-col px-4 pb-4 md:px-0 md:pb-0">
-                        <SharedDetailRow label="Date">
-                            {{ formatDate(transaction.transactionDate) }}
-                        </SharedDetailRow>
+                <div class="flex min-w-0 flex-col gap-3 md:gap-6">
+                    <SharedSectionBand title="Details">
+                        <div class="flex flex-col px-4 pb-4 md:px-0 md:pb-0">
+                            <SharedDetailRow label="Date">
+                                {{ formatDate(transaction.transactionDate) }}
+                            </SharedDetailRow>
 
-                        <SharedDetailRow
-                            label="Account"
-                            icon="pi pi-credit-card"
-                        >
-                            {{ transaction.account.name }}
-                            <template v-if="transaction.account.accountNumber">
-                                &nbsp;&bull;&bull;{{ transaction.account.accountNumber.slice(-4) }}
-                            </template>
-                        </SharedDetailRow>
-
-                        <SharedDetailRow
-                            v-if="transaction.counterpartOf"
-                            label="Linked from"
-                        >
-                            <NuxtLink
-                                :to="`/transactions/${transaction.counterpartOf.id}`"
-                                class="text-primary hover:underline"
+                            <SharedDetailRow
+                                label="Account"
+                                icon="pi pi-credit-card"
                             >
-                                {{ transaction.counterpartOf.description }} &middot;
-                                {{ transaction.counterpartOf.accountName }}
-                            </NuxtLink>
-                        </SharedDetailRow>
+                                {{ transaction.account.name }}
+                                <template v-if="transaction.account.accountNumber">
+                                    &nbsp;&bull;&bull;{{ transaction.account.accountNumber.slice(-4) }}
+                                </template>
+                            </SharedDetailRow>
 
-                        <SharedDetailRow
-                            v-if="counterpartLink"
-                            :label="counterpartLink.label"
-                        >
-                            <NuxtLink
-                                :to="counterpartLink.to"
-                                class="text-primary hover:underline"
+                            <SharedDetailRow
+                                v-if="transaction.counterpartOf"
+                                label="Linked from"
                             >
-                                {{ counterpartLink.text }}
-                            </NuxtLink>
-                        </SharedDetailRow>
+                                <NuxtLink
+                                    :to="`/transactions/${transaction.counterpartOf.id}`"
+                                    class="text-primary hover:underline"
+                                >
+                                    {{ transaction.counterpartOf.description }} &middot;
+                                    {{ transaction.counterpartOf.accountName }}
+                                </NuxtLink>
+                            </SharedDetailRow>
 
-                        <SharedDetailRow label="Category">
-                            {{ transaction.category?.name || "Uncategorized" }}
-                        </SharedDetailRow>
+                            <SharedDetailRow
+                                v-if="counterpartLink"
+                                :label="counterpartLink.label"
+                            >
+                                <NuxtLink
+                                    :to="counterpartLink.to"
+                                    class="text-primary hover:underline"
+                                >
+                                    {{ counterpartLink.text }}
+                                </NuxtLink>
+                            </SharedDetailRow>
 
-                        <SharedDetailRow
-                            v-if="applicableBudgets.length > 0"
-                            label="Counts toward budgets"
-                        >
-                            <SharedStatusTag
-                                v-for="budget in applicableBudgets"
-                                :key="budget.id"
-                                :value="`${budget.name} · ${budgetPeriodLabel(budget.period)}`"
-                            />
-                        </SharedDetailRow>
+                            <SharedDetailRow label="Category">
+                                {{ transaction.category?.name || "Uncategorized" }}
+                            </SharedDetailRow>
 
-                        <SharedDetailRow
-                            v-if="transaction.paymentType"
-                            label="Payment method"
-                        >
-                            <span class="capitalize">{{ transaction.paymentType }}</span>
-                        </SharedDetailRow>
+                            <SharedDetailRow
+                                v-if="applicableBudgets.length > 0"
+                                label="Counts toward budgets"
+                            >
+                                <SharedStatusTag
+                                    v-for="budget in applicableBudgets"
+                                    :key="budget.id"
+                                    :value="`${budget.name} · ${budgetPeriodLabel(budget.period)}`"
+                                />
+                            </SharedDetailRow>
 
-                        <SharedDetailRow
-                            v-if="transaction.externalId"
-                            label="Reference"
-                        >
-                            <span class="font-mono text-xs">{{ transaction.externalId }}</span>
-                        </SharedDetailRow>
+                            <SharedDetailRow
+                                v-if="transaction.paymentType"
+                                label="Payment method"
+                            >
+                                <span class="capitalize">{{ transaction.paymentType }}</span>
+                            </SharedDetailRow>
 
-                        <SharedDetailRow
-                            v-if="transaction.additionalDescription"
-                            label="Additional description"
-                        >
-                            {{ transaction.additionalDescription }}
-                        </SharedDetailRow>
+                            <SharedDetailRow
+                                v-if="transaction.externalId"
+                                label="Reference"
+                            >
+                                <span class="font-mono text-xs">{{ transaction.externalId }}</span>
+                            </SharedDetailRow>
 
-                        <SharedDetailRow
-                            v-if="transaction.originalAmount != null && transaction.originalCurrency"
-                            label="Original amount"
-                        >
-                            {{ formatCurrency(transaction.originalAmount, transaction.originalCurrency.code) }}
-                        </SharedDetailRow>
+                            <SharedDetailRow
+                                v-if="transaction.additionalDescription"
+                                label="Additional description"
+                            >
+                                {{ transaction.additionalDescription }}
+                            </SharedDetailRow>
 
-                        <SharedDetailRow
-                            v-if="transaction.originalCategory"
-                            label="Original category"
-                        >
-                            {{ transaction.originalCategory }}
-                        </SharedDetailRow>
+                            <SharedDetailRow
+                                v-if="transaction.originalAmount != null && transaction.originalCurrency"
+                                label="Original amount"
+                            >
+                                {{ formatCurrency(transaction.originalAmount, transaction.originalCurrency.code) }}
+                            </SharedDetailRow>
 
-                        <div
-                            v-if="transaction.notes"
-                            class="pt-3 mt-1 border-t border-surface-200 dark:border-surface-700"
-                        >
-                            <div class="text-xs uppercase tracking-wider text-muted-color mb-1">Notes</div>
-                            <div class="text-sm leading-relaxed">{{ transaction.notes }}</div>
+                            <SharedDetailRow
+                                v-if="transaction.originalCategory"
+                                label="Original category"
+                            >
+                                {{ transaction.originalCategory }}
+                            </SharedDetailRow>
+
+                            <div
+                                v-if="transaction.notes"
+                                class="pt-3 mt-1 border-t border-surface-200 dark:border-surface-700"
+                            >
+                                <div class="text-xs uppercase tracking-wider text-muted-color mb-1">Notes</div>
+                                <div class="text-sm leading-relaxed">{{ transaction.notes }}</div>
+                            </div>
                         </div>
-                    </div>
-                </SharedSectionBand>
+                    </SharedSectionBand>
+
+                    <ReimbursementsBand
+                        v-if="transaction.type === 'expense' || transaction.type === 'income'"
+                        :transaction="transaction"
+                    />
+                </div>
 
                 <!-- Attachments -->
-                <TransactionsAttachmentsCard :transaction="transaction" />
+                <div class="md:sticky md:top-4">
+                    <TransactionsAttachmentsCard :transaction="transaction" />
+                </div>
             </div>
         </div>
 

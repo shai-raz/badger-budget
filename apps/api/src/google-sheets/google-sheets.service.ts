@@ -354,9 +354,10 @@ export class GoogleSheetsService {
         // Build map: accountId → currencyId
         const accountCurrencyMap = new Map(accounts.map((a) => [a.id, a.currencyId as string]));
 
-        // Fetch all existing transactions for this user
+        // Fetch all existing transactions for this user. Reimbursement-linked rows are skipped so
+        // the same-currency invariant of allocations holds (links are same-currency only in v1).
         const existingTransactions = await this.prisma.transaction.findMany({
-            where: { userId, deletedAt: null },
+            where: { userId, deletedAt: null, reimbursedBy: { none: {} }, reimburses: { none: {} } },
             select: { id: true, accountId: true, currencyId: true, externalId: true },
         });
 

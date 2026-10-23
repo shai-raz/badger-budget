@@ -9,6 +9,7 @@ import { BudgetsModule } from "./budgets/budgets.module";
 import { TransactionsModule } from "./transactions/transactions.module";
 import { CategoryMappingRulesModule } from "./category-mapping-rules/category-mapping-rules.module";
 import { CardPayoffPatternsModule } from "./card-payoff-patterns/card-payoff-patterns.module";
+import { ReimbursementsModule } from "./reimbursements/reimbursements.module";
 import { CashWithdrawalPatternsModule } from "./cash-withdrawal-patterns/cash-withdrawal-patterns.module";
 import { CurrenciesModule } from "./currencies/currencies.module";
 import { GoogleSheetsModule } from "./google-sheets/google-sheets.module";
@@ -49,6 +50,7 @@ import { AppConfigModule } from "./app-config/app-config.module";
         TransactionsModule,
         CategoryMappingRulesModule,
         CardPayoffPatternsModule,
+        ReimbursementsModule,
         CashWithdrawalPatternsModule,
         CurrenciesModule,
         GoogleSheetsModule,

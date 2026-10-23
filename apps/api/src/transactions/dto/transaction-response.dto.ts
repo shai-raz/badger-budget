@@ -4,7 +4,7 @@ import { CurrencyResponseDto } from "./currency-response.dto";
 import { CategoryResponseDto } from "./category-response.dto";
 import { BudgetResponseDto } from "./budget-response.dto";
 import { TransactionAttachmentResponseDto } from "./transaction-attachment-response.dto";
-import type { ITransactionResponse } from "@badger/types";
+import type { ITransactionReimbursement, ITransactionResponse } from "@badger/types";
 import { TRANSACTION_NOTES_MAX_LENGTH } from "@badger/shared-data";
 
 export class TransactionResponseDto implements ITransactionResponse {
@@ -124,6 +124,14 @@ export class TransactionResponseDto implements ITransactionResponse {
 
     @ApiPropertyOptional({ nullable: true, description: "On a mirror row: the source transfer" })
     counterpartOf: { id: string; description: string; accountId: string; accountName: string } | null;
+
+    @ApiProperty({
+        type: Object,
+        nullable: true,
+        description:
+            "Reimbursement summary for an expense or income with live allocations (role, allocatedTotal, allocatedActive, links). Null for transfers and unlinked rows.",
+    })
+    reimbursement: ITransactionReimbursement | null;
 
     @ApiProperty({
         type: [BudgetResponseDto],

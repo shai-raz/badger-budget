@@ -21,6 +21,7 @@ Rules and tokens for the web UI. Read before any UI change. How the app is built
 ## Surfaces
 
 - **Page bands** (the default for every app page): a page sets `definePageMeta({ fullBleed: true })` and wraps its sections in `flex flex-col gap-3 pb-8 md:gap-6`, each section a `SharedSectionBand`. Mobile: full-width, top and bottom border, no side border. Desktop: a card (`md:rounded-xl md:border md:p-5`).
+- **Transaction detail** (`pages/transactions/[id].vue`): Overview full width, then a `md:grid-cols-[1.55fr_1fr]` grid. The left column stacks Details and the Reimbursements / Pays back band; the right holds Attachments, `md:sticky md:top-4` so it stays in view beside a long left column. Below md the DOM order is the stacking order. The band ends in a right-aligned receipt (plain lines, divider, emphasised total) whose amounts align with the item amounts via a shared `w-10` action column.
 - **Cards** (desktop only, via a band's `md:` chrome): one look everywhere, `bg-surface-0 dark:bg-surface-900`, 1px `border-surface-200 dark:border-surface-700`, no shadow, `rounded-xl` (12px).
 - **Always a card** (auth, OAuth consent): PrimeVue `Card`. Its look comes from the `shadow: "none"` token in `app/theme/preset.ts` plus a global `pt.card.root.class` border in `nuxt.config.ts`. Don't restyle `Card` per page; change the global preset or pt instead.
 - **Interactive and data widgets** (tables, forms, lists): PrimeVue components.
@@ -61,6 +62,7 @@ Rules and tokens for the web UI. Read before any UI change. How the app is built
 - **Budget list** (`components/budgets/BudgetList.vue`): the list of budget rows, shared by Overview and the Budgets page.
 - **Progress bar** (`components/budgets/BudgetProgressBar.vue`): a budget's spend, coloured by level. The only budget bar.
 - **Period stepper** (`components/budgets/PeriodStepper.vue`): moves a budget list between periods. See [Period stepper](#period-stepper).
+- **Reimbursement candidate row** (`components/transactions/ReimbursementCandidateRow.vue`): one selectable transaction in the reimbursement picker. A `role="radio"` inside a radiogroup, with the description and amount on one line and a muted meta line under it. Selected = primary border and ring on a `surface-100` (dark `surface-800`) ground.
 
 Avatars use Lucide icons through `utils/avatarIcons.ts`. Other UI uses PrimeIcons.
 
