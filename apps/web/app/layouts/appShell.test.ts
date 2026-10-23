@@ -19,6 +19,7 @@ const themePreset = read("../theme/preset.ts");
 const transactionForm = read("../components/transactions/TransactionForm.vue");
 const pageHeader = read("../components/layout/PageHeader.vue");
 const navDrawer = read("../components/layout/NavDrawer.vue");
+const updateDialog = read("../components/layout/UpdateDialog.vue");
 const budgetFormDialog = read("../components/budgets/BudgetFormDialog.vue");
 
 describe("app shell viewport contract", () => {
@@ -179,6 +180,19 @@ describe("app shell viewport contract", () => {
         expect(navDrawer).toContain("closeDrawer();");
         expect(navDrawer).toContain("openDialog();");
         expect(layout).toContain("<UpdateDialog />");
+    });
+
+    // The drawer nav fills the drawer's content height so the update item's mt-auto group sits directly above
+    // the footer divider, matching the sidebar.
+    it("pins the drawer's update item to the bottom of a full-height nav, above the footer divider", () => {
+        expect(navDrawer).toMatch(/<nav[^>]*class="flex h-full flex-col/);
+        expect(navDrawer).toContain('<div class="mt-auto">');
+    });
+
+    // After a manual check finds nothing newer, the header and footer stop offering an update.
+    it("retitles UpdateDialog and drops Dismiss once the check is up to date", () => {
+        expect(updateDialog).toContain("upToDate ? 'No update available' : 'Update available'");
+        expect(updateDialog).toMatch(/v-if="!upToDate"\s+label="Dismiss for this version"/);
     });
 
     it("badges the hamburger with a decorative dot only while the update notice is visible", () => {

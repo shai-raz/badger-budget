@@ -54,7 +54,7 @@ watch(isDesktop, (desktop) => {
 
         <nav
             aria-label="Menu"
-            class="flex flex-col py-1"
+            class="flex h-full flex-col py-1"
         >
             <NuxtLink
                 v-for="item in DRAWER_ITEMS"
@@ -67,19 +67,22 @@ watch(isDesktop, (desktop) => {
                 <span :class="item.icon" />
                 <span>{{ item.label }}</span>
             </NuxtLink>
-            <button
-                v-if="updateVisible"
-                v-ripple
-                type="button"
-                :class="[NAV_LINK_CLASS, 'w-[calc(100%-0.5rem)] border-0 bg-transparent text-left']"
-                @click="openUpdateDialog"
-            >
-                <span
-                    :class="[NAV_ACTIONS.update.icon, 'text-primary']"
-                    aria-hidden="true"
-                />
-                <span>{{ NAV_ACTIONS.update.label }}</span>
-            </button>
+            <!-- Pinned to the bottom of the list, directly above the footer's divider, as in the sidebar. -->
+            <div class="mt-auto">
+                <button
+                    v-if="updateVisible"
+                    v-ripple
+                    type="button"
+                    :class="[NAV_LINK_CLASS, 'w-[calc(100%-0.5rem)] border-0 bg-transparent text-left']"
+                    @click="openUpdateDialog"
+                >
+                    <span
+                        :class="[NAV_ACTIONS.update.icon, 'text-primary']"
+                        aria-hidden="true"
+                    />
+                    <span>{{ NAV_ACTIONS.update.label }}</span>
+                </button>
+            </div>
         </nav>
 
         <template #footer>
