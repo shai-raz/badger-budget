@@ -50,7 +50,7 @@ When running locally, the docker will usually be up and running.
 - **API** (`apps/api`, NestJS 11): see [apps/api/ARCHITECTURE.md](apps/api/ARCHITECTURE.md) for auth, validation, feature modules, bank-sync, and API-specific conventions.
 - **Web** (`apps/web`, Nuxt 4 SPA): see [apps/web/ARCHITECTURE.md](apps/web/ARCHITECTURE.md) for UI stack, state/data-fetching, page structure, and web-specific conventions.
 - **UI design system** (`apps/web/DESIGN.md`): read before any UI change.
-- **Docker image:** `.github/workflows/docker-publish.yml` builds linux/amd64+arm64 and pushes `ghcr.io/<owner>/badger-budget` (`:latest` on main, semver and sha tags). While the repo is private, pushes skip the job entirely (no GHCR push, no multi-arch build); PRs still build without pushing, amd64 only (QEMU skipped).
+- **Docker image:** `.github/workflows/docker-publish.yml` builds linux/amd64+arm64 and pushes `ghcr.io/<owner>/badger-budget` (`:latest` on main, semver and sha tags; `v*.*.*` tags come from `release.yml`). The `repository.private` guards there only matter if the repo is made private again.
 
 ### Shared Packages
 
@@ -77,6 +77,13 @@ Google Sheets integration reads only the `GOOGLE_SHEETS_*` env vars; no key file
 - `pnpm lint` — `apps/web` is clean (0 warnings), enforced by `--max-warnings 0` and the CI `Web lint & type-check` job. `apps/api` still has ~196 pre-existing warnings; don't chase them. Never introduce new type errors or lint warnings anywhere.
 - `pnpm test` — Jest in `apps/api`, Vitest (`vitest run`) in `apps/web`; CI runs both in the `Tests` job. Neither needs a database: specs mock `PrismaService`.
 - For UI changes, also run the app (`pnpm dev:web` / `pnpm dev:api`) and exercise the feature in a browser — passing types/lint/tests doesn’t confirm the feature works. Sign in with the seeded demo account (`demo@demo.demo` / `demo123QWEasd`, from `apps/api/prisma/seed-demo.ts`; it exists only if `SEED_DEMO=true` is set in `apps/api/.env` when you seed) to get realistic data to test against — its transactions are kept current, topped up to today on each demo login (see `apps/api/src/demo/AGENTS.md`).
+
+### Releases
+
+- PRs are squash-merged, so the PR title becomes the commit subject. `pr-title.yml` requires a Conventional Commit title (`type(scope)!: subject`; allowed types in `packages/release/src/conventional.mjs`).
+- `release.yml` runs on every push to main and releases everything user-facing since the last `v*` tag: `feat` → minor, `fix`/`perf` → patch, breaking → major (minor while the major is 0). It commits and tags the release, then creates the GitHub release.
+- `apps/api/changelog.json` is the source; `CHANGELOG.md` is generated from it (`node packages/release/bin/release.mjs --repo shai-raz/badger-budget --render-only`) and is excluded from Prettier (`.prettierignore`). Never hand-edit versions; the release job sets them in the three `package.json` files.
+- Dry run: `node packages/release/bin/release.mjs --repo shai-raz/badger-budget --dry-run`. Owner setup: [packages/release/README.md](packages/release/README.md).
 
 ### Keeping AGENTS.md / ARCHITECTURE.md current
 
