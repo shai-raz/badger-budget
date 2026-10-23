@@ -9,3 +9,6 @@ export function isUpdateNoticeVisible(info: ISystemInfo | undefined | null, dism
 export function hamburgerLabel(visible: boolean): string {
     return visible ? "Open menu, update available" : "Open menu";
 }
+
+/** Upgrade instructions linked from the update dialog. */
+export const UPGRADE_GUIDE_URL = "https://github.com/shai-raz/badger-budget/blob/main/README.md#upgrading";

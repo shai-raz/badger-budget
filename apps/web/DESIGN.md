@@ -54,6 +54,7 @@ Rules and tokens for the web UI. Read before any UI change. How the app is built
 - **Entity avatar** (`components/shared/EntityAvatar.vue`): a category or account icon in its colour, with a `fallback` icon for a missing one.
 - **Category chip** (`components/shared/CategoryChip.vue`): a category name inline, such as on transaction detail.
 - **Status tag** (`components/shared/StatusTag.vue`): a short label, such as System or Custom, Active or Paused, or a transaction type.
+- **Update badge**: the hamburger's dot (`components/layout/PageHeader.vue`), a `bg-primary` 0.625rem dot with a surface ring, shown only while an update is pending. The nav item for it takes `text-primary` on its icon.
 - **Form dialog shell** (`components/shared/FormDialog.vue`): the shell every form dialog is built on. See [Dialogs and forms](#dialogs-and-forms).
 - **Transaction row** (`components/transactions/TransactionRow.vue`): one transaction in every transaction list (Transactions, Overview Recent, Budget detail). It owns its `px-4` gutter at every breakpoint, the one exception to [Spacing](#spacing), so callers add no horizontal padding.
 - **Account row, mobile** (`components/accounts/AccountRow.vue`): one account below md, on Overview and the Accounts page.
