@@ -20,6 +20,7 @@ import { McpModule } from "./mcp/mcp.module";
 import { OAuthModule } from "./oauth/oauth.module";
 import { HealthModule } from "./health/health.module";
 import { AppConfigModule } from "./app-config/app-config.module";
+import { SystemModule } from "./system/system.module";
 
 @Module({
     imports: [
@@ -65,6 +66,9 @@ import { AppConfigModule } from "./app-config/app-config.module";
 
         // Public instance config flags (no guard)
         AppConfigModule,
+
+        // Running version and update check (authenticated)
+        SystemModule,
     ],
     controllers: [],
     providers: [],
