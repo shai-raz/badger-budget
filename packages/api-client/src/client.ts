@@ -38,6 +38,8 @@ import type {
     IReimbursementCandidatesResponse,
     ICardPayoffLinkPreview,
     ISystemInfo,
+    IChangelogResponse,
+    IChangelogSeenResponse,
 } from "@badger/types";
 
 export interface ApiClientConfig {
@@ -173,6 +175,17 @@ export class ApiClient {
 
     async checkForUpdates(): Promise<ISystemInfo> {
         const response = await this.client.post<ISystemInfo>("/system/check-updates");
+        return response.data;
+    }
+
+    // Bundled release notes for the What's New dialog (authenticated)
+    async getChangelog(): Promise<IChangelogResponse> {
+        const response = await this.client.get<IChangelogResponse>("/system/changelog");
+        return response.data;
+    }
+
+    async markChangelogSeen(): Promise<IChangelogSeenResponse> {
+        const response = await this.client.post<IChangelogSeenResponse>("/system/changelog/seen");
         return response.data;
     }
 

@@ -8,8 +8,8 @@ import {
 } from "../../utils/navigation";
 
 // Mobile-only menu, opened by LayoutPageHeader's hamburger. The logo heads it, the list holds the items the
-// bottom bar doesn't (Categories, Settings) and, while a release is pending, the update item that opens
-// UpdateDialog. The footer holds the theme switch and the signed-in user with logout, mirroring the sidebar's
+// bottom bar doesn't (Categories, Settings), the update item that opens UpdateDialog while a release is pending,
+// and always "What's new" (WhatsNewDialog). The footer holds the theme switch and the signed-in user with logout, mirroring the sidebar's
 // bottom. Desktop has the sidebar, so the drawer never shows there.
 const { open, closeDrawer } = useNavDrawer();
 const isDesktop = useIsDesktop();
@@ -21,10 +21,16 @@ const user = computed(() => authStore.user);
 const themeSwitchId = useId();
 const { visible: updateVisible } = useUpdateNotice();
 const { openDialog } = useUpdateDialog();
+const { openRecent } = useWhatsNewDialog();
 
 const openUpdateDialog = () => {
     closeDrawer();
     openDialog();
+};
+
+const openWhatsNew = () => {
+    closeDrawer();
+    openRecent();
 };
 
 // Any navigation (including tapping the current page's link) closes the drawer.
@@ -81,6 +87,18 @@ watch(isDesktop, (desktop) => {
                         aria-hidden="true"
                     />
                     <span>{{ NAV_ACTIONS.update.label }}</span>
+                </button>
+                <button
+                    v-ripple
+                    type="button"
+                    :class="[NAV_LINK_CLASS, 'w-[calc(100%-0.5rem)] border-0 bg-transparent text-left']"
+                    @click="openWhatsNew"
+                >
+                    <span
+                        :class="NAV_ACTIONS.whatsNew.icon"
+                        aria-hidden="true"
+                    />
+                    <span>{{ NAV_ACTIONS.whatsNew.label }}</span>
                 </button>
             </div>
         </nav>

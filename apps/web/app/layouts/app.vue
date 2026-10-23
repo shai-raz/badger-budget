@@ -3,6 +3,7 @@ import AppBottomBar from "~/components/layout/AppBottomBar.vue";
 import AppSidebar from "~/components/layout/AppSidebar.vue";
 import NavDrawer from "~/components/layout/NavDrawer.vue";
 import UpdateDialog from "~/components/layout/UpdateDialog.vue";
+import WhatsNewDialog from "~/components/layout/WhatsNewDialog.vue";
 import BudgetFormDialog from "~/components/budgets/BudgetFormDialog.vue";
 import CashFollowupToast from "~/components/transactions/CashFollowupToast.vue";
 import ReimbursementPickerDialog from "~/components/transactions/ReimbursementPickerDialog.vue";
@@ -68,6 +69,7 @@ useHead({ bodyAttrs: { class: "app-layout-body" } });
         <AppBottomBar class="md:hidden" />
         <NavDrawer />
         <UpdateDialog />
+        <WhatsNewDialog />
         <BudgetFormDialog />
         <ReimbursementPickerDialog />
     </div>
