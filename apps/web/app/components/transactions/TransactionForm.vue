@@ -792,7 +792,7 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
                 :tooltip="lockTooltip"
             />
             <button
-                v-tooltip.top.focus="'Excluded from the visible list and from Transferred/Available.'"
+                v-tooltip.top.focus="'Excluded from the visible list, budgets, reports and Transferred/Available.'"
                 type="button"
                 class="inline-flex items-center rounded-full text-surface-500 dark:text-surface-400"
                 aria-label="About hidden transactions"
