@@ -1,6 +1,8 @@
 # Builds the production image (see Dockerfile) for linux/amd64 and linux/arm64 and pushes it to
 # ghcr.io/<owner>/badger-budget: :latest on main, semver tags on v*.*.* tags, sha tags on every push.
 # The v*.*.* tags are pushed by release.yml, which tags each release on main.
+# Images carry APP_VERSION (from `git describe --tags`) and GIT_SHA build args: tag builds report vX.Y.Z (the API
+# strips the v), main builds after a tag report vX.Y.Z-N-g<sha>.
 # Pull requests build without pushing, so a broken Dockerfile fails the PR.
 # The Dockerfile's JS build stage runs on $BUILDPLATFORM, so only native deps run under QEMU.
 # The repository.private guards below only matter if the repo is made private again: pushes then skip the job
@@ -43,6 +45,8 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0 # full history and tags, so `git describe` can name the version
 
             # GHCR requires a lowercase owner; derive it from the repo so forks publish to their own namespace.
             - name: Compute image name
@@ -60,6 +64,12 @@ jobs:
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
 
+            - id: version
+              name: Resolve app version and commit
+              run: |
+                  echo "app_version=$(git describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+                  echo "git_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
             - id: meta
               uses: docker/metadata-action@v5
               with:
@@ -75,6 +85,9 @@ jobs:
                   context: .
                   platforms: ${{ github.event.repository.private && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
                   push: ${{ github.event_name != 'pull_request' && github.event.repository.private == false }}
+                  build-args: |
+                      APP_VERSION=${{ steps.version.outputs.app_version }}
+                      GIT_SHA=${{ steps.version.outputs.git_sha }}
                   tags: ${{ steps.meta.outputs.tags }}
                   labels: ${{ steps.meta.outputs.labels }}
                   cache-from: type=gha

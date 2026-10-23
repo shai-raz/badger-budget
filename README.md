@@ -173,6 +173,8 @@ The app runs database migrations automatically on start. Releases are cut automa
 
 For controlled upgrades, pin the image to a release tag instead of `latest`. Set `BADGER_IMAGE=ghcr.io/shai-raz/badger-budget:0.1.0` in `.env` and run `docker compose up -d`. Release tags are published as `v*.*.*` git tags.
 
+The published images report their version in the About card on the Settings page. An image you build yourself with `docker build` has no version stamp, so it reports `<version>-dev` and never shows the new-release banner.
+
 **PostgreSQL major versions:** do not change `postgres:16` to a newer major version in the compose file. The data directory is not compatible across major versions, and the database will not start. Take a dump, move the old `pgdata` volume aside or create a new one, start the new major version, and restore the dump into it.
 
 ## Split deployment
