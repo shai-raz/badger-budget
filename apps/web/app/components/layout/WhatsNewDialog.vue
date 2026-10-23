@@ -87,9 +87,9 @@ const prNumber = (prUrl: string) => prUrl.split("/").pop();
                         :key="index"
                         class="flex items-start gap-2"
                     >
-                        <Tag
+                        <SharedStatusTag
                             :value="typeLabel(item)"
-                            :severity="item.breaking ? 'danger' : 'secondary'"
+                            :tone="item.breaking ? 'danger' : 'neutral'"
                             class="shrink-0"
                         />
                         <span class="min-w-0 flex-1">{{ item.subject }}</span>
