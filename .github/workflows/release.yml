@@ -78,12 +78,7 @@ jobs:
               if: steps.key.outputs.skip != 'true'
               with:
                   node-version-file: .node-version
-                  cache: pnpm
-
-            # Only Prettier is needed to format the release files. Scripts are skipped; nothing here builds.
-            - name: Install Prettier
-              if: steps.key.outputs.skip != 'true'
-              run: pnpm install --frozen-lockfile --ignore-scripts
+                  # No pnpm cache: most runs never install, and the cache's post step warns when the store is missing.
 
             - id: plan
               name: Decide the next version and update the changelog
@@ -91,6 +86,12 @@ jobs:
               env:
                   GH_TOKEN: ${{ github.token }}
               run: node packages/release/bin/release.mjs --repo "$GITHUB_REPOSITORY"
+
+            # release.mjs has no dependencies, so the install waits until there is a release to format. Most runs (the
+            # bot's own release commit, chore/docs/ci merges) stop before this. Scripts are skipped; nothing here builds.
+            - name: Install Prettier
+              if: steps.key.outputs.skip != 'true' && steps.plan.outputs.released == 'true'
+              run: pnpm install --frozen-lockfile --ignore-scripts
 
             - name: Commit the release and tag it
               if: steps.key.outputs.skip != 'true' && steps.plan.outputs.released == 'true'
