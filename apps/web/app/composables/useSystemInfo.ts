@@ -1,3 +1,4 @@
+import { computed, toValue, type MaybeRefOrGetter } from "vue";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/vue-query";
 import { useApiClient } from "./useApiClient";
 import type { ISystemInfo } from "@badger/types";
@@ -8,7 +9,7 @@ export const systemKeys = {
 };
 
 // Running version and latest-release info. Errors stay silent: the About card falls back to "Unknown".
-export function useSystemInfo() {
+export function useSystemInfo(enabled: MaybeRefOrGetter<boolean> = true) {
     const apiClient = useApiClient();
 
     return useQuery({
@@ -16,6 +17,7 @@ export function useSystemInfo() {
         queryFn: (): Promise<ISystemInfo> => apiClient.getSystemInfo(),
         staleTime: 60 * 60_000,
         retry: false,
+        enabled: computed(() => toValue(enabled)),
     });
 }
 
