@@ -6,7 +6,7 @@ import type { ISystemInfo } from "@badger/types";
 export const systemKeys = {
     all: ["system"] as const,
     info: () => [...systemKeys.all, "info"] as const,
-    changelog: () => [...systemKeys.all, "changelog"] as const,
+    changelog: (userId?: string) => [...systemKeys.all, "changelog", userId] as const,
 };
 
 // Running version and latest-release info. Errors stay silent: the About card falls back to "Unknown".
