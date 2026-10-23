@@ -18,6 +18,7 @@ const user = computed(() => authStore.user);
 // The update item sits at the bottom of the nav, above the divider, and only while a release is pending.
 const { visible: updateVisible } = useUpdateNotice();
 const { openDialog } = useUpdateDialog();
+const { openRecent } = useWhatsNewDialog();
 </script>
 
 <template>
@@ -66,6 +67,18 @@ const { openDialog } = useUpdateDialog();
                         aria-hidden="true"
                     />
                     <span>{{ NAV_ACTIONS.update.label }}</span>
+                </button>
+                <button
+                    v-ripple
+                    type="button"
+                    :class="[NAV_LINK_CLASS, 'w-[calc(100%-0.5rem)] border-0 bg-transparent text-left']"
+                    @click="openRecent()"
+                >
+                    <span
+                        :class="NAV_ACTIONS.whatsNew.icon"
+                        aria-hidden="true"
+                    />
+                    <span>{{ NAV_ACTIONS.whatsNew.label }}</span>
                 </button>
             </div>
         </nav>

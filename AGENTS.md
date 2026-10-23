@@ -83,6 +83,7 @@ Google Sheets integration reads only the `GOOGLE_SHEETS_*` env vars; no key file
 - PRs are squash-merged, so the PR title becomes the commit subject. `pr-title.yml` requires a Conventional Commit title (`type(scope)!: subject`; allowed types in `packages/release/src/conventional.mjs`).
 - `release.yml` runs on every push to main and releases everything user-facing since the last `v*` tag: `feat` → minor, `fix`/`perf` → patch, breaking → major (minor while the major is 0). It commits and tags the release, then creates the GitHub release.
 - `apps/api/changelog.json` is the source; `CHANGELOG.md` is generated from it (`node packages/release/bin/release.mjs --repo shai-raz/badger-budget --render-only`) and is excluded from Prettier (`.prettierignore`). Never hand-edit versions; the release job sets them in the three `package.json` files.
+- Release notes reach users through that same bundled `changelog.json` (the in-app What's New dialog); the Dockerfile copies it into the image.
 - Dry run: `node packages/release/bin/release.mjs --repo shai-raz/badger-budget --dry-run`. Owner setup: [packages/release/README.md](packages/release/README.md).
 
 ### Keeping AGENTS.md / ARCHITECTURE.md current
