@@ -52,7 +52,7 @@ export interface ITransactionResponse {
      * the source transaction it mirrors. Null on every other row.
      */
     counterpartOfId: string | null;
-    /** On a source transfer: the linked mirror row in the cash account, if any. */
+    /** On a source transfer: the linked mirror row in the cash or savings account, if any. */
     counterpart: ITransactionCounterpart | null;
     /** On a mirror row: the source transfer it mirrors. Null on every other row. */
     counterpartOf: ITransactionCounterpartSource | null;
