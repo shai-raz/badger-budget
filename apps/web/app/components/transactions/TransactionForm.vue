@@ -153,7 +153,7 @@ watch(
 
 const currencyLockedByAccount = computed(() => isCurrencyLockedByAccount(selectedAccount.value));
 
-// Counterpart cash wallet (transfers only).
+// Counterpart ledger account (cash or savings; transfers only).
 const createdWallet = ref<IAccountResponse | null>(null);
 const walletOptions = computed(() => {
     const all = [...props.accounts];
