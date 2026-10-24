@@ -1,6 +1,47 @@
 {
     "releases": [
         {
+            "version": "0.2.0",
+            "date": "2026-10-24",
+            "items": [
+                {
+                    "type": "ci",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "run Jest and Vitest in a Tests job",
+                    "pr": 35
+                },
+                {
+                    "type": "ci",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "conventional PR titles and automatic releases",
+                    "pr": 36
+                },
+                {
+                    "type": "feat",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "running version, update check and About card",
+                    "pr": 37
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "update available nav item, badge and dialog",
+                    "pr": 38
+                },
+                {
+                    "type": "feat",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "What's New dialog from bundled changelog",
+                    "pr": 39
+                }
+            ]
+        },
+        {
             "version": "0.1.0",
             "date": "2026-10-20",
             "summary": "Initial public release.",
