@@ -1,7 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { ScrapedAccountType } from "@badger/shared-data";
 import { PrismaService } from "../prisma/prisma.service";
-import { CASH_SHORTFALL_DESCRIPTION, CASH_SURPLUS_DESCRIPTION, isLedgerAccountType } from "@badger/shared-data";
+import {
+    CASH_SHORTFALL_DESCRIPTION,
+    CASH_SURPLUS_DESCRIPTION,
+    SAVINGS_ADJUSTMENT_DESCRIPTION,
+    isLedgerAccountType,
+} from "@badger/shared-data";
 import type { ICashBalanceUpdateResponse } from "@badger/types";
 import { CreateAccountDto, UpdateAccountDto } from "./dto/account.dto";
 import { UpdateCashBalanceDto } from "./dto/update-cash-balance.dto";
@@ -9,6 +14,25 @@ import { AccountResponseDto } from "../transactions/dto/account-response.dto";
 import { toAccountResponse } from "./account-response.mapper";
 import { computeCashStats } from "./cash-balance";
 import type { Account, Currency, Prisma } from "@prisma/client";
+
+type BalanceAdjustmentFields =
+    | { type: "expense"; description: string }
+    | { type: "transfer"; transferDirection: "in" | "out"; description: string };
+
+/** The transaction fields recorded when a ledger account's balance is set to a new value (diff is in cents). */
+function describeBalanceAdjustment(accountType: string, diff: number): BalanceAdjustmentFields {
+    if (accountType === "savings") {
+        return {
+            type: "transfer",
+            transferDirection: diff > 0 ? "in" : "out",
+            description: SAVINGS_ADJUSTMENT_DESCRIPTION,
+        };
+    }
+    if (diff < 0) {
+        return { type: "expense", description: CASH_SHORTFALL_DESCRIPTION };
+    }
+    return { type: "transfer", transferDirection: "in", description: CASH_SURPLUS_DESCRIPTION };
+}
 
 @Injectable()
 export class AccountsService {
@@ -190,9 +214,11 @@ export class AccountsService {
     }
 
     /**
-     * Sets a cash account's balance to what the user actually has. The server computes the difference
-     * against the computed balance (the client's view may be stale) and records it: a shortfall becomes
-     * an uncategorized expense, a surplus a transfer-in. Concurrent calls serialize on the account row.
+     * Sets a cash or savings account's balance to what the user actually has. The server computes the
+     * difference against the computed balance (the client's view may be stale) and records it. For cash,
+     * a shortfall becomes an uncategorized expense and a surplus a transfer-in. For savings, either
+     * direction is a transfer (in or out), recorded as a "Savings adjustment". Concurrent calls serialize
+     * on the account row.
      */
     async updateCashBalance(
         id: string,
@@ -207,11 +233,11 @@ export class AccountsService {
             if (!account) {
                 throw new NotFoundException(`Account with ID ${id} not found`);
             }
-            if (account.type !== "cash") {
-                throw new BadRequestException("Only cash accounts have a balance you can update");
+            if (!isLedgerAccountType(account.type)) {
+                throw new BadRequestException("Only cash and savings accounts have a balance you can update");
             }
             if (!account.currencyId) {
-                throw new BadRequestException("A cash account needs a currency");
+                throw new BadRequestException(`A ${account.type} account needs a currency`);
             }
 
             // Takes the row lock so concurrent updates serialize.
@@ -222,30 +248,20 @@ export class AccountsService {
 
             let adjustment: ICashBalanceUpdateResponse["adjustment"] = null;
             if (diff !== 0) {
-                const base = {
-                    userId,
-                    accountId: id,
-                    currencyId: account.currencyId,
-                    transactionDate: new Date(dto.date),
-                    categoryId: null,
-                };
+                const fields = describeBalanceAdjustment(account.type, diff);
+                const amount = Math.abs(diff) / 100;
                 const created = await tx.transaction.create({
-                    data:
-                        diff < 0
-                            ? { ...base, type: "expense", amount: -diff / 100, description: CASH_SHORTFALL_DESCRIPTION }
-                            : {
-                                  ...base,
-                                  type: "transfer",
-                                  transferDirection: "in",
-                                  amount: diff / 100,
-                                  description: CASH_SURPLUS_DESCRIPTION,
-                              },
+                    data: {
+                        userId,
+                        accountId: id,
+                        currencyId: account.currencyId,
+                        transactionDate: new Date(dto.date),
+                        categoryId: null,
+                        amount,
+                        ...fields,
+                    },
                 });
-                adjustment = {
-                    id: created.id,
-                    type: diff < 0 ? "expense" : "transfer",
-                    amount: Math.abs(diff) / 100,
-                };
+                adjustment = { id: created.id, type: fields.type, amount };
             }
 
             const [response] = await this.withCashStats(userId, [account], tx);

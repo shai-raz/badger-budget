@@ -45,9 +45,9 @@ export class AccountsController {
 
     @Post(":id/cash-balance")
     @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: "Set a cash account's balance; records the difference as an adjustment" })
+    @ApiOperation({ summary: "Set a cash or savings account's balance; records the difference as an adjustment" })
     @ApiResponse({ status: 200, description: "Updated account and the adjustment transaction, if any" })
-    @ApiResponse({ status: 400, description: "Not a cash account" })
+    @ApiResponse({ status: 400, description: "Not a cash or savings account" })
     @ApiResponse({ status: 404, description: "Account not found" })
     updateCashBalance(@Param("id") id: string, @Body() dto: UpdateCashBalanceDto, @CurrentUser() user: any) {
         return this.accountsService.updateCashBalance(id, user.id, dto);

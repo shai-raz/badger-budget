@@ -691,11 +691,78 @@ describe("AccountsService", () => {
             expect(result.adjustment).toBeNull();
         });
 
-        it("rejects a non-cash account", async () => {
+        describe("savings accounts", () => {
+            const savingsRow = (over: Record<string, unknown> = {}) =>
+                cashRow({ id: "sav-1", name: "Pot", type: "savings", ...over });
+            const setupSavings = (computed: number, balanceAfter: number) => {
+                mockPrismaService.$transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
+                    cb(mockPrismaService),
+                );
+                mockPrismaService.account.findFirst.mockResolvedValue(savingsRow());
+                mockPrismaService.account.update.mockResolvedValue(savingsRow());
+                mockPrismaService.transaction.create.mockResolvedValue({ id: "adj-1" });
+                mockCashRows([group("sav-1", "income", null, computed)]);
+                mockCashRows([group("sav-1", "income", null, balanceAfter)]);
+            };
+
+            it("records a rise as a transfer in", async () => {
+                setupSavings(100, 150);
+                const result = await service.updateCashBalance("sav-1", "user-123", dto(150));
+                expect(mockPrismaService.transaction.create).toHaveBeenCalledWith({
+                    data: expect.objectContaining({
+                        accountId: "sav-1",
+                        type: "transfer",
+                        transferDirection: "in",
+                        amount: 50,
+                        description: "Savings adjustment",
+                        categoryId: null,
+                    }),
+                });
+                expect(result.adjustment).toEqual({ id: "adj-1", type: "transfer", amount: 50 });
+                expect(result.account.balance).toBe(150);
+                expect(result.account.balanceKind).toBe("account_balance");
+            });
+
+            it("records a drop as a transfer out, not an expense", async () => {
+                setupSavings(100, 70);
+                const result = await service.updateCashBalance("sav-1", "user-123", dto(70));
+                expect(mockPrismaService.transaction.create).toHaveBeenCalledWith({
+                    data: expect.objectContaining({
+                        type: "transfer",
+                        transferDirection: "out",
+                        amount: 30,
+                        description: "Savings adjustment",
+                        categoryId: null,
+                    }),
+                });
+                expect(result.adjustment).toEqual({ id: "adj-1", type: "transfer", amount: 30 });
+            });
+
+            it("creates nothing when the balance already matches", async () => {
+                setupSavings(100, 100);
+                const result = await service.updateCashBalance("sav-1", "user-123", dto(100));
+                expect(mockPrismaService.transaction.create).not.toHaveBeenCalled();
+                expect(result.adjustment).toBeNull();
+                expect(result.account.balanceKind).toBe("account_balance");
+            });
+
+            it("rejects a savings account without a currency", async () => {
+                mockPrismaService.$transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
+                    cb(mockPrismaService),
+                );
+                mockPrismaService.account.findFirst.mockResolvedValue(savingsRow({ currencyId: null }));
+                await expect(service.updateCashBalance("sav-1", "user-123", dto(5))).rejects.toThrow(
+                    "A savings account needs a currency",
+                );
+                expect(mockPrismaService.transaction.create).not.toHaveBeenCalled();
+            });
+        });
+
+        it("rejects a non-ledger account", async () => {
             mockPrismaService.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(mockPrismaService));
             mockPrismaService.account.findFirst.mockResolvedValue(cashRow({ type: "bank" }));
             await expect(service.updateCashBalance("cash-1", "user-123", dto(5))).rejects.toThrow(
-                "Only cash accounts have a balance you can update",
+                "Only cash and savings accounts have a balance you can update",
             );
             expect(mockPrismaService.transaction.create).not.toHaveBeenCalled();
         });
