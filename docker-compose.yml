@@ -61,6 +61,8 @@ services:
             R2_PRESIGN_TTL: ${R2_PRESIGN_TTL:-604800}
             CAL_PROXY_URL: ${CAL_PROXY_URL:-}
             STORE_SCRAPER_DEBUG_LOCALLY: ${STORE_SCRAPER_DEBUG_LOCALLY:-}
+            UPDATE_CHECK: ${UPDATE_CHECK:-}
+            UPDATE_CHECK_REPO: ${UPDATE_CHECK_REPO:-}
 
     db:
         image: postgres:16

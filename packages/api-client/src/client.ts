@@ -37,6 +37,7 @@ import type {
     IReimbursementAllocationResponse,
     IReimbursementCandidatesResponse,
     ICardPayoffLinkPreview,
+    ISystemInfo,
 } from "@badger/types";
 
 export interface ApiClientConfig {
@@ -161,6 +162,17 @@ export class ApiClient {
     // Public instance config (no auth)
     async getConfig(): Promise<IAppConfigResponse> {
         const response = await this.client.get<IAppConfigResponse>("/config");
+        return response.data;
+    }
+
+    // Running version and latest-release info (authenticated)
+    async getSystemInfo(): Promise<ISystemInfo> {
+        const response = await this.client.get<ISystemInfo>("/system/info");
+        return response.data;
+    }
+
+    async checkForUpdates(): Promise<ISystemInfo> {
+        const response = await this.client.post<ISystemInfo>("/system/check-updates");
         return response.data;
     }
 

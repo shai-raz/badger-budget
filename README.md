@@ -51,6 +51,8 @@ Use only URL-safe characters in these three values (letters, digits, `-`, `_`, `
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PRESIGN_TTL`            | Uploading scraper debug artifacts (screenshots, page snapshots) to Cloudflare R2. Without R2, nothing is uploaded.                                                                                                                                                                          |
 | `STORE_SCRAPER_DEBUG_LOCALLY`                                                                         | Troubleshooting only. Writes scraper debug artifacts to `/data/debug-artifacts`. These contain bank-page content, so delete them when you are done.                                                                                                                                         |
 | `SEED_DEMO`                                                                                           | Creates the public demo account `demo@demo.demo` on startup. Its password is published in the repository, so leave this off on any instance that other people can reach.                                                                                                                    |
+| `UPDATE_CHECK`                                                                                        | Once a day the server asks api.github.com for the latest release, to show the running version and a new-release banner. `false` disables it and makes no outbound request.                                                                                                                  |
+| `UPDATE_CHECK_REPO`                                                                                   | The GitHub repository to check for releases (`owner/name`). Default `shai-raz/badger-budget`; set it for a fork.                                                                                                                                                                            |
 
 Set variables in `.env` and run `docker compose up -d` again to apply them.
 
@@ -170,6 +172,8 @@ docker compose up -d
 The app runs database migrations automatically on start. Releases are cut automatically when changes land on main, and each one is listed in [CHANGELOG.md](./CHANGELOG.md) and on the GitHub releases page.
 
 For controlled upgrades, pin the image to a release tag instead of `latest`. Set `BADGER_IMAGE=ghcr.io/shai-raz/badger-budget:0.1.0` in `.env` and run `docker compose up -d`. Release tags are published as `v*.*.*` git tags.
+
+The published images report their version in the About card on the Settings page. An image you build yourself with `docker build` has no version stamp, so it reports `<version>-dev` and never shows the new-release banner.
 
 **PostgreSQL major versions:** do not change `postgres:16` to a newer major version in the compose file. The data directory is not compatible across major versions, and the database will not start. Take a dump, move the old `pgdata` volume aside or create a new one, start the new major version, and restore the dump into it.
 

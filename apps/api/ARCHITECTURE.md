@@ -24,7 +24,7 @@ Jest also transforms through `@swc/jest` (inline config in `apps/api/package.jso
 
 ## Feature modules
 
-`auth`, `accounts`, `budgets`, `categories`, `transactions`, `transaction-import` (CSV/bank import), `category-mapping-rules`, `card-payoff-patterns`, `reimbursements` (income → expense allocation CRUD and candidates picker; see its AGENTS.md), `currencies`, `google-sheets`, `reports`, `bank-sync`, `crypto`, `oauth`, `mcp`, `health` (public `GET /api/v1/health`, no guard: `SELECT 1` ping, 503 after 2s), `app-config` (public `GET /api/v1/config`, no guard: `{ registrationOpen, googleSheetsEnabled, fxEnabled }` flags, no secret values), `demo` (no controller — invoked from `AuthService`, not HTTP). Each follows NestJS module conventions (module → controller → service → DTOs), except `demo`. Each module's controller is the reference for its endpoints.
+`auth`, `accounts`, `budgets`, `categories`, `transactions`, `transaction-import` (CSV/bank import), `category-mapping-rules`, `card-payoff-patterns`, `reimbursements` (income → expense allocation CRUD and candidates picker; see its AGENTS.md), `currencies`, `google-sheets`, `reports`, `bank-sync`, `crypto`, `oauth`, `mcp`, `health` (public `GET /api/v1/health`, no guard: `SELECT 1` ping, 503 after 2s), `app-config` (public `GET /api/v1/config`, no guard: `{ registrationOpen, googleSheetsEnabled, fxEnabled }` flags, no secret values), `demo` (no controller — invoked from `AuthService`, not HTTP), `system` (below). Each follows NestJS module conventions (module → controller → service → DTOs), except `demo`. Each module's controller is the reference for its endpoints.
 
 ## Bank sync
 
@@ -34,6 +34,14 @@ The `bank-sync` module automates transaction import from Israeli banks via `isra
 - Scraper sessions can run against a remote Browserless instance (`BROWSERLESS_URL`) or launch local Chromium; concurrency is capped via `BANK_SYNC_CONCURRENCY`.
 - On scrape failure, debug artifacts (screenshots/MHTML) upload to Cloudflare R2 (`R2_*` env vars) via `@aws-sdk/client-s3` when configured. Local copies are written only with `STORE_SCRAPER_DEBUG_LOCALLY=true`, to `DEBUG_ARTIFACTS_DIR` (else `DATA_DIR/debug-artifacts`, else `cwd/debug-artifacts`); with neither, nothing is stored.
 - Each sync also records **account balances**: `AccountBalanceService` (`accounts/account-balance.service.ts`) appends an `account_balance_snapshots` row per scraped account and refreshes the denormalized `balance*` columns on `accounts`. The snapshot table has no `deletedAt` on purpose — a balance is a point-in-time observation that can't be reconstructed later, since we only ever scrape a transaction lookback window. Card accounts also carry `cardFrame`/`cardIssuer`, and a post-sync sweep types auto-created accounts from the provider.
+
+## System (version and update check)
+
+`GET /api/v1/system/info` and `POST /api/v1/system/check-updates` are behind `JwtAuthGuard` on purpose: the version never appears on a public endpoint (`/health` stays unchanged).
+
+- **Running version**: `APP_VERSION` (stamped into CI images) wins. Without it a local run reports `<apps/api package version>-dev`, which never shows an update. `GIT_SHA` is the commit. See `system/running-version.ts`.
+- **Update check**: `UpdateCheckService` reads `api.github.com/repos/<UPDATE_CHECK_REPO>/releases/latest` at boot and then at most once a day. A failure keeps the previous answer and retries after an hour. `check-updates` has a server-wide 60s cooldown. `UPDATE_CHECK=false` makes no request at all.
+- **Local runs**: put these variables in `apps/api/.env`, not the shell, since turbo's strict env mode drops shell variables.
 
 ## OAuth (authorization server for MCP)
 
