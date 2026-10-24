@@ -7,6 +7,9 @@
 # Images carry APP_VERSION (from `git describe --tags`) and GIT_SHA build args: release builds report vX.Y.Z (the
 # API strips the v), main builds after a tag report vX.Y.Z-N-g<sha>.
 # Pull requests build without pushing, so a broken Dockerfile fails the PR.
+# Both triggers share one paths list: the files the image is built from. Docs, CI-only and README merges skip the
+# build. Release commits always touch apps/api/changelog.json and the package.json files, so every release builds.
+# Keep the two lists identical, and add any new file the Dockerfile copies.
 # The Dockerfile's JS build stage runs on $BUILDPLATFORM, so only native deps run under QEMU.
 # The repository.private guards below only matter if the repo is made private again: pushes then skip the job
 # (no GHCR push, no multi-arch build), and PRs build linux/amd64 only and skip QEMU, to save Actions minutes.
@@ -16,10 +19,23 @@ name: Docker publish
 on:
     push:
         branches: [main]
+        paths:
+            - Dockerfile
+            - .dockerignore
+            - .npmrc
+            - docker/**
+            - apps/**
+            - packages/**
+            - package.json
+            - pnpm-lock.yaml
+            - pnpm-workspace.yaml
+            - turbo.json
+            - .github/workflows/docker-publish.yml
     pull_request:
         paths:
             - Dockerfile
             - .dockerignore
+            - .npmrc
             - docker/**
             - apps/**
             - packages/**
