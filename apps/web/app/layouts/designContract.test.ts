@@ -555,6 +555,28 @@ describe("design contract: budget create/edit dialog", () => {
     });
 });
 
+describe("savings accounts: counterpart picker and balance dialog", () => {
+    const txForm = readFileSync(`${appDir}/components/transactions/TransactionForm.vue`, "utf8");
+    const balanceDialog = readFileSync(`${appDir}/components/accounts/UpdateCashBalanceDialog.vue`, "utf8");
+
+    it("only hides Create Cash when a cash account already exists in the needed currency", () => {
+        expect(txForm).toContain('a.type === "cash" && a.currencyId === neededCurrencyId.value');
+    });
+
+    it("captions each counterpart option with its account type so cash and savings differ", () => {
+        expect(txForm).toContain("accountTypeCaption(slotProps.option.type)");
+        expect(txForm).toContain('tooltip="This account uses its own currency"');
+    });
+
+    it("takes the update-balance copy and prefill from the ledger helpers", () => {
+        expect(balanceDialog).toContain('ledgerBalanceDialogCopy(props.account?.type ?? "cash")');
+        expect(balanceDialog).toContain("ledgerBalancePrefill(props.account)");
+        expect(balanceDialog).toContain(':header="copy.header"');
+        expect(balanceDialog).toContain("copy.value.successSummary");
+        expect(balanceDialog).toContain("copy.value.errorFallback");
+    });
+});
+
 describe("savings accounts: web wiring", () => {
     // Savings is a ledger type like cash: form, menu and row/tile Update all key off isLedgerAccountType.
     const formModal = readFileSync(`${appDir}/components/accounts/AccountsFormModal.vue`, "utf8");
