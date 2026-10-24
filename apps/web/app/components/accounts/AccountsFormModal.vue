@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { IAccountResponse, ICurrencyResponse } from "@badger/types";
+import { isLedgerAccountType } from "@badger/shared-data";
 import { useToast } from "primevue/usetoast";
 import { accountFallbackIcon } from "~/utils/avatarIcons";
 
@@ -29,6 +30,7 @@ const accountTypeOptions = [
     { label: "Bank", value: "bank" },
     { label: "Credit Card", value: "credit_card" },
     { label: "Cash", value: "cash" },
+    { label: "Savings", value: "savings" },
     { label: "Unknown", value: "unknown" },
 ];
 
@@ -49,13 +51,13 @@ const isEditMode = computed(() => !!props.account);
 const dialogTitle = computed(() => (isEditMode.value ? "Edit account" : "New account"));
 const apiError = ref<string | null>(null);
 
-const isCash = computed(() => accountType.value === "cash");
+const isLedger = computed(() => isLedgerAccountType(accountType.value));
 const currencyTouched = ref(false);
-// Mirrors the API: any transaction pins a cash wallet's currency; linked transfers also pin its type.
-const isCashAccount = computed(() => props.account?.type === "cash");
-const lockedCurrency = computed(() => isCashAccount.value && !!props.account?.hasTransactions);
-const lockedType = computed(() => isCashAccount.value && !!props.account?.hasLinkedTransfers);
-const currencyMissing = computed(() => isCash.value && !accountCurrencyId.value);
+// Mirrors the API: a transaction pins a ledger account's currency; linked transfers also pin its type.
+const isLedgerAccount = computed(() => isLedgerAccountType(props.account?.type));
+const lockedCurrency = computed(() => isLedgerAccount.value && !!props.account?.hasTransactions);
+const lockedType = computed(() => isLedgerAccount.value && !!props.account?.hasLinkedTransfers);
+const currencyMissing = computed(() => isLedger.value && !accountCurrencyId.value);
 const showCurrencyError = computed(() => currencyMissing.value && currencyTouched.value);
 
 const canSave = computed(() => {
@@ -250,7 +252,7 @@ const handleSave = async () => {
                 <label
                     for="account-currency"
                     class="block text-sm font-medium mb-2"
-                    >Currency{{ isCash ? " *" : " (optional)" }}</label
+                    >Currency{{ isLedger ? " *" : " (optional)" }}</label
                 >
                 <Select
                     id="account-currency"
@@ -270,17 +272,17 @@ const handleSave = async () => {
                 <small
                     v-if="showCurrencyError"
                     class="block mt-1 text-red-500"
-                    >Cash accounts need a currency</small
+                    >Cash and savings accounts need a currency</small
                 >
                 <small
                     v-if="lockedType"
                     class="block mt-1 text-muted-color"
-                    >This wallet has linked transfers, so its currency and type can't change.</small
+                    >This account has linked transfers, so its currency and type can't change.</small
                 >
                 <small
                     v-else-if="lockedCurrency"
                     class="block mt-1 text-muted-color"
-                    >This wallet has transactions, so its currency can't change.</small
+                    >This account has transactions, so its currency can't change.</small
                 >
             </div>
         </div>

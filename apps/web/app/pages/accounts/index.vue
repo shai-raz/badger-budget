@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { IAccountResponse } from "@badger/types";
+import { isLedgerAccountType } from "@badger/shared-data";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
 import { sortAccountsForDisplay } from "~/utils/accountBalance";
@@ -80,15 +81,15 @@ const selectedAccount = ref<IAccountResponse | null>(null);
 const menuItems = computed(() => {
     const account = selectedAccount.value;
     if (!account) return [];
-    // A wallet with linked transfers can't be deleted until those transfers are reverted or re-pointed.
-    const deleteBlocked = account.type === "cash" && account.hasLinkedTransfers;
+    // An account with linked transfers can't be deleted until those transfers are reverted or re-pointed.
+    const deleteBlocked = isLedgerAccountType(account.type) && account.hasLinkedTransfers;
     return [
         {
             label: "Edit",
             icon: "pi pi-pencil",
             command: () => handleEditAccount(account),
         },
-        ...(account.type === "cash"
+        ...(isLedgerAccountType(account.type)
             ? [
                   {
                       label: "Update balance",
@@ -105,7 +106,7 @@ const menuItems = computed(() => {
             disabled: deleteBlocked,
             ...(deleteBlocked
                 ? {
-                      tooltip: "This wallet has linked transfers. Revert or re-point them before deleting it.",
+                      tooltip: "This account has linked transfers. Revert or re-point them before deleting it.",
                   }
                 : {}),
         },
