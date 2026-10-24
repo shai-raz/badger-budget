@@ -29,7 +29,7 @@ export class ListAccountsTool implements McpToolDefinition<typeof inputSchema> {
         "`account_balance` is money in the account, `next_charge` is what leaves the bank account on the next debit date, " +
         "`utilized_credit` is the credit line consumed so far, and `cash_on_hand` is a cash account's computed balance from its own transactions (not a bank observation, never summed with other kinds). " +
         "A savings account's balance is also computed from its transactions, but is reported as `account_balance`. Balances of different kinds or different currencies " +
-        "must not be summed together. `balanceDate` is the date of that observation; accounts without bank sync have null balance fields. " +
+        "must not be summed together. `balanceDate` is the date of that observation; bank and card accounts without bank sync have null balance fields, while cash and savings balances are computed once they have transactions. " +
         "`cardFrame` is a credit card's credit limit; it is not summable across cards because one group-level limit " +
         "can be reported on every card of the same issuer agreement. `accountNumberMasked` shows only the last 4 characters.";
     readonly inputSchema = inputSchema;

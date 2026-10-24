@@ -499,8 +499,6 @@ describe("AccountsService", () => {
                 // Pre-update stats (none), then the response overlay for the now-savings row (none).
                 mockCashRows([]);
                 mockCashRows([]);
-                mockCashRows([]);
-                mockCashRows([]);
                 const result = await service.update("a1", "user-123", { type: "savings" });
                 expect(mockPrismaService.account.update).toHaveBeenCalledWith({
                     where: { id: "a1" },
