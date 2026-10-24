@@ -90,7 +90,7 @@ export function sortAccountsForDisplay(accounts: IAccountResponse[]): IAccountRe
     return [...balanceAccounts(accounts), ...noBalance];
 }
 
-/** The type caption under an account name: "Bank account", "Credit card", "Cash", otherwise "Account". */
+/** The type caption under an account name: "Bank account", "Credit card", "Cash", "Savings", otherwise "Account". */
 export function accountTypeCaption(type: string): string {
     switch (type) {
         case "bank":
@@ -99,6 +99,8 @@ export function accountTypeCaption(type: string): string {
             return "Credit card";
         case "cash":
             return "Cash";
+        case "savings":
+            return "Savings";
         default:
             return "Account";
     }

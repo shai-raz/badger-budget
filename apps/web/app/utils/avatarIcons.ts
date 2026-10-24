@@ -73,7 +73,7 @@ export function resolveAvatarIcon(name: string | null | undefined, fallback: Ava
 
 /**
  * Default icon for an account with no stored icon, keyed by account type.
- * Cash accounts get a wallet, credit cards a card, and everything else a bank.
+ * Cash accounts get a wallet, savings a piggy bank, credit cards a card, and everything else a bank.
  */
 export function accountFallbackIcon(type: string | null | undefined): AvatarIconName {
     switch (type) {
@@ -81,6 +81,8 @@ export function accountFallbackIcon(type: string | null | undefined): AvatarIcon
             return "credit-card";
         case "cash":
             return "wallet";
+        case "savings":
+            return "piggy-bank";
         default:
             return "landmark";
     }

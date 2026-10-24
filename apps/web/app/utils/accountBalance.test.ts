@@ -325,11 +325,28 @@ describe("accountRowSubtitle", () => {
     });
 });
 
+describe("savings accounts", () => {
+    it("are an account balance, counted in the bank total while cash on hand is not", () => {
+        const savings = account({
+            id: "s",
+            name: "Savings",
+            type: "savings",
+            balance: 500,
+            balanceKind: "account_balance",
+        });
+        const bank = account({ id: "b", name: "Bank", balance: 100, balanceKind: "account_balance" });
+        const wallet = account({ id: "c", name: "Wallet", type: "cash", balance: 20, balanceKind: "cash_on_hand" });
+        expect(getBalanceDisplay(savings)).toMatchObject({ kind: "account_balance", label: "Current balance" });
+        expect(sumBankBalances([bank, savings, wallet])).toEqual({ total: 600, currencyCode: undefined });
+    });
+});
+
 describe("accountTypeCaption", () => {
     it("maps each account type to its caption", () => {
         expect(accountTypeCaption("bank")).toBe("Bank account");
         expect(accountTypeCaption("credit_card")).toBe("Credit card");
         expect(accountTypeCaption("cash")).toBe("Cash");
+        expect(accountTypeCaption("savings")).toBe("Savings");
     });
 
     it("falls back to Account for anything else", () => {

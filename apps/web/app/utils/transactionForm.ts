@@ -10,6 +10,7 @@ import {
     DEFAULT_CURRENCY_CODE,
     TRANSACTION_ADDITIONAL_DESCRIPTION_MAX_LENGTH,
     TRANSACTION_NOTES_MAX_LENGTH,
+    isLedgerAccountType,
 } from "@badger/shared-data";
 import { toLocalIsoDate } from "./localDate";
 
@@ -151,11 +152,13 @@ export interface CashFollowup {
 }
 
 /**
- * For an outgoing transfer linked to a wallet: what the "Record a cash payment" toast needs; otherwise null.
+ * For an outgoing transfer linked to a wallet (cash counterparts only; savings never prompt): what the
+ * "Record a cash payment" toast needs; otherwise null.
  * Pass `previous` (the row before an edit) to skip saves that left the wallet link unchanged.
  */
 export function cashFollowupFor(tx: ITransactionResponse, previous?: ITransactionResponse): CashFollowup | null {
     if (tx.type !== "transfer" || tx.transferDirection !== "out" || !tx.counterpart) return null;
+    if (tx.counterpart.accountType !== "cash") return null;
     const before = previous?.counterpart;
     if (
         before &&
@@ -336,9 +339,9 @@ export function defaultCounterpartAmount(
     return null;
 }
 
-/** Cash accounts selectable as counterpart: type cash, not the source account. */
+/** Cash and savings accounts selectable as counterpart: ledger accounts, not the source account. */
 export function counterpartOptions(accounts: IAccountResponse[], sourceAccountId: string | null): IAccountResponse[] {
-    return accounts.filter((a) => a.type === "cash" && a.id !== sourceAccountId);
+    return accounts.filter((a) => isLedgerAccountType(a.type) && a.id !== sourceAccountId);
 }
 
 /** Currency the wallet should be in: originalCurrencyId when set (edit of a foreign charge), else the form currency. */
@@ -352,15 +355,15 @@ export function neededCounterpartCurrencyId(
 /** Label for the counterpart field. */
 export const counterpartLabel = (dir: TransferDirection) => (dir === "out" ? "To account" : "From account");
 
-/** Cash accounts always use their own currency. */
+/** Ledger accounts (cash and savings) always use their own currency. */
 export function isCurrencyLockedByAccount(
     account: Pick<IAccountResponse, "type" | "currencyId"> | null | undefined,
 ): boolean {
-    return account?.type === "cash" && !!account.currencyId;
+    return isLedgerAccountType(account?.type) && !!account.currencyId;
 }
 
 /**
- * Currency a cash account forces on the form after the account changes, or null when nothing should change.
+ * Currency a ledger account (cash or savings) forces on the form after the account changes, or null when nothing should change.
  * In edit mode a locked currency field (synced row) is left alone.
  */
 export function currencyForAccountChange(
