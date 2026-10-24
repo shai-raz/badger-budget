@@ -16,6 +16,19 @@ const NAV = {
     settings: { label: "Settings", icon: "pi pi-cog", to: "/settings" },
 } as const satisfies Record<string, NavItem>;
 
+/** Nav entries that open a dialog instead of a route. Kept out of NAV and every route list. */
+export interface NavAction {
+    id: "update" | "whats-new";
+    label: string;
+    icon: string;
+}
+
+/** Rendered after the route items, above the bottom divider. */
+export const NAV_ACTIONS = {
+    update: { id: "update", label: "Update available", icon: "pi pi-arrow-circle-up" },
+    whatsNew: { id: "whats-new", label: "What's new", icon: "pi pi-sparkles" },
+} as const satisfies Record<string, NavAction>;
+
 export const SIDEBAR_ITEMS: readonly NavItem[] = [
     NAV.overview,
     NAV.transactions,
