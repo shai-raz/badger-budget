@@ -24,6 +24,7 @@ COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY packages/api-client/package.json packages/api-client/
 COPY packages/eslint-config/package.json packages/eslint-config/
+COPY packages/release/package.json packages/release/
 COPY packages/shared-data/package.json packages/shared-data/
 COPY packages/types/package.json packages/types/
 COPY packages/typescript-config/package.json packages/typescript-config/
@@ -51,6 +52,7 @@ COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY packages/api-client/package.json packages/api-client/
 COPY packages/eslint-config/package.json packages/eslint-config/
+COPY packages/release/package.json packages/release/
 COPY packages/shared-data/package.json packages/shared-data/
 COPY packages/types/package.json packages/types/
 COPY packages/typescript-config/package.json packages/typescript-config/
