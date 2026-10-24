@@ -70,7 +70,7 @@ describe("TransactionsService", () => {
                 accountId: true,
                 amount: true,
                 currencyId: true,
-                account: { select: { name: true } },
+                account: { select: { name: true, type: true } },
             },
         },
         counterpartOf: {
@@ -218,6 +218,18 @@ describe("TransactionsService", () => {
             expect(mockPrismaService.transaction.create).not.toHaveBeenCalled();
         });
 
+        it("rejects a transaction whose currency differs from its savings account", async () => {
+            mockPrismaService.account.findFirst.mockResolvedValue({
+                type: "savings",
+                currencyId: "ils-id",
+                currency: { code: "ILS" },
+            });
+            await expect(service.create("test-user", baseDto)).rejects.toThrow(
+                "Transactions on a savings account must be in its currency (ILS)",
+            );
+            expect(mockPrismaService.transaction.create).not.toHaveBeenCalled();
+        });
+
         it("accepts a transaction in the cash account's currency", async () => {
             mockPrismaService.account.findFirst.mockResolvedValue({
                 type: "cash",
@@ -273,7 +285,7 @@ describe("TransactionsService", () => {
                     accountId: "cash-account-id",
                     amount: new Prisma.Decimal(700),
                     currencyId: "ils-id",
-                    account: { name: "ILS Cash" },
+                    account: { name: "ILS Cash", type: "cash" },
                 },
             });
             mockPrismaService.budget.findMany.mockResolvedValue([]);
@@ -291,6 +303,7 @@ describe("TransactionsService", () => {
                 id: "mirror-id",
                 accountId: "cash-account-id",
                 accountName: "ILS Cash",
+                accountType: "cash",
                 amount: 700,
                 currencyId: "ils-id",
             });

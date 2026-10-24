@@ -155,11 +155,46 @@ describe("transfer-counterpart", () => {
             );
         });
 
-        it("rejects a non-cash account", async () => {
+        it("rejects a bank account", async () => {
             tx.account.findFirst.mockResolvedValue({ ...wallet, type: "bank" });
             await expect(run(source, null, { counterpartAccountId: "wallet" })).rejects.toThrow(
-                "The counterpart must be one of your cash accounts",
+                "The counterpart must be one of your cash or savings accounts",
             );
+        });
+
+        it("rejects a credit card account", async () => {
+            tx.account.findFirst.mockResolvedValue({ ...wallet, type: "credit_card" });
+            await expect(run(source, null, { counterpartAccountId: "wallet" })).rejects.toThrow(BadRequestException);
+            expect(tx.transaction.create).not.toHaveBeenCalled();
+        });
+
+        it("accepts a savings counterpart for an out transfer, mirrored as in", async () => {
+            tx.account.findFirst.mockResolvedValue({ ...wallet, type: "savings" });
+
+            await run(source, null, { counterpartAccountId: "wallet" });
+
+            expect(tx.transaction.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    accountId: "wallet",
+                    transferDirection: "in",
+                    amount: 700,
+                    counterpartOfId: "src",
+                }),
+            });
+        });
+
+        it("accepts a savings counterpart for an in transfer, mirrored as out", async () => {
+            tx.account.findFirst.mockResolvedValue({ ...wallet, type: "savings" });
+
+            await run({ ...source, transferDirection: "in" }, null, { counterpartAccountId: "wallet" });
+
+            expect(tx.transaction.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    accountId: "wallet",
+                    transferDirection: "out",
+                    counterpartOfId: "src",
+                }),
+            });
         });
 
         it("rejects the same account as the source (AC12)", async () => {
@@ -172,7 +207,7 @@ describe("transfer-counterpart", () => {
         it("rejects a wallet without a currency", async () => {
             tx.account.findFirst.mockResolvedValue({ ...wallet, currencyId: null });
             await expect(run(source, null, { counterpartAccountId: "wallet" })).rejects.toThrow(
-                "Set a currency on this cash account first",
+                "Set a currency on this account first",
             );
         });
 
