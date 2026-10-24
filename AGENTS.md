@@ -50,7 +50,7 @@ When running locally, the docker will usually be up and running.
 - **API** (`apps/api`, NestJS 11): see [apps/api/ARCHITECTURE.md](apps/api/ARCHITECTURE.md) for auth, validation, feature modules, bank-sync, and API-specific conventions.
 - **Web** (`apps/web`, Nuxt 4 SPA): see [apps/web/ARCHITECTURE.md](apps/web/ARCHITECTURE.md) for UI stack, state/data-fetching, page structure, and web-specific conventions.
 - **UI design system** (`apps/web/DESIGN.md`): read before any UI change.
-- **Docker image:** `.github/workflows/docker-publish.yml` builds linux/amd64+arm64 and pushes `ghcr.io/<owner>/badger-budget` (`:latest` on main, semver and sha tags; `v*.*.*` tags come from `release.yml`). It passes `APP_VERSION` (from `git describe --tags`) and `GIT_SHA` build args, which the Dockerfile sets as env vars; local builds leave them empty and the API reports `<version>-dev`. The `repository.private` guards there only matter if the repo is made private again.
+- **Docker image:** `.github/workflows/docker-publish.yml` builds linux/amd64+arm64 and pushes `ghcr.io/<owner>/badger-budget` (`:latest` and sha tags on every main push; a release commit, which `release.yml` tags atomically, also gets its semver tags from that same build, so tag pushes do not trigger a build). It passes `APP_VERSION` (from `git describe --tags`) and `GIT_SHA` build args, which the Dockerfile sets as env vars; local builds leave them empty and the API reports `<version>-dev`. The `repository.private` guards there only matter if the repo is made private again.
 
 ### Shared Packages
 

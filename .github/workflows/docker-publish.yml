@@ -1,8 +1,11 @@
 # Builds the production image (see Dockerfile) for linux/amd64 and linux/arm64 and pushes it to
-# ghcr.io/<owner>/badger-budget: :latest on main, semver tags on v*.*.* tags, sha tags on every push.
-# The v*.*.* tags are pushed by release.yml, which tags each release on main.
-# Images carry APP_VERSION (from `git describe --tags`) and GIT_SHA build args: tag builds report vX.Y.Z (the API
-# strips the v), main builds after a tag report vX.Y.Z-N-g<sha>.
+# ghcr.io/<owner>/badger-budget: :latest and a sha tag on every push to main, plus X.Y.Z and X.Y when the commit
+# carries a v*.*.* tag.
+# Releases build once: release.yml pushes the release commit and its tag atomically, so the main-push run for that
+# commit already sees the tag and publishes the semver tags too. Tag pushes do not trigger a second build of the
+# same commit. To rebuild a release by hand, run this workflow on its tag (workflow_dispatch).
+# Images carry APP_VERSION (from `git describe --tags`) and GIT_SHA build args: release builds report vX.Y.Z (the
+# API strips the v), main builds after a tag report vX.Y.Z-N-g<sha>.
 # Pull requests build without pushing, so a broken Dockerfile fails the PR.
 # The Dockerfile's JS build stage runs on $BUILDPLATFORM, so only native deps run under QEMU.
 # The repository.private guards below only matter if the repo is made private again: pushes then skip the job
@@ -13,7 +16,6 @@ name: Docker publish
 on:
     push:
         branches: [main]
-        tags: ["v*.*.*"]
     pull_request:
         paths:
             - Dockerfile
@@ -69,6 +71,8 @@ jobs:
               run: |
                   echo "app_version=$(git describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
                   echo "git_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+                  # The release tag on this exact commit, if any (empty for ordinary main pushes and PRs).
+                  echo "release_tag=$(git tag --points-at HEAD --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1)" >> "$GITHUB_OUTPUT"
 
             - id: meta
               uses: docker/metadata-action@v5
@@ -76,8 +80,8 @@ jobs:
                   images: ${{ env.IMAGE }}
                   tags: |
                       type=raw,value=latest,enable={{is_default_branch}}
-                      type=semver,pattern={{version}}
-                      type=semver,pattern={{major}}.{{minor}}
+                      type=semver,pattern={{version}},value=${{ steps.version.outputs.release_tag }},enable=${{ steps.version.outputs.release_tag != '' }}
+                      type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.release_tag }},enable=${{ steps.version.outputs.release_tag != '' }}
                       type=sha
 
             - uses: docker/build-push-action@v6

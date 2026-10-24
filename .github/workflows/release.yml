@@ -2,9 +2,8 @@
 # push to main; a run that finds nothing new exits cleanly.
 #
 # Why a deploy key: main is protected by a ruleset that requires a pull request, so GITHUB_TOKEN cannot push the
-# release commit. Deploy keys can be ruleset bypass actors, so the push uses the SSH key in RELEASE_DEPLOY_KEY. The
-# tag is pushed with the same key because GITHUB_TOKEN pushes do not trigger other workflows; docker-publish.yml
-# builds the semver image tags from it.
+# release commit. Deploy keys can be ruleset bypass actors, so the push uses the SSH key in RELEASE_DEPLOY_KEY.
+# Unlike GITHUB_TOKEN pushes, deploy-key pushes trigger other workflows, so docker-publish.yml builds the release.
 #
 # Why a 30s sleep and a checkout of main's current tip: a stack that lands as several pushes becomes one release
 # instead of several, and each release covers everything on main, not only the commit that triggered the run.
@@ -14,7 +13,8 @@
 # releases everything since the last tag. The release commit re-triggers this workflow; that run finds no
 # user-facing commits and does nothing.
 #
-# A push to main rebuilds the `latest` image in docker-publish.yml; the v* tag push builds the semver tags.
+# docker-publish.yml builds the release commit once from its main push: the tag is already on that commit, so the
+# same run publishes `latest` and the semver tags.
 
 name: Release
 
