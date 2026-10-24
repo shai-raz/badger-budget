@@ -8,7 +8,7 @@ export interface CashAccountStats {
 }
 
 /**
- * Computes the cash-on-hand balance for the given accounts from their own non-deleted transactions
+ * Computes the ledger (cash/savings) balance for the given accounts from their own non-deleted transactions
  * (hidden included): income and transfers in add, expenses and transfers out subtract (a transfer
  * with a null direction counts as out). Accounts with no rows are absent from the result.
  */

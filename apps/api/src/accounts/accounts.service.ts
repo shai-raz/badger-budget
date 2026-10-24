@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import type { ScrapedAccountType } from "@badger/shared-data";
 import { PrismaService } from "../prisma/prisma.service";
-import { CASH_SHORTFALL_DESCRIPTION, CASH_SURPLUS_DESCRIPTION } from "@badger/shared-data";
+import { CASH_SHORTFALL_DESCRIPTION, CASH_SURPLUS_DESCRIPTION, isLedgerAccountType } from "@badger/shared-data";
 import type { ICashBalanceUpdateResponse } from "@badger/types";
 import { CreateAccountDto, UpdateAccountDto } from "./dto/account.dto";
 import { UpdateCashBalanceDto } from "./dto/update-cash-balance.dto";
@@ -14,32 +14,33 @@ import type { Account, Currency, Prisma } from "@prisma/client";
 export class AccountsService {
     constructor(private prisma: PrismaService) {}
 
-    /** Cash accounts always have a currency (their transactions must use it). */
-    private assertCashHasCurrency(type: string, currencyId: string | null | undefined): void {
-        if (type === "cash" && !currencyId) {
-            throw new BadRequestException("A cash account needs a currency");
+    /** Ledger accounts (cash, savings) always have a currency (their transactions must use it). */
+    private assertLedgerHasCurrency(type: string, currencyId: string | null | undefined): void {
+        if (isLedgerAccountType(type) && !currencyId) {
+            throw new BadRequestException(`A ${type} account needs a currency`);
         }
     }
 
     /**
-     * Maps rows to the response shape and overlays the computed cash fields (balance, `cash_on_hand`
-     * kind, last transaction date, linked flag) on cash accounts that have transactions.
+     * Maps rows to the response shape and overlays the computed ledger fields (balance, balance kind,
+     * last transaction date, linked flag) on ledger accounts that have transactions. Cash reports
+     * `cash_on_hand`; savings reports `account_balance`.
      */
     private async withCashStats(
         userId: string,
         rows: Array<Account & { currency: Currency | null }>,
         db: Prisma.TransactionClient | PrismaService = this.prisma,
     ): Promise<AccountResponseDto[]> {
-        const cashIds = rows.filter((r) => r.type === "cash").map((r) => r.id);
-        const stats = await computeCashStats(db, userId, cashIds);
+        const ledgerIds = rows.filter((r) => isLedgerAccountType(r.type)).map((r) => r.id);
+        const stats = await computeCashStats(db, userId, ledgerIds);
         return rows.map((row) => {
             const response = toAccountResponse(row);
-            const s = row.type === "cash" ? stats.get(row.id) : undefined;
+            const s = isLedgerAccountType(row.type) ? stats.get(row.id) : undefined;
             if (!s) return response;
             return {
                 ...response,
                 balance: s.balance,
-                balanceKind: "cash_on_hand",
+                balanceKind: row.type === "cash" ? "cash_on_hand" : "account_balance",
                 lastTransactionDate: s.lastTransactionDate,
                 hasLinkedTransfers: s.hasLinkedTransfers,
                 // An entry exists only when the account has non-deleted rows.
@@ -54,7 +55,7 @@ export class AccountsService {
     }
 
     async create(userId: string, createAccountDto: CreateAccountDto): Promise<AccountResponseDto> {
-        this.assertCashHasCurrency(createAccountDto.type, createAccountDto.currencyId);
+        this.assertLedgerHasCurrency(createAccountDto.type, createAccountDto.currencyId);
         const account = await this.prisma.account.create({
             data: {
                 ...createAccountDto,
@@ -104,7 +105,7 @@ export class AccountsService {
         if (!current) {
             throw new NotFoundException(`Account with ID ${id} not found`);
         }
-        this.assertCashHasCurrency(
+        this.assertLedgerHasCurrency(
             updateAccountDto.type ?? current.type,
             updateAccountDto.currencyId !== undefined ? updateAccountDto.currencyId : current.currencyId,
         );
@@ -112,35 +113,34 @@ export class AccountsService {
         const resultingCurrencyId =
             updateAccountDto.currencyId !== undefined ? updateAccountDto.currencyId : current.currencyId;
 
-        if (current.type === "cash") {
+        if (isLedgerAccountType(current.type)) {
             const currencyChanges =
                 updateAccountDto.currencyId !== undefined && updateAccountDto.currencyId !== current.currencyId;
-            const typeChanges = updateAccountDto.type !== undefined && updateAccountDto.type !== "cash";
+            // A type change between ledger types (cash <-> savings) still counts as a type change.
+            const typeChanges = updateAccountDto.type !== undefined && updateAccountDto.type !== current.type;
             const stats = currencyChanges || typeChanges ? await this.cashStatsFor(userId, id) : undefined;
             if (stats?.hasLinkedTransfers) {
                 if (currencyChanges) {
-                    throw new BadRequestException(
-                        "This cash account has linked transfers, so its currency can't change",
-                    );
+                    throw new BadRequestException("This account has linked transfers, so its currency can't change");
                 }
                 if (typeChanges) {
-                    throw new BadRequestException("This cash account has linked transfers, so its type can't change");
+                    throw new BadRequestException("This account has linked transfers, so its type can't change");
                 }
             }
-            // One currency per cash wallet: any transaction on the account pins it.
+            // One currency per ledger account: any transaction on the account pins it.
             if (currencyChanges && stats) {
-                throw new BadRequestException("This cash account has transactions, so its currency can't change");
+                throw new BadRequestException("This account has transactions, so its currency can't change");
             }
         }
 
-        // Becoming a cash wallet: every existing transaction must already be in the wallet's currency.
-        if (current.type !== "cash" && updateAccountDto.type === "cash" && resultingCurrencyId) {
+        // Becoming a ledger account (cash or savings): every existing transaction must already be in its currency.
+        if (!isLedgerAccountType(current.type) && isLedgerAccountType(updateAccountDto.type) && resultingCurrencyId) {
             const otherCurrency = await this.prisma.transaction.count({
                 where: { accountId: id, userId, deletedAt: null, currencyId: { not: resultingCurrencyId } },
             });
             if (otherCurrency > 0) {
                 throw new BadRequestException(
-                    "This account has transactions in another currency, so it can't become a cash wallet",
+                    `This account has transactions in another currency, so it can't become a ${updateAccountDto.type} account`,
                 );
             }
         }
@@ -255,9 +255,9 @@ export class AccountsService {
 
     async remove(id: string, userId: string) {
         const account = await this.findOne(id, userId); // Check if exists
-        if (account.type === "cash" && account.hasLinkedTransfers) {
+        if (isLedgerAccountType(account.type) && account.hasLinkedTransfers) {
             throw new BadRequestException(
-                "This cash account has linked transfers. Revert or re-point them before deleting it.",
+                "This account has linked transfers. Revert or re-point them before deleting it.",
             );
         }
 
