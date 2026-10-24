@@ -1,5 +1,6 @@
 import type { IAccountResponse } from "@badger/types";
-import type { BalanceKind } from "@badger/shared-data";
+import type { AccountType, BalanceKind } from "@badger/shared-data";
+import { ACCOUNT_TYPES } from "@badger/shared-data";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { CurrencyResponseDto } from "./currency-response.dto";
 
@@ -13,8 +14,8 @@ export class AccountResponseDto implements IAccountResponse {
     @ApiPropertyOptional({ type: String, nullable: true })
     accountNumber: string | null;
 
-    @ApiProperty({ enum: ["credit_card", "bank", "cash", "unknown"] })
-    type: "credit_card" | "bank" | "cash" | "unknown";
+    @ApiProperty({ enum: [...ACCOUNT_TYPES] })
+    type: AccountType;
 
     @ApiProperty({ type: String, nullable: true })
     icon: string | null;
