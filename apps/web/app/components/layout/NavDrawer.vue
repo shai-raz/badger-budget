@@ -1,15 +1,9 @@
 <script setup lang="ts">
-import {
-    DRAWER_ITEMS,
-    NAV_ACTIONS,
-    NAV_ACTIVE_LINK_CLASS,
-    NAV_LINK_CLASS,
-    isActiveRoute,
-} from "../../utils/navigation";
+import { DRAWER_ITEMS, NAV_ACTIONS, NAV_ACTIVE_LINK_CLASS, isActiveRoute } from "../../utils/navigation";
 
 // Mobile-only menu, opened by LayoutPageHeader's hamburger. The logo heads it, the list holds the items the
-// bottom bar doesn't (Categories, Settings), the update item that opens UpdateDialog while a release is pending,
-// and always "What's new" (WhatsNewDialog). The footer holds the theme switch and the signed-in user with
+// bottom bar doesn't (Categories, Settings). The footer holds the update item that opens UpdateDialog while a
+// release is pending, always "What's new" (WhatsNewDialog), then the theme switch and the signed-in user with
 // logout, mirroring the sidebar's bottom. Desktop has the sidebar, so the drawer never shows there.
 const { open, closeDrawer } = useNavDrawer();
 const isDesktop = useIsDesktop();
@@ -19,6 +13,11 @@ const authStore = useAuthStore();
 const logout = useLogout();
 const user = computed(() => authStore.user);
 const themeSwitchId = useId();
+
+// Bleeds into the drawer's 1.25rem side padding, so every row's text lines up with "Dark mode" while the tap
+// highlight still spans the drawer's width.
+const DRAWER_ROW_CLASS =
+    "-mx-5 flex w-[calc(100%+2.5rem)] items-center gap-2 border-0 bg-transparent px-5 py-2 text-left text-surface-700 transition-colors duration-150 hover:bg-surface-100 dark:text-surface-200 dark:hover:bg-surface-800 cursor-pointer";
 const { visible: updateVisible } = useUpdateNotice();
 const { openDialog } = useUpdateDialog();
 const { openRecent } = useWhatsNewDialog();
@@ -67,47 +66,47 @@ watch(isDesktop, (desktop) => {
                 :key="item.to"
                 v-ripple
                 :to="item.to"
-                :class="[NAV_LINK_CLASS, isActiveRoute(route.path, item.to) && NAV_ACTIVE_LINK_CLASS]"
+                :class="[DRAWER_ROW_CLASS, isActiveRoute(route.path, item.to) && NAV_ACTIVE_LINK_CLASS]"
                 @click="closeDrawer"
             >
                 <span :class="item.icon" />
                 <span>{{ item.label }}</span>
             </NuxtLink>
-            <!-- Pinned to the bottom of the list, directly above the footer's divider, as in the sidebar. -->
-            <div class="mt-auto">
-                <button
-                    v-if="updateVisible"
-                    v-ripple
-                    type="button"
-                    :class="[NAV_LINK_CLASS, 'w-[calc(100%-0.5rem)] border-0 bg-transparent text-left']"
-                    @click="openUpdateDialog"
-                >
-                    <span
-                        :class="[NAV_ACTIONS.update.icon, 'text-primary']"
-                        aria-hidden="true"
-                    />
-                    <span>{{ NAV_ACTIONS.update.label }}</span>
-                </button>
-                <button
-                    v-ripple
-                    type="button"
-                    :class="[NAV_LINK_CLASS, 'w-[calc(100%-0.5rem)] border-0 bg-transparent text-left']"
-                    @click="openWhatsNew"
-                >
-                    <span
-                        :class="NAV_ACTIONS.whatsNew.icon"
-                        aria-hidden="true"
-                    />
-                    <span>{{ NAV_ACTIONS.whatsNew.label }}</span>
-                </button>
-            </div>
         </nav>
 
         <template #footer>
-            <div
-                class="flex flex-col border-t border-surface-200 pb-[env(safe-area-inset-bottom)] dark:border-surface-700"
-            >
-                <div class="flex items-center justify-between gap-3 py-3">
+            <div class="flex flex-col pb-[env(safe-area-inset-bottom)]">
+                <!-- Directly above the divider, aligned with the footer rows rather than the nav links. -->
+                <div class="pb-1">
+                    <button
+                        v-if="updateVisible"
+                        v-ripple
+                        type="button"
+                        :class="DRAWER_ROW_CLASS"
+                        @click="openUpdateDialog"
+                    >
+                        <span
+                            :class="[NAV_ACTIONS.update.icon, 'text-primary']"
+                            aria-hidden="true"
+                        />
+                        <span>{{ NAV_ACTIONS.update.label }}</span>
+                    </button>
+                    <button
+                        v-ripple
+                        type="button"
+                        :class="DRAWER_ROW_CLASS"
+                        @click="openWhatsNew"
+                    >
+                        <span
+                            :class="NAV_ACTIONS.whatsNew.icon"
+                            aria-hidden="true"
+                        />
+                        <span>{{ NAV_ACTIONS.whatsNew.label }}</span>
+                    </button>
+                </div>
+                <div
+                    class="flex items-center justify-between gap-3 border-t border-surface-200 py-3 dark:border-surface-700"
+                >
                     <label
                         :for="themeSwitchId"
                         class="text-surface-700 dark:text-surface-200"
