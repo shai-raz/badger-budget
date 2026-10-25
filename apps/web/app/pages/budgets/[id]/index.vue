@@ -9,6 +9,7 @@ import {
     BUDGET_LEVEL_TEXT_CLASS,
     budgetDaysLeftLabel,
     budgetPeriodLabel,
+    budgetPeriodTransactions,
     budgetProgressLevel,
     budgetWindowLabel,
 } from "~/utils/budget";
@@ -54,20 +55,7 @@ const filteredBudgetTransactions = computed<ITransactionResponse[]>(() => {
         return [];
     }
 
-    const categoryIds = new Set(analytics.value.categories.map((category) => category.id));
-    const periodStart = new Date(analytics.value.periodStart);
-    const periodEnd = new Date(analytics.value.periodEnd);
-
-    return budgetTransactions.value.filter((transaction) => {
-        if (transaction.type !== "expense" || !transaction.categoryId) {
-            return false;
-        }
-
-        const transactionDate = new Date(transaction.transactionDate);
-        return (
-            categoryIds.has(transaction.categoryId) && transactionDate >= periodStart && transactionDate <= periodEnd
-        );
-    });
+    return budgetPeriodTransactions(budgetTransactions.value, analytics.value);
 });
 
 // Shared overflow menu + Edit / Apply category rule / Mark Card Payoff modals for the rows.

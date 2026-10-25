@@ -1,0 +1,135 @@
+# Releases everything user-facing on main since the last v*.*.* tag (see packages/release/README.md). Runs on every
+# push to main; a run that finds nothing new exits cleanly.
+#
+# Why a deploy key: main is protected by a ruleset that requires a pull request, so GITHUB_TOKEN cannot push the
+# release commit. Deploy keys can be ruleset bypass actors, so the push uses the SSH key in RELEASE_DEPLOY_KEY.
+# Unlike GITHUB_TOKEN pushes, deploy-key pushes trigger other workflows, so docker-publish.yml builds the release.
+#
+# Why a 30s sleep and a checkout of main's current tip: a stack that lands as several pushes becomes one release
+# instead of several, and each release covers everything on main, not only the commit that triggered the run.
+#
+# Race rule: the push is atomic (branch and tag together) and never forced. If main moved while the release was
+# being prepared, the push is rejected, nothing is tagged, and the run exits cleanly. The queued run that follows
+# releases everything since the last tag. The release commit re-triggers this workflow; that run finds no
+# user-facing commits and does nothing.
+#
+# docker-publish.yml builds the release commit once from its main push: the tag is already on that commit, so the
+# same run publishes `latest` and the semver tags.
+
+name: Release
+
+on:
+    push:
+        branches: [main]
+    workflow_dispatch:
+
+# GitHub keeps only the newest pending run, which is enough because every run releases everything since the last tag.
+concurrency:
+    group: release
+    cancel-in-progress: false
+
+permissions:
+    contents: write
+    pull-requests: read
+
+jobs:
+    release:
+        name: Release
+        if: github.event.repository.fork == false
+        runs-on: ubuntu-latest
+        steps:
+            # Without the deploy key the release cannot be pushed, so skip with a warning instead of failing every push.
+            - id: key
+              name: Check for the deploy key
+              env:
+                  HAS_KEY: ${{ secrets.RELEASE_DEPLOY_KEY != '' }}
+              run: |
+                  if [ "$HAS_KEY" != "true" ]; then
+                      echo "::warning::RELEASE_DEPLOY_KEY is not set; skipping release"
+                      echo "skip=true" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Let a stack of pushes settle
+              if: steps.key.outputs.skip != 'true'
+              run: sleep 30
+
+            - uses: actions/checkout@v4
+              if: steps.key.outputs.skip != 'true'
+              with:
+                  ref: main
+                  fetch-depth: 0
+                  ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
+
+            # The checkout's HTTPS remote carries GITHUB_TOKEN, which the ruleset does not let past the PR rule.
+            # Point origin at SSH so the push authenticates with the deploy key.
+            - name: Use the deploy key for git
+              if: steps.key.outputs.skip != 'true'
+              run: git remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
+
+            - id: base
+              name: Record the commit the release is built on
+              if: steps.key.outputs.skip != 'true'
+              run: echo "base_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+            - uses: pnpm/action-setup@v4
+              if: steps.key.outputs.skip != 'true'
+
+            - uses: actions/setup-node@v4
+              if: steps.key.outputs.skip != 'true'
+              with:
+                  node-version-file: .node-version
+                  # No pnpm cache: most runs never install, and the cache's post step warns when the store is missing.
+
+            - id: plan
+              name: Decide the next version and update the changelog
+              if: steps.key.outputs.skip != 'true'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: node packages/release/bin/release.mjs --repo "$GITHUB_REPOSITORY"
+
+            # release.mjs has no dependencies, so the install waits until there is a release to format. Most runs (the
+            # bot's own release commit, chore/docs/ci merges) stop before this. Scripts are skipped; nothing here builds.
+            - name: Install Prettier
+              if: steps.key.outputs.skip != 'true' && steps.plan.outputs.released == 'true'
+              run: pnpm install --frozen-lockfile --ignore-scripts
+
+            - name: Commit the release and tag it
+              if: steps.key.outputs.skip != 'true' && steps.plan.outputs.released == 'true'
+              env:
+                  VERSION: ${{ steps.plan.outputs.version }}
+              run: |
+                  pnpm exec prettier --write apps/api/changelog.json package.json apps/api/package.json apps/web/package.json
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git add CHANGELOG.md apps/api/changelog.json package.json apps/api/package.json apps/web/package.json
+                  git commit -m "chore(release): v$VERSION"
+                  git tag -a "v$VERSION" -m "v$VERSION"
+
+            # Atomic, never forced. If the branch push is rejected, no tag is created either.
+            - id: push
+              name: Push the release commit and tag
+              if: steps.key.outputs.skip != 'true' && steps.plan.outputs.released == 'true'
+              env:
+                  VERSION: ${{ steps.plan.outputs.version }}
+                  BASE_SHA: ${{ steps.base.outputs.base_sha }}
+              run: |
+                  if git push --atomic origin HEAD:refs/heads/main "refs/tags/v$VERSION"; then
+                      echo "pushed=true" >> "$GITHUB_OUTPUT"
+                      exit 0
+                  fi
+                  git fetch origin main
+                  if [ "$(git rev-parse origin/main)" != "$BASE_SHA" ]; then
+                      echo "::notice::main moved during the release; the queued run will release everything since the last tag"
+                      echo "pushed=false" >> "$GITHUB_OUTPUT"
+                  else
+                      exit 1
+                  fi
+
+            - name: Create the GitHub release
+              if: steps.key.outputs.skip != 'true' && steps.push.outputs.pushed == 'true'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+                  VERSION: ${{ steps.plan.outputs.version }}
+                  NOTES_FILE: ${{ steps.plan.outputs.notes_file }}
+              run: gh release create "v$VERSION" --title "v$VERSION" --notes-file "$NOTES_FILE" --verify-tag --latest

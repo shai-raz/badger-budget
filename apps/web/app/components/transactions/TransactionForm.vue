@@ -3,6 +3,7 @@ import type { Category, IAccountResponse, ICurrencyResponse, ITransactionRespons
 import { TRANSACTION_ADDITIONAL_DESCRIPTION_MAX_LENGTH, TRANSACTION_NOTES_MAX_LENGTH } from "@badger/shared-data";
 import { transactionAmountClass, transactionSign } from "./formatters";
 import { getLocaleCurrencyCode } from "../../utils/locale-currency";
+import { accountTypeCaption } from "../../utils/accountBalance";
 import LockHint from "./LockHint.vue";
 import { matchesCashWithdrawal, pickCashWallet } from "../../utils/cashWithdrawal";
 import { pickNewCategoryColor, type PendingCategory } from "../../utils/pendingCategory";
@@ -152,7 +153,7 @@ watch(
 
 const currencyLockedByAccount = computed(() => isCurrencyLockedByAccount(selectedAccount.value));
 
-// Counterpart cash wallet (transfers only).
+// Counterpart ledger account (cash or savings; transfers only).
 const createdWallet = ref<IAccountResponse | null>(null);
 const walletOptions = computed(() => {
     const all = [...props.accounts];
@@ -173,7 +174,7 @@ const canCreateWallet = computed(
     () =>
         values.type === "transfer" &&
         !!neededCurrency.value &&
-        !walletOptions.value.some((a) => a.currencyId === neededCurrencyId.value),
+        !walletOptions.value.some((a) => a.type === "cash" && a.currencyId === neededCurrencyId.value),
 );
 const createAccount = useCreateAccount();
 const walletError = ref<string | null>(null);
@@ -356,7 +357,7 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
                 />
                 <LockHint
                     v-else-if="currencyLockedByAccount"
-                    tooltip="Cash accounts use their own currency"
+                    tooltip="This account uses its own currency"
                 />
                 <div class="flex w-full items-center justify-center gap-2">
                     <span
@@ -647,13 +648,16 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
                     :disabled="disabled || isLocked('counterpart')"
                 >
                     <template #option="slotProps">
-                        <div class="flex items-center gap-2">
+                        <div class="flex w-full items-center gap-2">
                             <div
                                 v-if="slotProps.option.color"
                                 class="h-4 w-4 rounded-full"
                                 :style="{ backgroundColor: slotProps.option.color }"
                             ></div>
                             <span>{{ slotProps.option.name }}</span>
+                            <span class="ml-auto text-sm text-muted-color">{{
+                                accountTypeCaption(slotProps.option.type)
+                            }}</span>
                         </div>
                     </template>
                 </Select>
@@ -792,7 +796,7 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
                 :tooltip="lockTooltip"
             />
             <button
-                v-tooltip.top.focus="'Excluded from the visible list and from Transferred/Available.'"
+                v-tooltip.top.focus="'Excluded from the visible list, budgets, reports and Transferred/Available.'"
                 type="button"
                 class="inline-flex items-center rounded-full text-surface-500 dark:text-surface-400"
                 aria-label="About hidden transactions"

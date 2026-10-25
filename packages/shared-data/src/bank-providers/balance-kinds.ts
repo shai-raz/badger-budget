@@ -8,7 +8,10 @@ import type { BankCompanyId } from "./providers";
  * as a bare "balance" would silently mix incompatible numbers.
  */
 export type BalanceKind =
-    /** Money actually in the account. Banks — and the only kind that is meaningful to sum. */
+    /**
+     * Money actually in the account. Banks report it; a savings account's is computed from its own transactions
+     * (see `apps/api/src/accounts/AGENTS.md`). The only kind meaningful to sum.
+     */
     | "account_balance"
     /** What leaves the bank account on the next debit date. Cal only (`-nextTotalDebit`). */
     | "next_charge"

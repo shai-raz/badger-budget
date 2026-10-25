@@ -9,6 +9,9 @@
 services:
     app:
         image: ghcr.io/shai-raz/badger-budget:latest
+        # Re-pull :latest on every deploy. Coolify pulls on its own, but other compose-based hosts (e.g. Dokploy) only
+        # run `docker compose up`, which keeps the cached image, so a redeploy would restart the old version.
+        pull_policy: always
         restart: unless-stopped
         depends_on:
             db:

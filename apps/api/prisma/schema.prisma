@@ -23,6 +23,8 @@ model User {
   currencyBackfilledAt DateTime? @map("currency_backfilled_at") @db.Timestamp(6)
   // Last day through which demo transactions were generated (demo user only; null for everyone else; see src/demo).
   demoDataThrough      DateTime? @map("demo_data_through") @db.Date
+  // Last app version whose What's New the user has seen; null = never stamped. Only ever raised (see system/changelog.ts).
+  lastSeenVersion      String?   @map("last_seen_version") @db.VarChar(64)
   createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
   deletedAt            DateTime? @map("deleted_at") @db.Timestamp(6)
@@ -44,6 +46,7 @@ model User {
   balanceSnapshots     AccountBalanceSnapshot[]
   oauthAuthorizationRequests OAuthAuthorizationRequest[]
   oauthGrants          OAuthGrant[]
+  reimbursementAllocations ReimbursementAllocation[]
 
   @@index([email])
   @@index([googleId])
@@ -78,7 +81,7 @@ model Account {
   userId        String    @map("user_id") @db.Uuid
   name          String    @db.VarChar(255)
   accountNumber String?   @map("account_number") @db.VarChar(255)
-  type          String    @db.VarChar(20) // credit_card, bank, cash, unknown
+  type          String    @db.VarChar(20) // credit_card, bank, cash, savings, unknown
   icon          String?   @db.VarChar(50)
   color         String?   @db.VarChar(7)
   currencyId    String?   @map("currency_id") @db.Uuid
@@ -229,6 +232,8 @@ model Transaction {
   originalCurrency Currency? @relation("transaction_original_currency", fields: [originalCurrencyId], references: [id])
   conversions      TransactionConversion[]
   attachments      TransactionAttachment[]
+  reimburses       ReimbursementAllocation[] @relation("ReimbursementIncome") // allocations where this row is the income
+  reimbursedBy     ReimbursementAllocation[] @relation("ReimbursementExpense") // allocations where this row is the expense
 
   @@index([userId])
   @@index([accountId])
@@ -263,6 +268,27 @@ model TransactionAttachment {
   @@index([transactionId, deletedAt])
   @@index([userId])
   @@map("transaction_attachments")
+}
+
+// Income -> expense link: this income pays back `amount` of that expense. Hard-deleted (no deletedAt).
+// Totals subtract only links where both sides are active (see transactions/reimbursement-netting.ts).
+model ReimbursementAllocation {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  incomeId  String   @map("income_id") @db.Uuid
+  expenseId String   @map("expense_id") @db.Uuid
+  amount    Decimal  @db.Decimal(12, 2)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  income  Transaction @relation("ReimbursementIncome", fields: [incomeId], references: [id], onDelete: Cascade)
+  expense Transaction @relation("ReimbursementExpense", fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@unique([incomeId, expenseId])
+  @@index([expenseId])
+  @@index([userId])
+  @@map("reimbursement_allocations")
 }
 
 model BudgetCategory {

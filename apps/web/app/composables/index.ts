@@ -11,7 +11,7 @@ export {
     useCreateAccount,
     useUpdateAccount,
     useDeleteAccount,
-    useUpdateCashBalance,
+    useUpdateLedgerBalance,
 } from "./accounts/useAccounts";
 export { currencyKeys, useGetCurrencies } from "./currencies/useCurrencies";
 export {

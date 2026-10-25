@@ -7,6 +7,7 @@ import { applyUpdateToTransaction, cashFollowupFor, type UpdateTransactionPayloa
 import { showCashFollowupToast } from "../../utils/cashFollowupToast";
 import { saveWithPendingCategory } from "../../utils/pendingCategory";
 import { useCreateCategoryMutation } from "../../composables/categories/useCreateCategory.mutation";
+import { editDialogReimbursementLine } from "../../utils/reimbursement";
 
 const props = defineProps<{
     visible: boolean;
@@ -35,6 +36,18 @@ const loading = computed(() => accountsLoading.value || currenciesLoading.value)
 const ready = computed(() => !!accounts.value && !!currencies.value && !!props.transaction);
 
 const close = () => emit("update:visible", false);
+
+const route = useRoute();
+const reimbursementLine = computed(() => (props.transaction ? editDialogReimbursementLine(props.transaction) : null));
+
+/** Opens the row's detail page, where reimbursements are managed. */
+const manageReimbursements = () => {
+    const tx = props.transaction;
+    if (!tx) return;
+    const target = `/transactions/${tx.id}`;
+    close();
+    if (route.path !== target) void navigateTo(target);
+};
 
 const handleHide = () => {
     apiError.value = null;
@@ -93,6 +106,20 @@ const handleCreateRule = () => {
         @hide="handleHide"
         @save="handleSave()"
     >
+        <p
+            v-if="ready && reimbursementLine"
+            class="m-0 text-sm text-muted-color"
+        >
+            {{ reimbursementLine }} &middot;
+            <button
+                type="button"
+                class="text-primary hover:underline"
+                @click="manageReimbursements"
+            >
+                Manage
+            </button>
+        </p>
+
         <div
             v-if="loading"
             class="flex justify-center py-8"

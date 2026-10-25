@@ -4,6 +4,7 @@ import { DEFAULT_CURRENCY_CODE, UNCATEGORIZED_CATEGORY } from "@badger/shared-da
 import { toIsoDateString } from "@badger/utils";
 import { PrismaService } from "../prisma/prisma.service";
 import { FxConversionService } from "../transactions/fx-conversion.service";
+import { ACTIVE_SIDE, netOf, sumAllocations } from "../transactions/reimbursement-netting";
 import { mapWithConcurrency } from "../bank-sync/concurrency.util";
 import { SpendingReportQueryDto } from "./dto/spending-report-query.dto";
 import { getPreviousPeriod } from "./utils/report-period.util";
@@ -37,6 +38,7 @@ interface ExpenseRow {
         color: string;
         icon: string | null;
     } | null;
+    reimbursedBy: { amount: unknown }[];
 }
 
 @Injectable()
@@ -114,6 +116,7 @@ export class ReportsService {
             where: {
                 userId,
                 deletedAt: null,
+                hidden: false,
                 type: "expense",
                 transactionDate: {
                     gte: start,
@@ -128,6 +131,7 @@ export class ReportsService {
                 category: {
                     select: { id: true, name: true, color: true, icon: true },
                 },
+                reimbursedBy: { where: { income: ACTIVE_SIDE }, select: { amount: true } },
             },
         });
     }
@@ -200,7 +204,9 @@ export class ReportsService {
                 // resolveRates covered every pair; this is a programming error.
                 throw new Error(`Missing FX rate for ${txn.currencyId} on ${toIsoDateString(txn.transactionDate)}`);
             }
-            const converted = Number(txn.amount) * rate;
+            // Net of active income reimbursements.
+            const allocated = sumAllocations(txn.reimbursedBy);
+            const converted = netOf(txn.amount, allocated) * rate;
 
             const bucketKey = txn.categoryId ?? "__uncategorized__";
             let bucket = buckets.get(bucketKey);

@@ -15,6 +15,7 @@ describe("SearchTransactionsTool", () => {
         type: "expense",
         transferDirection: null,
         amount: 12.5,
+        netAmount: 7.5,
         currencyCode: "ILS",
         originalAmount: null,
         originalCurrencyCode: null,
@@ -64,12 +65,17 @@ describe("SearchTransactionsTool", () => {
             { skip: 0, take: 1000 },
         );
         expect(out).toEqual({
-            columns: ["date", "type", "amount", "currency", "description", "category", "account"],
-            rows: [["2026-03-05", "expense", 12.5, "ILS", "Coffee", "Food", "Checking"]],
+            columns: ["date", "type", "amount", "netAmount", "currency", "description", "category", "account"],
+            rows: [["2026-03-05", "expense", 12.5, 7.5, "ILS", "Coffee", "Food", "Checking"]],
             rowCount: 1,
             truncated: false,
             totalCount: 1,
         });
+    });
+
+    it("netAmount is selectable as its own column next to amount", async () => {
+        const out = await data({ fields: ["amount", "netAmount"] });
+        expect(out).toMatchObject({ columns: ["amount", "netAmount"], rows: [[12.5, 7.5]] });
     });
 
     it("fields limits and orders the columns, deduped", async () => {
@@ -189,6 +195,7 @@ describe("SearchTransactionsTool", () => {
             "type",
             "transferDirection",
             "amount",
+            "netAmount",
             "currency",
             "originalAmount",
             "originalCurrency",

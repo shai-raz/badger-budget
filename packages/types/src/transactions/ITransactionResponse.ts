@@ -4,6 +4,7 @@ import type { ICategoryResponse } from "./ICategoryResponse";
 import type { IBudgetResponse } from "./IBudgetResponse";
 import type { ITransactionAttachmentResponse } from "./ITransactionAttachmentResponse";
 import type { ITransactionCounterpart, ITransactionCounterpartSource } from "./ITransactionCounterpart";
+import type { ITransactionReimbursement } from "../reimbursements";
 
 export interface ITransactionResponse {
     id: string;
@@ -51,10 +52,15 @@ export interface ITransactionResponse {
      * the source transaction it mirrors. Null on every other row.
      */
     counterpartOfId: string | null;
-    /** On a source transfer: the linked mirror row in the cash account, if any. */
+    /** On a source transfer: the linked mirror row in the cash or savings account, if any. */
     counterpart: ITransactionCounterpart | null;
     /** On a mirror row: the source transfer it mirrors. Null on every other row. */
     counterpartOf: ITransactionCounterpartSource | null;
+    /**
+     * Reimbursement summary for an expense or income row with live allocations, from this row's point of view
+     * (`role`). Null for transfers and for rows with no links.
+     */
+    reimbursement: ITransactionReimbursement | null;
     /**
      * Budgets this transaction counts toward, derived from the
      * transaction's category via budget-category links (plus the

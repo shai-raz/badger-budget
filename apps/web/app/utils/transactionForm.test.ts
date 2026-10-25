@@ -534,10 +534,16 @@ describe("defaultCounterpartAmount", () => {
 describe("counterpart helpers", () => {
     const acc = (id: string, type: IAccountResponse["type"]) => ({ id, type }) as IAccountResponse;
 
-    it("counterpartOptions keeps only cash accounts other than the source", () => {
-        const list = [acc("a", "bank"), acc("b", "cash"), acc("c", "cash"), acc("d", "credit_card")];
-        expect(counterpartOptions(list, "b").map((a) => a.id)).toEqual(["c"]);
-        expect(counterpartOptions(list, null).map((a) => a.id)).toEqual(["b", "c"]);
+    it("counterpartOptions keeps cash and savings accounts other than the source", () => {
+        const list = [
+            acc("a", "bank"),
+            acc("b", "cash"),
+            acc("c", "cash"),
+            acc("d", "credit_card"),
+            acc("s", "savings"),
+        ];
+        expect(counterpartOptions(list, "b").map((a) => a.id)).toEqual(["c", "s"]);
+        expect(counterpartOptions(list, null).map((a) => a.id)).toEqual(["b", "c", "s"]);
     });
 
     it("neededCounterpartCurrencyId prefers the original currency", () => {
@@ -555,6 +561,8 @@ describe("counterpart helpers", () => {
     it("isCurrencyLockedByAccount", () => {
         expect(isCurrencyLockedByAccount({ type: "cash", currencyId: "cur-ils" })).toBe(true);
         expect(isCurrencyLockedByAccount({ type: "cash", currencyId: null })).toBe(false);
+        expect(isCurrencyLockedByAccount({ type: "savings", currencyId: "cur-ils" })).toBe(true);
+        expect(isCurrencyLockedByAccount({ type: "savings", currencyId: null })).toBe(false);
         expect(isCurrencyLockedByAccount({ type: "bank", currencyId: "cur-ils" })).toBe(false);
         expect(isCurrencyLockedByAccount(null)).toBe(false);
     });
@@ -564,6 +572,8 @@ describe("counterpart helpers", () => {
         expect(currencyForAccountChange(cash, { isEdit: true, currencyLocked: false })).toBe("cur-usd");
         expect(currencyForAccountChange(cash, { isEdit: false, currencyLocked: false })).toBe("cur-usd");
         expect(currencyForAccountChange(cash, { isEdit: true, currencyLocked: true })).toBeNull();
+        const savings = { type: "savings" as const, currencyId: "cur-usd" };
+        expect(currencyForAccountChange(savings, { isEdit: false, currencyLocked: false })).toBe("cur-usd");
         expect(
             currencyForAccountChange({ type: "bank", currencyId: "cur-usd" }, { isEdit: true, currencyLocked: false }),
         ).toBeNull();
@@ -611,6 +621,7 @@ describe("counterpart form logic", () => {
             id: "m",
             accountId: "w",
             accountName: "Wallet",
+            accountType: "cash" as const,
             amount: "50.00" as unknown as number,
             currencyId: "cur-ils",
         };
@@ -740,6 +751,7 @@ describe("cashFollowupFor", () => {
                 id: "m1",
                 accountId: "w1",
                 accountName: "Cash (ILS)",
+                accountType: "cash",
                 amount: "700" as unknown as number,
                 currencyId: "cur-ils",
             },
@@ -764,6 +776,12 @@ describe("cashFollowupFor", () => {
         expect(cashFollowupFor(moved, transfer())).not.toBeNull();
         const resized = transfer({ counterpart: { ...base, amount: "500" as unknown as number } });
         expect(cashFollowupFor(resized, transfer())).not.toBeNull();
+    });
+
+    it("returns null for a savings counterpart (only wallets get the cash prompt)", () => {
+        const base = transfer().counterpart!;
+        expect(cashFollowupFor(transfer({ counterpart: { ...base, accountType: "savings" } }))).toBeNull();
+        expect(cashFollowupFor(transfer({ counterpart: { ...base, accountType: "cash" } }))).not.toBeNull();
     });
 
     it("returns null for other rows", () => {

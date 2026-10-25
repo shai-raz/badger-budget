@@ -9,6 +9,7 @@ import { BudgetsModule } from "./budgets/budgets.module";
 import { TransactionsModule } from "./transactions/transactions.module";
 import { CategoryMappingRulesModule } from "./category-mapping-rules/category-mapping-rules.module";
 import { CardPayoffPatternsModule } from "./card-payoff-patterns/card-payoff-patterns.module";
+import { ReimbursementsModule } from "./reimbursements/reimbursements.module";
 import { CashWithdrawalPatternsModule } from "./cash-withdrawal-patterns/cash-withdrawal-patterns.module";
 import { CurrenciesModule } from "./currencies/currencies.module";
 import { GoogleSheetsModule } from "./google-sheets/google-sheets.module";
@@ -19,6 +20,7 @@ import { McpModule } from "./mcp/mcp.module";
 import { OAuthModule } from "./oauth/oauth.module";
 import { HealthModule } from "./health/health.module";
 import { AppConfigModule } from "./app-config/app-config.module";
+import { SystemModule } from "./system/system.module";
 
 @Module({
     imports: [
@@ -49,6 +51,7 @@ import { AppConfigModule } from "./app-config/app-config.module";
         TransactionsModule,
         CategoryMappingRulesModule,
         CardPayoffPatternsModule,
+        ReimbursementsModule,
         CashWithdrawalPatternsModule,
         CurrenciesModule,
         GoogleSheetsModule,
@@ -63,6 +66,9 @@ import { AppConfigModule } from "./app-config/app-config.module";
 
         // Public instance config flags (no guard)
         AppConfigModule,
+
+        // Running version and update check (authenticated)
+        SystemModule,
     ],
     controllers: [],
     providers: [],

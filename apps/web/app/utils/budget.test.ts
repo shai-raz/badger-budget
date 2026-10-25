@@ -6,6 +6,7 @@ import {
     budgetDaysLeftLabel,
     budgetPeriodLabel,
     budgetPeriodNoun,
+    budgetPeriodTransactions,
     budgetProgressLevel,
     budgetWindowLabel,
     formatDaysLeft,
@@ -231,5 +232,60 @@ describe("budgetWindowLabel", () => {
                 }),
             ).toBe("2026");
         });
+    });
+});
+
+describe("budgetPeriodTransactions", () => {
+    const analytics = {
+        categories: [{ id: "cat-food" }, { id: "cat-fuel" }],
+        periodStart: "2026-10-01T00:00:00.000Z",
+        periodEnd: "2026-10-31T23:59:59.999Z",
+    };
+
+    const txn = (
+        overrides: Partial<{
+            id: string;
+            type: string;
+            categoryId: string | null;
+            transactionDate: string;
+            hidden: boolean;
+        }>,
+    ) => ({
+        id: "t",
+        type: "expense",
+        categoryId: "cat-food",
+        transactionDate: "2026-10-10T12:00:00.000Z",
+        hidden: false,
+        ...overrides,
+    });
+
+    it("keeps expenses in the budget's categories inside the period", () => {
+        const kept = txn({ id: "kept" });
+        const result = budgetPeriodTransactions(
+            [kept, txn({ id: "other-cat", categoryId: "cat-rent" }), txn({ id: "uncategorized", categoryId: null })],
+            analytics,
+        );
+        expect(result.map((t) => t.id)).toEqual(["kept"]);
+    });
+
+    it("excludes hidden expenses so the list matches the API's spend count", () => {
+        const result = budgetPeriodTransactions(
+            [txn({ id: "visible" }), txn({ id: "hidden-expense", hidden: true })],
+            analytics,
+        );
+        expect(result.map((t) => t.id)).toEqual(["visible"]);
+    });
+
+    it("excludes non-expense types and out-of-period dates", () => {
+        const result = budgetPeriodTransactions(
+            [
+                txn({ id: "income", type: "income" }),
+                txn({ id: "transfer", type: "transfer" }),
+                txn({ id: "before", transactionDate: "2026-09-30T23:59:00.000Z" }),
+                txn({ id: "after", transactionDate: "2026-11-01T00:00:00.000Z" }),
+            ],
+            analytics,
+        );
+        expect(result).toEqual([]);
     });
 });

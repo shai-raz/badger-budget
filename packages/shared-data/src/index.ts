@@ -5,3 +5,4 @@ export * from "./categories";
 export * from "./sync-passkeys";
 export * from "./transactions";
 export * from "./avatar-icons";
+export * from "./account-types";

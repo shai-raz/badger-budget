@@ -25,14 +25,23 @@ import type {
     ISyncJob,
     SpendingReport,
     IAccountResponse,
-    IUpdateCashBalance,
-    ICashBalanceUpdateResponse,
+    IUpdateLedgerBalance,
+    ILedgerBalanceUpdateResponse,
     IOAuthConsentRequest,
     IOAuthDecisionResponse,
     IOAuthConnection,
     IMcpConfig,
     IAppConfigResponse,
+    ICreateReimbursementAllocation,
+    IUpdateReimbursementAllocation,
+    IReimbursementAllocationResponse,
+    IReimbursementCandidatesResponse,
+    ICardPayoffLinkPreview,
+    ISystemInfo,
+    IChangelogResponse,
+    IChangelogSeenResponse,
 } from "@badger/types";
+import type { AccountType } from "@badger/shared-data";
 
 export interface ApiClientConfig {
     baseURL: string;
@@ -159,6 +168,28 @@ export class ApiClient {
         return response.data;
     }
 
+    // Running version and latest-release info (authenticated)
+    async getSystemInfo(): Promise<ISystemInfo> {
+        const response = await this.client.get<ISystemInfo>("/system/info");
+        return response.data;
+    }
+
+    async checkForUpdates(): Promise<ISystemInfo> {
+        const response = await this.client.post<ISystemInfo>("/system/check-updates");
+        return response.data;
+    }
+
+    // Bundled release notes for the What's New dialog (authenticated)
+    async getChangelog(): Promise<IChangelogResponse> {
+        const response = await this.client.get<IChangelogResponse>("/system/changelog");
+        return response.data;
+    }
+
+    async markChangelogSeen(): Promise<IChangelogSeenResponse> {
+        const response = await this.client.post<IChangelogSeenResponse>("/system/changelog/seen");
+        return response.data;
+    }
+
     // Auth endpoints
     async register(data: { email: string; password: string; firstName: string; lastName: string }) {
         const response = await this.client.post("/auth/register", data);
@@ -198,7 +229,7 @@ export class ApiClient {
     async createAccount(data: {
         name: string;
         accountNumber?: string;
-        type: string;
+        type: AccountType;
         icon?: string;
         color?: string;
         currencyId?: string;
@@ -207,14 +238,14 @@ export class ApiClient {
         return response.data;
     }
 
-    async updateCashBalance(id: string, data: IUpdateCashBalance): Promise<ICashBalanceUpdateResponse> {
-        const response = await this.client.post(`/accounts/${id}/cash-balance`, data);
+    async updateLedgerBalance(id: string, data: IUpdateLedgerBalance): Promise<ILedgerBalanceUpdateResponse> {
+        const response = await this.client.post(`/accounts/${id}/balance`, data);
         return response.data;
     }
 
     async updateAccount(
         id: string,
-        data: Partial<{ name: string; type: string; icon: string; color: string; currencyId: string }>,
+        data: Partial<{ name: string; type: AccountType; icon: string; color: string; currencyId: string }>,
     ) {
         const response = await this.client.patch(`/accounts/${id}`, data);
         return response.data;
@@ -411,7 +442,10 @@ export class ApiClient {
     }
 
     async markTransactionAsCardPayoff(id: string, description: string) {
-        const response = await this.client.post(`/transactions/${id}/mark-card-payoff`, { description });
+        const response = await this.client.post<{ count: number; linksRemoved: number; pattern: ICardPayoffPattern }>(
+            `/transactions/${id}/mark-card-payoff`,
+            { description },
+        );
         return response.data;
     }
 
@@ -451,12 +485,49 @@ export class ApiClient {
     }
 
     async applyAllCardPayoffPatterns() {
-        const response = await this.client.post<{ count: number }>("/card-payoff-patterns/apply-all");
+        const response = await this.client.post<{ count: number; linksRemoved: number }>(
+            "/card-payoff-patterns/apply-all",
+        );
+        return response.data;
+    }
+
+    async getCardPayoffLinkPreview(description: string) {
+        const response = await this.client.get<ICardPayoffLinkPreview>("/card-payoff-patterns/link-preview", {
+            params: { description },
+        });
+        return response.data;
+    }
+
+    async getApplyAllCardPayoffLinkPreview() {
+        const response = await this.client.get<ICardPayoffLinkPreview>("/card-payoff-patterns/apply-all/link-preview");
         return response.data;
     }
 
     async deleteCardPayoffPattern(id: string) {
         await this.client.delete(`/card-payoff-patterns/${id}`);
+    }
+
+    // Reimbursements
+    async createReimbursement(data: ICreateReimbursementAllocation) {
+        const response = await this.client.post<IReimbursementAllocationResponse>("/reimbursements", data);
+        return response.data;
+    }
+
+    async updateReimbursement(id: string, data: IUpdateReimbursementAllocation) {
+        const response = await this.client.patch<IReimbursementAllocationResponse>(`/reimbursements/${id}`, data);
+        return response.data;
+    }
+
+    async deleteReimbursement(id: string) {
+        await this.client.delete(`/reimbursements/${id}`);
+    }
+
+    async getReimbursementCandidates(transactionId: string, search?: string) {
+        const term = search?.trim();
+        const response = await this.client.get<IReimbursementCandidatesResponse>("/reimbursements/candidates", {
+            params: term ? { transactionId, search: term } : { transactionId },
+        });
+        return response.data;
     }
 
     // Currencies

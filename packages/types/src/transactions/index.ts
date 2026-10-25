@@ -10,4 +10,4 @@ export type { ITransactionAttachmentResponse } from "./ITransactionAttachmentRes
 export type { ICreateTransaction } from "./ICreateTransaction";
 export type { ICreateTransactionAttachment } from "./ICreateTransactionAttachment";
 export type { IUpdateTransaction } from "./IUpdateTransaction";
-export type { IUpdateCashBalance, ICashBalanceUpdateResponse } from "./ICashBalanceUpdate";
+export type { IUpdateLedgerBalance, ILedgerBalanceUpdateResponse } from "./ILedgerBalanceUpdate";

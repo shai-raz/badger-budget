@@ -13,11 +13,11 @@ const accounts = computed(() => balanceAccounts(data.value ?? []));
 // balance-bearing tile already carries its own amount).
 const bankTotal = computed(() => sumBankBalances(accounts.value));
 
-const cashAccount = ref<IAccountResponse | null>(null);
-const showUpdateCash = ref(false);
-const openUpdateCash = (account: IAccountResponse) => {
-    cashAccount.value = account;
-    showUpdateCash.value = true;
+const balanceAccount = ref<IAccountResponse | null>(null);
+const showUpdateBalance = ref(false);
+const openUpdateBalance = (account: IAccountResponse) => {
+    balanceAccount.value = account;
+    showUpdateBalance.value = true;
 };
 </script>
 
@@ -64,7 +64,7 @@ const openUpdateCash = (account: IAccountResponse) => {
                 v-for="account in accounts"
                 :key="account.id"
                 :account="account"
-                @update-cash="openUpdateCash(account)"
+                @update-cash="openUpdateBalance(account)"
             />
         </div>
         <div
@@ -75,13 +75,13 @@ const openUpdateCash = (account: IAccountResponse) => {
                 v-for="account in accounts"
                 :key="account.id"
                 :account="account"
-                @update-cash="openUpdateCash(account)"
+                @update-cash="openUpdateBalance(account)"
             />
         </div>
 
-        <AccountsUpdateCashBalanceDialog
-            v-model:visible="showUpdateCash"
-            :account="cashAccount"
+        <AccountsUpdateLedgerBalanceDialog
+            v-model:visible="showUpdateBalance"
+            :account="balanceAccount"
         />
     </SharedSectionBand>
 </template>

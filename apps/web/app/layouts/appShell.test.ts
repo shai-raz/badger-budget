@@ -19,6 +19,7 @@ const themePreset = read("../theme/preset.ts");
 const transactionForm = read("../components/transactions/TransactionForm.vue");
 const pageHeader = read("../components/layout/PageHeader.vue");
 const navDrawer = read("../components/layout/NavDrawer.vue");
+const updateDialog = read("../components/layout/UpdateDialog.vue");
 const budgetFormDialog = read("../components/budgets/BudgetFormDialog.vue");
 
 describe("app shell viewport contract", () => {
@@ -165,8 +166,48 @@ describe("app shell viewport contract", () => {
 
     it("gives PageHeader the back and menu buttons, the single title and resolves leading via the pure util", () => {
         expect(pageHeader).toContain('aria-label="Back"');
-        expect(pageHeader).toContain('aria-label="Open menu"');
+        expect(pageHeader).toContain("hamburgerLabel(updateVisible)");
         expect(pageHeader).toContain("resolveHeaderLeading");
         expect(pageHeader).toContain("<h1");
+    });
+
+    // The update item lives in the sidebar bottom group and the drawer footer, and opens the layout-mounted dialog.
+    it("renders the update nav item from NAV_ACTIONS in the sidebar and drawer, opening UpdateDialog", () => {
+        expect(sidebar).toContain("NAV_ACTIONS.update");
+        expect(sidebar).toContain("openDialog()");
+        expect(sidebar).toContain("mt-auto");
+        expect(navDrawer).toContain("NAV_ACTIONS.update");
+        expect(navDrawer).toContain("closeDrawer();");
+        expect(navDrawer).toContain("openDialog();");
+        expect(layout).toContain("<UpdateDialog />");
+    });
+
+    // The drawer's actions open its footer, directly above the theme switch's divider, rather than ending the
+    // nav list: there the content and footer paddings left a gap between them and the footer.
+    it("puts the drawer's actions at the top of its footer, above the theme switch", () => {
+        const nav = navDrawer.slice(navDrawer.indexOf("<nav"), navDrawer.indexOf("</nav>"));
+        const footer = navDrawer.slice(navDrawer.indexOf("#footer"));
+        expect(nav).not.toContain("NAV_ACTIONS");
+        expect(footer.indexOf("NAV_ACTIONS.update")).toBeGreaterThan(-1);
+        expect(footer.indexOf("NAV_ACTIONS.whatsNew")).toBeGreaterThan(footer.indexOf("NAV_ACTIONS.update"));
+        expect(footer.indexOf("Dark mode")).toBeGreaterThan(footer.indexOf("NAV_ACTIONS.whatsNew"));
+    });
+
+    // Routes and actions share one row class, so every row's text lines up with the footer's "Dark mode".
+    it("gives the drawer's routes and actions the same row class", () => {
+        expect(navDrawer.match(/:class="\[?DRAWER_ROW_CLASS/g)).toHaveLength(3);
+        expect(navDrawer).not.toContain("NAV_LINK_CLASS");
+    });
+
+    // After a manual check finds nothing newer, the header and footer stop offering an update.
+    it("retitles UpdateDialog and drops Dismiss once the check is up to date", () => {
+        expect(updateDialog).toContain("upToDate ? 'No update available' : 'Update available'");
+        expect(updateDialog).toMatch(/v-if="!upToDate"\s+label="Dismiss for this version"/);
+    });
+
+    it("badges the hamburger with a decorative dot only while the update notice is visible", () => {
+        expect(pageHeader).toContain("useUpdateNotice");
+        expect(pageHeader).toContain('v-if="updateVisible"');
+        expect(pageHeader).toContain('aria-hidden="true"');
     });
 });

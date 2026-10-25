@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
     BOTTOM_BAR_ITEMS,
     DRAWER_ITEMS,
+    NAV_ACTIONS,
     SIDEBAR_BOTTOM_ITEMS,
     SIDEBAR_ITEMS,
     isActiveRoute,
+    type NavAction,
     type NavItem,
 } from "./navigation";
 
@@ -70,6 +72,30 @@ describe("navigation config", () => {
             } else {
                 byTo.set(item.to, item);
             }
+        }
+    });
+});
+
+describe("navigation actions", () => {
+    const actions: readonly NavAction[] = Object.values(NAV_ACTIONS);
+
+    it("has unique ids, labels and icons", () => {
+        expect(new Set(actions.map((action) => action.id)).size).toBe(actions.length);
+        expect(new Set(actions.map((action) => action.label)).size).toBe(actions.length);
+        expect(new Set(actions.map((action) => action.icon)).size).toBe(actions.length);
+    });
+
+    it("does not reuse a route item icon", () => {
+        const routeIcons = new Set(ALL_ITEMS.map((item) => item.icon));
+        for (const action of actions) {
+            expect(routeIcons.has(action.icon)).toBe(false);
+        }
+    });
+
+    it("stays out of every route list", () => {
+        const routeLabels = new Set(ALL_ITEMS.map((item) => item.label));
+        for (const action of actions) {
+            expect(routeLabels.has(action.label)).toBe(false);
         }
     });
 });

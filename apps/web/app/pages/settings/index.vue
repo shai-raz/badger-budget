@@ -64,6 +64,8 @@ const user = computed(() => authStore.user);
 
         <SettingsMcpConnectionsCard />
 
+        <SettingsAboutCard />
+
         <SharedSectionBand title="Account">
             <div class="flex px-4 pb-4 md:px-0 md:pb-0">
                 <Button

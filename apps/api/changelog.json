@@ -1,0 +1,111 @@
+{
+    "releases": [
+        {
+            "version": "0.3.1",
+            "date": "2026-10-25",
+            "items": [
+                {
+                    "type": "fix",
+                    "scope": "deploy",
+                    "breaking": false,
+                    "subject": "always pull the app image in the Coolify compose file",
+                    "pr": 48
+                }
+            ]
+        },
+        {
+            "version": "0.3.0",
+            "date": "2026-10-25",
+            "items": [
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "savings account type (ledger like cash, transfer counterpart) (1/2)",
+                    "pr": 43
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "savings accounts in the account form, transfer picker and balance update (2/2)",
+                    "pr": 44
+                }
+            ]
+        },
+        {
+            "version": "0.2.1",
+            "date": "2026-10-25",
+            "items": [
+                {
+                    "type": "ci",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "build each release image once instead of twice",
+                    "pr": 41
+                },
+                {
+                    "type": "ci",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "skip the image build on main pushes that don't change the image",
+                    "pr": 42
+                },
+                {
+                    "type": "fix",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "line up the mobile drawer's actions with its footer",
+                    "pr": 46
+                }
+            ]
+        },
+        {
+            "version": "0.2.0",
+            "date": "2026-10-24",
+            "items": [
+                {
+                    "type": "ci",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "run Jest and Vitest in a Tests job",
+                    "pr": 35
+                },
+                {
+                    "type": "ci",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "conventional PR titles and automatic releases",
+                    "pr": 36
+                },
+                {
+                    "type": "feat",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "running version, update check and About card",
+                    "pr": 37
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "update available nav item, badge and dialog",
+                    "pr": 38
+                },
+                {
+                    "type": "feat",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "What's New dialog from bundled changelog",
+                    "pr": 39
+                }
+            ]
+        },
+        {
+            "version": "0.1.0",
+            "date": "2026-10-20",
+            "summary": "Initial public release.",
+            "items": []
+        }
+    ]
+}

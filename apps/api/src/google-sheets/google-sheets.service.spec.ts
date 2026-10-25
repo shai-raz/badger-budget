@@ -21,6 +21,10 @@ describe("GoogleSheetsService", () => {
             create: jest.fn(),
             update: jest.fn(),
         },
+        user: { findUnique: jest.fn(), update: jest.fn() },
+        currency: { findMany: jest.fn() },
+        account: { findMany: jest.fn() },
+        transaction: { findMany: jest.fn(), update: jest.fn() },
     };
 
     // Plain function, not jest.fn(): afterEach resetAllMocks would wipe a jest.fn implementation.
@@ -86,5 +90,22 @@ describe("GoogleSheetsService", () => {
 
         await expect(service.connectSheet("user-1", "sheet-id")).rejects.toThrow(BadRequestException);
         expect(mockPrismaService.sheetConnection.create).not.toHaveBeenCalled();
+    });
+
+    it("backfillCurrenciesOnce leaves reimbursement-linked rows alone", async () => {
+        mockPrismaService.user.findUnique.mockResolvedValue({ currencyBackfilledAt: null });
+        mockPrismaService.currency.findMany.mockResolvedValue([{ id: "usd-id", code: "USD", symbol: "$" }]);
+        mockPrismaService.account.findMany.mockResolvedValue([]);
+        mockPrismaService.transaction.findMany.mockResolvedValue([]);
+        mockPrismaService.sheetConnection.findFirst.mockResolvedValue(null);
+        mockPrismaService.user.update.mockResolvedValue({});
+
+        const result = await service.backfillCurrenciesOnce("user-1");
+
+        expect(result).toEqual({ skipped: false });
+        expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith({
+            where: { userId: "user-1", deletedAt: null, reimbursedBy: { none: {} }, reimburses: { none: {} } },
+            select: expect.any(Object),
+        });
     });
 });

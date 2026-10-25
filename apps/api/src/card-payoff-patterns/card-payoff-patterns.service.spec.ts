@@ -16,7 +16,15 @@ describe("CardPayoffPatternsService", () => {
         },
         transaction: {
             updateMany: jest.fn(),
+            findMany: jest.fn(),
+            count: jest.fn(),
         },
+        reimbursementAllocation: {
+            deleteMany: jest.fn(),
+            count: jest.fn(),
+        },
+        $executeRaw: jest.fn(),
+        $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(mockPrismaService)),
     };
 
     beforeEach(async () => {
@@ -26,6 +34,9 @@ describe("CardPayoffPatternsService", () => {
 
         service = module.get<CardPayoffPatternsService>(CardPayoffPatternsService);
         prisma = module.get<PrismaService>(PrismaService);
+
+        // No matching rows and no links unless a test says otherwise.
+        mockPrismaService.transaction.findMany.mockResolvedValue([]);
     });
 
     afterEach(() => {
@@ -147,7 +158,7 @@ describe("CardPayoffPatternsService", () => {
 
             const result = await service.applyPatternDescription(userId, "Pattern 1");
 
-            expect(result.count).toBe(7);
+            expect(result).toEqual({ count: 7, linksRemoved: 0 });
             expect(mockPrismaService.transaction.updateMany).toHaveBeenNthCalledWith(1, {
                 where: { userId, description: "Pattern 1", deletedAt: null, type: "expense" },
                 data: { type: "transfer", hidden: true, transferDirection: "out" },
@@ -167,6 +178,109 @@ describe("CardPayoffPatternsService", () => {
                     counterpart: { is: null },
                 },
                 data: { hidden: true },
+            });
+        });
+    });
+
+    describe("applyPatternDescription reimbursement links", () => {
+        it("deletes links on matched expense and income rows before retagging, and reports the count", async () => {
+            const userId = "user-123";
+            mockPrismaService.transaction.findMany.mockResolvedValue([{ id: "exp-1" }, { id: "inc-1" }]);
+            mockPrismaService.reimbursementAllocation.deleteMany.mockResolvedValue({ count: 3 });
+            mockPrismaService.transaction.updateMany.mockResolvedValue({ count: 0 });
+
+            const result = await service.applyPatternDescription(userId, "Pattern 1");
+
+            expect(result).toEqual({ count: 0, linksRemoved: 3 });
+            expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith({
+                where: {
+                    userId,
+                    description: "Pattern 1",
+                    deletedAt: null,
+                    type: { in: ["expense", "income"] },
+                },
+                select: { id: true },
+            });
+            expect(mockPrismaService.reimbursementAllocation.deleteMany).toHaveBeenCalledWith({
+                where: { OR: [{ incomeId: { in: ["exp-1", "inc-1"] } }, { expenseId: { in: ["exp-1", "inc-1"] } }] },
+            });
+            expect(mockPrismaService.reimbursementAllocation.deleteMany.mock.invocationCallOrder[0]).toBeLessThan(
+                mockPrismaService.transaction.updateMany.mock.invocationCallOrder[0],
+            );
+        });
+
+        it("takes the reimbursement lock inside the transaction", async () => {
+            mockPrismaService.transaction.updateMany.mockResolvedValue({ count: 0 });
+
+            await service.applyPatternDescription("user-123", "Pattern 1");
+
+            expect(mockPrismaService.$transaction).toHaveBeenCalledTimes(1);
+            expect(mockPrismaService.$executeRaw).toHaveBeenCalledTimes(1);
+        });
+
+        it("skips the link delete when no expense or income matches", async () => {
+            mockPrismaService.transaction.updateMany.mockResolvedValue({ count: 0 });
+
+            const result = await service.applyPatternDescription("user-123", "Pattern 1");
+
+            expect(result).toEqual({ count: 0, linksRemoved: 0 });
+            expect(mockPrismaService.reimbursementAllocation.deleteMany).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("previewLinkRemoval", () => {
+        it("counts linked transactions and allocations touching the given descriptions", async () => {
+            const userId = "user-123";
+            mockPrismaService.transaction.count.mockResolvedValue(2);
+            mockPrismaService.reimbursementAllocation.count.mockResolvedValue(3);
+
+            const result = await service.previewLinkRemoval(userId, ["Pattern 1"]);
+
+            expect(result).toEqual({ linkedTransactions: 2, links: 3 });
+            expect(mockPrismaService.transaction.count).toHaveBeenCalledWith({
+                where: {
+                    userId,
+                    deletedAt: null,
+                    description: { in: ["Pattern 1"] },
+                    type: { in: ["expense", "income"] },
+                    OR: [{ reimbursedBy: { some: {} } }, { reimburses: { some: {} } }],
+                },
+            });
+            expect(mockPrismaService.reimbursementAllocation.count).toHaveBeenCalledWith({
+                where: {
+                    userId,
+                    OR: [
+                        { income: { userId, deletedAt: null, description: { in: ["Pattern 1"] } } },
+                        { expense: { userId, deletedAt: null, description: { in: ["Pattern 1"] } } },
+                    ],
+                },
+            });
+        });
+
+        it("returns zeros without querying when there are no descriptions", async () => {
+            const result = await service.previewLinkRemoval("user-123", []);
+
+            expect(result).toEqual({ linkedTransactions: 0, links: 0 });
+            expect(mockPrismaService.transaction.count).not.toHaveBeenCalled();
+            expect(mockPrismaService.reimbursementAllocation.count).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("previewApplyAllLinkRemoval", () => {
+        it("previews across every pattern the user can see", async () => {
+            const userId = "user-123";
+            mockPrismaService.cardPayoffPattern.findMany.mockResolvedValue([
+                { id: "p1", description: "Pattern 1", isSystem: true },
+                { id: "p2", description: "Pattern 2", isSystem: false, userId },
+            ]);
+            mockPrismaService.transaction.count.mockResolvedValue(1);
+            mockPrismaService.reimbursementAllocation.count.mockResolvedValue(4);
+
+            const result = await service.previewApplyAllLinkRemoval(userId);
+
+            expect(result).toEqual({ linkedTransactions: 1, links: 4 });
+            expect(mockPrismaService.transaction.count).toHaveBeenCalledWith({
+                where: expect.objectContaining({ description: { in: ["Pattern 1", "Pattern 2"] } }),
             });
         });
     });
@@ -191,7 +305,7 @@ describe("CardPayoffPatternsService", () => {
 
             const result = await service.applyAllPatternsToTransactions(userId);
 
-            expect(result.count).toBe(8);
+            expect(result).toEqual({ count: 8, linksRemoved: 0 });
             expect(mockPrismaService.transaction.updateMany).toHaveBeenCalledTimes(6);
             expect(mockPrismaService.transaction.updateMany).toHaveBeenCalledWith({
                 where: {
@@ -217,7 +331,24 @@ describe("CardPayoffPatternsService", () => {
 
             const result = await service.applyAllPatternsToTransactions(userId);
 
-            expect(result.count).toBe(0);
+            expect(result).toEqual({ count: 0, linksRemoved: 0 });
+        });
+
+        it("sums links removed across patterns", async () => {
+            const userId = "user-123";
+            mockPrismaService.cardPayoffPattern.findMany.mockResolvedValue([
+                { id: "p1", description: "Pattern 1", isSystem: true },
+                { id: "p2", description: "Pattern 2", isSystem: false, userId },
+            ]);
+            mockPrismaService.transaction.findMany.mockResolvedValue([{ id: "t1" }]);
+            mockPrismaService.reimbursementAllocation.deleteMany
+                .mockResolvedValueOnce({ count: 2 })
+                .mockResolvedValueOnce({ count: 1 });
+            mockPrismaService.transaction.updateMany.mockResolvedValue({ count: 0 });
+
+            const result = await service.applyAllPatternsToTransactions(userId);
+
+            expect(result).toEqual({ count: 0, linksRemoved: 3 });
         });
     });
 });

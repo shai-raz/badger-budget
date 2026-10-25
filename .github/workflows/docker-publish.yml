@@ -1,22 +1,41 @@
 # Builds the production image (see Dockerfile) for linux/amd64 and linux/arm64 and pushes it to
-# ghcr.io/<owner>/badger-budget: :latest on main, semver tags on v*.*.* tags, sha tags on every push.
-# Pull requests build without pushing, so a broken Dockerfile fails the PR. Both architectures build once the repo
-# is public; while it is private, PRs build linux/amd64 only and skip QEMU, to save Actions minutes.
+# ghcr.io/<owner>/badger-budget: :latest and a sha tag on every push to main, plus X.Y.Z and X.Y when the commit
+# carries a v*.*.* tag.
+# Releases build once: release.yml pushes the release commit and its tag atomically, so the main-push run for that
+# commit already sees the tag and publishes the semver tags too. Tag pushes do not trigger a second build of the
+# same commit. To rebuild a release by hand, run this workflow on its tag (workflow_dispatch).
+# Images carry APP_VERSION (from `git describe --tags`) and GIT_SHA build args: release builds report vX.Y.Z (the
+# API strips the v), main builds after a tag report vX.Y.Z-N-g<sha>.
+# Pull requests build without pushing, so a broken Dockerfile fails the PR.
+# Both triggers share one paths list: the files the image is built from. Docs, CI-only and README merges skip the
+# build. Release commits always touch apps/api/changelog.json and the package.json files, so every release builds.
+# Keep the two lists identical, and add any new file the Dockerfile copies.
 # The Dockerfile's JS build stage runs on $BUILDPLATFORM, so only native deps run under QEMU.
-# While the repo is private, nothing is pushed to GHCR, and the job is skipped on pushes (main and tags), so the
-# multi-arch build never runs there. Once the repo is public, the first push creates the GHCR package; the owner
-# makes it public once in the package settings. The first PR in the public repo is the first real arm64 check.
+# The repository.private guards below only matter if the repo is made private again: pushes then skip the job
+# (no GHCR push, no multi-arch build), and PRs build linux/amd64 only and skip QEMU, to save Actions minutes.
 
 name: Docker publish
 
 on:
     push:
         branches: [main]
-        tags: ["v*.*.*"]
+        paths:
+            - Dockerfile
+            - .dockerignore
+            - .npmrc
+            - docker/**
+            - apps/**
+            - packages/**
+            - package.json
+            - pnpm-lock.yaml
+            - pnpm-workspace.yaml
+            - turbo.json
+            - .github/workflows/docker-publish.yml
     pull_request:
         paths:
             - Dockerfile
             - .dockerignore
+            - .npmrc
             - docker/**
             - apps/**
             - packages/**
@@ -44,6 +63,8 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0 # full history and tags, so `git describe` can name the version
 
             # GHCR requires a lowercase owner; derive it from the repo so forks publish to their own namespace.
             - name: Compute image name
@@ -61,14 +82,22 @@ jobs:
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
 
+            - id: version
+              name: Resolve app version and commit
+              run: |
+                  echo "app_version=$(git describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+                  echo "git_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+                  # The release tag on this exact commit, if any (empty for ordinary main pushes and PRs).
+                  echo "release_tag=$(git tag --points-at HEAD --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1)" >> "$GITHUB_OUTPUT"
+
             - id: meta
               uses: docker/metadata-action@v5
               with:
                   images: ${{ env.IMAGE }}
                   tags: |
                       type=raw,value=latest,enable={{is_default_branch}}
-                      type=semver,pattern={{version}}
-                      type=semver,pattern={{major}}.{{minor}}
+                      type=semver,pattern={{version}},value=${{ steps.version.outputs.release_tag }},enable=${{ steps.version.outputs.release_tag != '' }}
+                      type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.release_tag }},enable=${{ steps.version.outputs.release_tag != '' }}
                       type=sha
 
             - uses: docker/build-push-action@v6
@@ -76,6 +105,9 @@ jobs:
                   context: .
                   platforms: ${{ github.event.repository.private && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
                   push: ${{ github.event_name != 'pull_request' && github.event.repository.private == false }}
+                  build-args: |
+                      APP_VERSION=${{ steps.version.outputs.app_version }}
+                      GIT_SHA=${{ steps.version.outputs.git_sha }}
                   tags: ${{ steps.meta.outputs.tags }}
                   labels: ${{ steps.meta.outputs.labels }}
                   cache-from: type=gha

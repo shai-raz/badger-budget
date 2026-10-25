@@ -1,10 +1,11 @@
+import type { AccountType } from "../account-types";
 import type { BankCompanyId } from "./providers";
 
 /**
  * What kind of account a provider's scraped accounts represent. Mirrors the `Account.type` values
  * the app persists ("bank" / "credit_card"), so it can be written straight onto the column.
  */
-export type ScrapedAccountType = "bank" | "credit_card";
+export type ScrapedAccountType = Extract<AccountType, "bank" | "credit_card">;
 
 /**
  * The provider already tells us whether an account is a card or a bank account, so accounts

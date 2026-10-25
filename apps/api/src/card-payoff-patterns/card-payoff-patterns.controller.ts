@@ -1,5 +1,17 @@
-import { Controller, Get, Post, Body, Delete, Param, HttpCode, HttpStatus, UseGuards } from "@nestjs/common";
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from "@nestjs/swagger";
+import {
+    Controller,
+    Get,
+    Post,
+    Body,
+    Delete,
+    Param,
+    Query,
+    HttpCode,
+    HttpStatus,
+    UseGuards,
+    BadRequestException,
+} from "@nestjs/common";
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from "@nestjs/swagger";
 import { CardPayoffPatternsService } from "./card-payoff-patterns.service";
 import { CreateCardPayoffPatternDto } from "./dto/create-card-payoff-pattern.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
@@ -26,6 +38,24 @@ export class CardPayoffPatternsController {
         return this.cardPayoffPatternsService.findAll(user.id);
     }
 
+    // Preview routes must stay above `:id`, or Nest matches "link-preview" as a pattern id.
+    @Get("link-preview")
+    @ApiOperation({ summary: "Preview reimbursement links a card payoff description would remove" })
+    @ApiQuery({ name: "description", required: true, type: String })
+    @ApiResponse({ status: 200, description: "Linked transaction and link counts" })
+    @ApiResponse({ status: 400, description: "description is required" })
+    previewLinkRemoval(@Query("description") description: string, @CurrentUser() user: { id: string }) {
+        if (!description?.trim()) throw new BadRequestException("description is required");
+        return this.cardPayoffPatternsService.previewLinkRemoval(user.id, [description]);
+    }
+
+    @Get("apply-all/link-preview")
+    @ApiOperation({ summary: "Preview reimbursement links that applying all patterns would remove" })
+    @ApiResponse({ status: 200, description: "Linked transaction and link counts" })
+    previewApplyAllLinkRemoval(@CurrentUser() user: { id: string }) {
+        return this.cardPayoffPatternsService.previewApplyAllLinkRemoval(user.id);
+    }
+
     @Get(":id")
     @ApiOperation({ summary: "Get pattern by ID" })
     @ApiResponse({ status: 200, description: "Pattern found" })
@@ -35,8 +65,10 @@ export class CardPayoffPatternsController {
     }
 
     @Post("apply-all")
-    @ApiOperation({ summary: "Apply all patterns: matching transactions become hidden transfers" })
-    @ApiResponse({ status: 200, description: "Patterns applied successfully" })
+    @ApiOperation({
+        summary: "Apply all patterns: matching transactions become hidden transfers and lose their reimbursement links",
+    })
+    @ApiResponse({ status: 200, description: "Patterns applied; response has count and linksRemoved" })
     async applyAllPatterns(@CurrentUser() user: any) {
         return this.cardPayoffPatternsService.applyAllPatternsToTransactions(user.id);
     }

@@ -14,7 +14,7 @@ export interface ICreateTransaction {
     postedDate?: string;
     budgetId?: string;
     categoryId?: string;
-    /** Cash account receiving/sending the money; transfers only. */
+    /** Cash or savings account receiving/sending the money; transfers only. */
     counterpartAccountId?: string;
     /** Amount in the counterpart account's currency. */
     counterpartAmount?: number;

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/vue-query";
 import { useApiClient } from "../useApiClient";
-import type { IAccountResponse, IUpdateCashBalance } from "@badger/types";
+import type { IAccountResponse, IUpdateLedgerBalance } from "@badger/types";
+import type { AccountType } from "@badger/shared-data";
 import { transactionKeys } from "../transactions/useTransactions";
 import { accountKeys } from "./accountKeys";
 
@@ -24,7 +25,7 @@ export function useCreateAccount() {
         mutationFn: (data: {
             name: string;
             accountNumber?: string;
-            type: string;
+            type: AccountType;
             icon?: string;
             color?: string;
             currencyId?: string;
@@ -45,7 +46,7 @@ export function useUpdateAccount() {
             data,
         }: {
             id: string;
-            data: Partial<{ name: string; type: string; icon: string; color: string; currencyId: string }>;
+            data: Partial<{ name: string; type: AccountType; icon: string; color: string; currencyId: string }>;
         }) => apiClient.updateAccount(id, data),
         onSuccess: (_, { id }) => {
             queryClient.invalidateQueries({ queryKey: accountKeys.lists() });
@@ -66,12 +67,13 @@ export function useDeleteAccount() {
     });
 }
 
-export function useUpdateCashBalance() {
+export function useUpdateLedgerBalance() {
     const apiClient = useApiClient();
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ id, data }: { id: string; data: IUpdateCashBalance }) => apiClient.updateCashBalance(id, data),
+        mutationFn: ({ id, data }: { id: string; data: IUpdateLedgerBalance }) =>
+            apiClient.updateLedgerBalance(id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: accountKeys.all });
             queryClient.invalidateQueries({ queryKey: transactionKeys.all });

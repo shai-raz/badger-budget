@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { faker } from "@faker-js/faker";
-import type { BalanceKind } from "@badger/shared-data";
+import type { BalanceKind, ScrapedAccountType } from "@badger/shared-data";
 import {
     DEMO_CAL_CARD_NAME,
     DEMO_CAL_DEBIT_DAY,
@@ -16,7 +16,7 @@ export type DemoBalanceDb = Pick<Prisma.TransactionClient, "account" | "transact
 
 interface NewBalanceAccountDef {
     name: string;
-    type: "bank" | "credit_card";
+    type: ScrapedAccountType;
     icon: string;
     color: string;
 }
