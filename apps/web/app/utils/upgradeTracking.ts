@@ -16,8 +16,8 @@ export interface PendingUpgrade {
     /** Nuxt build id of the page that triggered the upgrade. */
     fromBuildId: string;
     startedAt: number;
-    /** Set once a tab first sees the upgraded version live, so later loads read done without a toast. */
-    completedAt?: number;
+    /** Set by the first tab that sees the target version live, so a page reloaded from ready reads its phase without waiting for /system/info. */
+    liveAt?: number;
 }
 
 export type UpgradePhase = "upgrading" | "ready" | "stalled" | "done";
@@ -48,16 +48,16 @@ export function parsePendingUpgrade(raw: unknown, userId: string | null): Pendin
     }
     if (!isRecord(value)) return null;
 
-    const { userId: storedUserId, targetVersion, fromVersion, fromBuildId, startedAt, completedAt } = value;
+    const { userId: storedUserId, targetVersion, fromVersion, fromBuildId, startedAt, liveAt } = value;
     if (storedUserId !== userId) return null;
     if (targetVersion !== null && typeof targetVersion !== "string") return null;
     if (fromVersion !== null && typeof fromVersion !== "string") return null;
     if (typeof fromBuildId !== "string") return null;
     if (typeof startedAt !== "number" || !Number.isFinite(startedAt)) return null;
-    if (completedAt !== undefined && (typeof completedAt !== "number" || !Number.isFinite(completedAt))) return null;
+    if (liveAt !== undefined && (typeof liveAt !== "number" || !Number.isFinite(liveAt))) return null;
 
     const parsed: PendingUpgrade = { userId, targetVersion, fromVersion, fromBuildId, startedAt };
-    if (completedAt !== undefined) parsed.completedAt = completedAt;
+    if (liveAt !== undefined) parsed.liveAt = liveAt;
     return parsed;
 }
 
@@ -78,27 +78,55 @@ export function versionReached(p: PendingUpgrade, running: string | null): boole
 }
 
 /**
- * Where the upgrade stands for this browser.
- * `reloadedHere` is true only in the tab that reloaded for this upgrade (a per-tab marker), so other tabs on the
- * old build still read ready. A completed entry already saw the new version live, so it does not wait for `info`.
- * `info` null (not loaded yet) is never stalled: the version is unknown, so a reloaded page cannot tell a slow
- * upgrade from a finished one.
+ * Where the upgrade stands for this browser. Once the target has been seen live (stamped as `liveAt` by any tab, or
+ * live in `info`), no `info` is needed: a page on the build that started the upgrade is ready, any other build is
+ * done. `info` null before it loads is never stalled, so a slow or failed /system/info cannot flip a finished
+ * upgrade to stalled.
  */
-export function upgradePhase(
-    p: PendingUpgrade,
+export function upgradePhase(p: PendingUpgrade, info: ISystemInfo | null, buildId: string, now: number): UpgradePhase {
+    if (p.liveAt !== undefined || versionReached(p, info?.version ?? null)) {
+        return buildId !== p.fromBuildId ? "done" : "ready";
+    }
+    if (info === null) return "upgrading";
+    return now - p.startedAt >= UPGRADE_STALL_MS ? "stalled" : "upgrading";
+}
+
+/** One tab's view of the upgrade, derived from the shared entry, the copy this tab holds, and its own build and info. */
+export interface UpgradeTabView {
+    /** The phase this tab shows, or null when nothing is tracked. */
+    phase: UpgradePhase | null;
+    /** The entry the phase reads: the shared one, or this tab's copy once another tab cleared the shared entry. */
+    entry: PendingUpgrade | null;
+    /** This tab's copy to keep: taken while the upgrade is ready on the build it started from, never while stalled. */
+    held: PendingUpgrade | null;
+    /** The shared entry stamped with `liveAt`, once this tab sees the target live; null when there is nothing to write. */
+    stamp: PendingUpgrade | null;
+    /** Set in the first tab that sees the upgrade finish: announce it with `version`, then clear the shared entry. */
+    done: { version: string | null } | null;
+}
+
+/**
+ * Derives a tab's view. The composable writes `stamp` back to the shared entry and clears it on `done`; the tests
+ * replay those writes over this function to walk the matrix across tabs and reloads.
+ */
+export function tabView(
+    shared: PendingUpgrade | null,
+    held: PendingUpgrade | null,
     info: ISystemInfo | null,
     buildId: string,
     now: number,
-    reloadedHere: boolean,
-): UpgradePhase {
-    if (p.completedAt !== undefined) return buildId !== p.fromBuildId || reloadedHere ? "done" : "ready";
-    if (info === null) return "upgrading";
-    if (versionReached(p, info.version)) {
-        // This tab reloaded already, or the page runs a different build: nothing left to do.
-        if (buildId !== p.fromBuildId || reloadedHere) return "done";
-        return "ready";
-    }
-    return now - p.startedAt >= UPGRADE_STALL_MS ? "stalled" : "upgrading";
+): UpgradeTabView {
+    const reached = shared !== null && shared.liveAt === undefined && versionReached(shared, info?.version ?? null);
+    const live = shared && reached ? { ...shared, liveAt: now } : shared;
+    const entry = live ?? held;
+    const phase = entry ? upgradePhase(entry, info, buildId, now) : null;
+    return {
+        phase,
+        entry,
+        held: live && phase === "ready" ? live : held,
+        stamp: reached && live ? live : null,
+        done: live && phase === "done" ? { version: info?.version ?? live.targetVersion } : null,
+    };
 }
 
 /**
@@ -118,22 +146,6 @@ export function stalledToastIsStale(
     next: UpgradePhase | null | undefined,
 ): boolean {
     return prev === "stalled" && next !== "stalled";
-}
-
-/**
- * The done toast shows once per upgrade per tab. `shownFor` is the startedAt this tab last announced, kept in
- * sessionStorage, so a later load of the same tab does not repeat it.
- */
-export function doneToastDue(p: PendingUpgrade, shownFor: number | null): boolean {
-    return shownFor !== p.startedAt;
-}
-
-/**
- * Whether a tab announces a finished upgrade: the tab that reloaded for it, or the first tab to see it finish. A
- * completed entry loaded fresh by a tab that did neither stays quiet.
- */
-export function announcesDone(p: PendingUpgrade, reloadedHere: boolean): boolean {
-    return reloadedHere || p.completedAt === undefined;
 }
 
 /** The Upgrade action exists only when the host has a webhook and an update is out; it is disabled while the upgrade runs. */

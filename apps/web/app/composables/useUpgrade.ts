@@ -1,4 +1,4 @@
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { useMutation } from "@tanstack/vue-query";
 import { useToast } from "primevue/usetoast";
 import { useApiClient } from "./useApiClient";
@@ -7,19 +7,13 @@ import { useAuthStore } from "~/stores/auth";
 import { reloadToNewBuild } from "~/utils/reloadToNewBuild";
 import {
     PENDING_UPGRADE_KEY,
-    announcesDone,
-    doneToastDue,
     parsePendingUpgrade,
+    tabView,
     upgradeActionState,
-    upgradePhase,
     type PendingUpgrade,
 } from "~/utils/upgradeTracking";
 
 export const UPGRADE_TOAST_GROUP = "upgrade";
-/** sessionStorage key holding the startedAt of the upgrade this tab reloaded for. Per tab, so other tabs do not inherit it. */
-const RELOADED_FOR_KEY = "upgradeReloadedFor";
-/** sessionStorage key holding the startedAt whose done toast this tab already showed. Per tab, like RELOADED_FOR_KEY. */
-const DONE_SHOWN_FOR_KEY = "upgradeDoneShownFor";
 
 /** Shared upgrade state for this browser: the pending upgrade, its phase, and the trigger/reload actions. */
 export const useUpgrade = () => {
@@ -28,21 +22,36 @@ export const useUpgrade = () => {
     const toast = useToast();
     const buildId = useRuntimeConfig().app.buildId;
     const { info } = useUpdateNotice();
-    // Per-browser memory of the upgrade this browser started. The server stays the source of truth.
+    // The shared entry: the upgrade this browser started, keyed by user. The server stays the source of truth.
     const stored = useLocalStorage<string | null>(PENDING_UPGRADE_KEY, null);
-    // Synchronous write: the marker must be stored before the reload it guards starts.
-    const reloadedFor = useSessionStorage<number | null>(RELOADED_FOR_KEY, null, { flush: "sync" });
-    const doneShownFor = useSessionStorage<number | null>(DONE_SHOWN_FOR_KEY, null, { flush: "sync" });
     const now = useNow({ interval: 15_000 });
+    // This tab's own copy of the upgrade it last saw ready. In memory only: it keeps Reload working after another tab
+    // reached done and cleared the shared entry.
+    const held = ref<PendingUpgrade | null>(null);
 
-    const pending = computed(() => parsePendingUpgrade(stored.value, authStore.user?.id ?? null));
-    const reloadedHere = computed(() => pending.value !== null && reloadedFor.value === pending.value.startedAt);
-    const phase = computed(() =>
-        pending.value
-            ? upgradePhase(pending.value, info.value, buildId, now.value.getTime(), reloadedHere.value)
-            : null,
+    const view = computed(() =>
+        tabView(
+            parsePendingUpgrade(stored.value, authStore.user?.id ?? null),
+            held.value,
+            info.value,
+            buildId,
+            now.value.getTime(),
+        ),
     );
+    const pending = computed(() => view.value.entry);
+    const phase = computed(() => view.value.phase);
     const actionState = computed(() => upgradeActionState(info.value, phase.value));
+
+    // Records what this tab learned: its own copy, and the live stamp on the shared entry. Immediate, so a fresh load
+    // runs it at setup.
+    watch(
+        view,
+        (next) => {
+            held.value = next.held;
+            if (next.stamp) stored.value = JSON.stringify(next.stamp);
+        },
+        { immediate: true },
+    );
 
     const triggerMutation = useMutation({
         mutationFn: async (): Promise<PendingUpgrade> => {
@@ -66,25 +75,13 @@ export const useUpgrade = () => {
         stored.value = null;
     };
 
-    // Never clears the shared entry: other tabs on the old build still need it to show Reload. The first tab to see
-    // the upgrade finish records completedAt there, so later loads read done quietly. This tab's own marker keeps
-    // the done toast to once per upgrade here.
-    const claimDoneToast = (): boolean => {
-        const current = pending.value;
-        if (!current || !doneToastDue(current, doneShownFor.value)) return false;
-        if (!announcesDone(current, reloadedHere.value)) return false;
-        if (current.completedAt === undefined) {
-            stored.value = JSON.stringify({ ...current, completedAt: Date.now() });
-        }
-        doneShownFor.value = current.startedAt;
-        return true;
-    };
-
-    // Marks this tab before the reload, so the page that loads the new build reads it as done rather than ready again.
-    const reloadNow = async () => {
-        const current = pending.value;
-        if (current) reloadedFor.value = current.startedAt;
-        await reloadToNewBuild();
+    // The first tab that sees the finished upgrade takes the done toast and clears the shared entry. Other tabs keep
+    // their own copy, so they still show Reload until they reload; later loads and new tabs find nothing to announce.
+    const claimDoneToast = (): { version: string | null } | null => {
+        const done = view.value.done;
+        if (!done) return null;
+        clear();
+        return done;
     };
 
     const showStarted = (targetVersion: string | null) => {
@@ -106,7 +103,7 @@ export const useUpgrade = () => {
         triggerPending: triggerMutation.isPending,
         clear,
         claimDoneToast,
-        reloadNow,
+        reloadNow: reloadToNewBuild,
         showStarted,
     };
 };

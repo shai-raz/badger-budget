@@ -44,7 +44,7 @@ let readyToastShown = false;
 
 const toast = useToast();
 const authStore = useAuthStore();
-const { info, phase, pending, reloadNow, clear, claimDoneToast } = useUpgrade();
+const { phase, pending, reloadNow, clear, claimDoneToast } = useUpgrade();
 const reloading = ref(false);
 
 // Polls only while an upgrade is in flight; the query is shared with useUpdateNotice, so no extra request is made.
@@ -98,17 +98,15 @@ watch(
                 data: { kind: "stalled", startedAt: pending.value?.startedAt },
             } as ToastMessageOptions & { data: UpgradeToastData });
         } else if (next === "done") {
-            if (!claimDoneToast()) return;
+            const finished = claimDoneToast();
+            if (!finished) return;
             toast.removeGroup(UPGRADE_TOAST_GROUP);
-            const version = info.value?.version;
-            if (version) {
-                toast.add({
-                    group: UPGRADE_TOAST_GROUP,
-                    severity: "success",
-                    summary: `Upgraded to v${version}`,
-                    life: 5000,
-                });
-            }
+            toast.add({
+                group: UPGRADE_TOAST_GROUP,
+                severity: "success",
+                summary: finished.version ? `Upgraded to v${finished.version}` : "Upgrade complete",
+                life: 5000,
+            });
         }
     },
     { immediate: true },
