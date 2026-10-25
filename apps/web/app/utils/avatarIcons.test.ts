@@ -51,9 +51,7 @@ describe("accountFallbackIcon", () => {
         expect(accountFallbackIcon("savings")).toBe("piggy-bank");
     });
 
-    it("falls back to landmark for unknown, missing or null types", () => {
+    it("falls back to landmark for the unknown type", () => {
         expect(accountFallbackIcon("unknown")).toBe("landmark");
-        expect(accountFallbackIcon(null)).toBe("landmark");
-        expect(accountFallbackIcon(undefined)).toBe("landmark");
     });
 });

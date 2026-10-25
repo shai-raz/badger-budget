@@ -41,6 +41,7 @@ import type {
     IChangelogResponse,
     IChangelogSeenResponse,
 } from "@badger/types";
+import type { AccountType } from "@badger/shared-data";
 
 export interface ApiClientConfig {
     baseURL: string;
@@ -228,7 +229,7 @@ export class ApiClient {
     async createAccount(data: {
         name: string;
         accountNumber?: string;
-        type: string;
+        type: AccountType;
         icon?: string;
         color?: string;
         currencyId?: string;
@@ -244,7 +245,7 @@ export class ApiClient {
 
     async updateAccount(
         id: string,
-        data: Partial<{ name: string; type: string; icon: string; color: string; currencyId: string }>,
+        data: Partial<{ name: string; type: AccountType; icon: string; color: string; currencyId: string }>,
     ) {
         const response = await this.client.patch(`/accounts/${id}`, data);
         return response.data;

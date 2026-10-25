@@ -23,11 +23,11 @@ const rows = computed(() => sortAccountsForDisplay(accounts.value ?? []));
 const showFormModal = ref(false);
 const editingAccount = ref<IAccountResponse | null>(null);
 
-const showCashDialog = ref(false);
-const cashAccount = ref<IAccountResponse | null>(null);
-const openUpdateCash = (account: IAccountResponse) => {
-    cashAccount.value = account;
-    showCashDialog.value = true;
+const showUpdateBalance = ref(false);
+const balanceAccount = ref<IAccountResponse | null>(null);
+const openUpdateBalance = (account: IAccountResponse) => {
+    balanceAccount.value = account;
+    showUpdateBalance.value = true;
 };
 
 const handleAddAccount = () => {
@@ -94,7 +94,7 @@ const menuItems = computed(() => {
                   {
                       label: "Update balance",
                       icon: "pi pi-wallet",
-                      command: () => openUpdateCash(account),
+                      command: () => openUpdateBalance(account),
                   },
               ]
             : []),
@@ -218,9 +218,9 @@ const openMenu = ({ account, event }: { account: IAccountResponse; event: Event 
             </template>
         </Menu>
 
-        <AccountsUpdateCashBalanceDialog
-            v-model:visible="showCashDialog"
-            :account="cashAccount"
+        <AccountsUpdateLedgerBalanceDialog
+            v-model:visible="showUpdateBalance"
+            :account="balanceAccount"
         />
 
         <AccountsFormModal

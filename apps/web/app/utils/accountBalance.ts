@@ -1,4 +1,5 @@
 import type { IAccountResponse } from "@badger/types";
+import type { AccountType } from "@badger/shared-data";
 import { calendarDaysUntil } from "./relativeTime";
 
 export type BalanceDisplay =
@@ -90,20 +91,17 @@ export function sortAccountsForDisplay(accounts: IAccountResponse[]): IAccountRe
     return [...balanceAccounts(accounts), ...noBalance];
 }
 
+const ACCOUNT_TYPE_CAPTIONS: Record<AccountType, string> = {
+    bank: "Bank account",
+    credit_card: "Credit card",
+    cash: "Cash",
+    savings: "Savings",
+    unknown: "Account",
+};
+
 /** The type caption under an account name: "Bank account", "Credit card", "Cash", "Savings", otherwise "Account". */
-export function accountTypeCaption(type: string): string {
-    switch (type) {
-        case "bank":
-            return "Bank account";
-        case "credit_card":
-            return "Credit card";
-        case "cash":
-            return "Cash";
-        case "savings":
-            return "Savings";
-        default:
-            return "Account";
-    }
+export function accountTypeCaption(type: AccountType): string {
+    return ACCOUNT_TYPE_CAPTIONS[type];
 }
 
 /**

@@ -557,7 +557,7 @@ describe("design contract: budget create/edit dialog", () => {
 
 describe("savings accounts: counterpart picker and balance dialog", () => {
     const txForm = readFileSync(`${appDir}/components/transactions/TransactionForm.vue`, "utf8");
-    const balanceDialog = readFileSync(`${appDir}/components/accounts/UpdateCashBalanceDialog.vue`, "utf8");
+    const balanceDialog = readFileSync(`${appDir}/components/accounts/UpdateLedgerBalanceDialog.vue`, "utf8");
 
     it("only hides Create Cash when a cash account already exists in the needed currency", () => {
         expect(txForm).toContain('a.type === "cash" && a.currencyId === neededCurrencyId.value');
@@ -569,7 +569,7 @@ describe("savings accounts: counterpart picker and balance dialog", () => {
     });
 
     it("takes the update-balance copy and prefill from the ledger helpers", () => {
-        expect(balanceDialog).toContain('ledgerBalanceDialogCopy(props.account?.type ?? "cash")');
+        expect(balanceDialog).toContain('ledgerBalanceDialogCopy(isLedgerAccountType(type) ? type : "cash")');
         expect(balanceDialog).toContain("ledgerBalancePrefill(props.account)");
         expect(balanceDialog).toContain(':header="copy.header"');
         expect(balanceDialog).toContain("copy.value.successSummary");

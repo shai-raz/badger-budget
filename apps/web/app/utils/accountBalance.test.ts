@@ -349,8 +349,7 @@ describe("accountTypeCaption", () => {
         expect(accountTypeCaption("savings")).toBe("Savings");
     });
 
-    it("falls back to Account for anything else", () => {
+    it("captions the unknown type as Account", () => {
         expect(accountTypeCaption("unknown")).toBe("Account");
-        expect(accountTypeCaption("")).toBe("Account");
     });
 });

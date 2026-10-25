@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { IAccountResponse, ICurrencyResponse } from "@badger/types";
-import { isLedgerAccountType } from "@badger/shared-data";
+import { isLedgerAccountType, type AccountType } from "@badger/shared-data";
 import { useToast } from "primevue/usetoast";
 import { accountFallbackIcon } from "~/utils/avatarIcons";
 
@@ -20,13 +20,13 @@ const createMutation = useCreateAccount();
 const updateMutation = useUpdateAccount();
 
 const accountName = ref("");
-const accountType = ref<string>("bank");
+const accountType = ref<AccountType>("bank");
 const accountIcon = ref("");
 const accountColor = ref("#3B82F6");
 const accountCurrencyId = ref<string | null>(null);
 const saving = ref(false);
 
-const accountTypeOptions = [
+const accountTypeOptions: { label: string; value: AccountType }[] = [
     { label: "Bank", value: "bank" },
     { label: "Credit Card", value: "credit_card" },
     { label: "Cash", value: "cash" },

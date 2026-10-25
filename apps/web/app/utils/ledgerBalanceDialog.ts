@@ -1,5 +1,5 @@
 import type { IAccountResponse } from "@badger/types";
-import { isLedgerAccountType } from "@badger/shared-data";
+import { isLedgerAccountType, type LedgerAccountType } from "@badger/shared-data";
 
 export interface LedgerBalanceDialogCopy {
     header: string;
@@ -25,9 +25,14 @@ const CASH_COPY: LedgerBalanceDialogCopy = {
     errorFallback: "Could not update the cash balance",
 };
 
-/** Copy for the "update balance" dialog of a ledger account; cash is the default. */
-export function ledgerBalanceDialogCopy(type: string): LedgerBalanceDialogCopy {
-    return type === "savings" ? SAVINGS_COPY : CASH_COPY;
+const LEDGER_BALANCE_DIALOG_COPY: Record<LedgerAccountType, LedgerBalanceDialogCopy> = {
+    cash: CASH_COPY,
+    savings: SAVINGS_COPY,
+};
+
+/** Copy for the "update balance" dialog of a ledger account. */
+export function ledgerBalanceDialogCopy(type: LedgerAccountType): LedgerBalanceDialogCopy {
+    return LEDGER_BALANCE_DIALOG_COPY[type];
 }
 
 /** The balance to prefill the update dialog with: a ledger account's non-negative balance, else null. */

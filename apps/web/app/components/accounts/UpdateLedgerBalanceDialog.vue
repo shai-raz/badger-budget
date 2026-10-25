@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { IAccountResponse } from "@badger/types";
+import { isLedgerAccountType } from "@badger/shared-data";
 import { useToast } from "primevue/usetoast";
 import { toLocalIsoDate } from "~/utils/localDate";
 import { ledgerBalanceDialogCopy, ledgerBalancePrefill } from "~/utils/ledgerBalanceDialog";
@@ -13,8 +14,11 @@ const emit = defineEmits<{ "update:visible": [value: boolean] }>();
 
 const toast = useToast();
 const isDesktop = useIsDesktop();
-const mutation = useUpdateCashBalance();
-const copy = computed(() => ledgerBalanceDialogCopy(props.account?.type ?? "cash"));
+const mutation = useUpdateLedgerBalance();
+const copy = computed(() => {
+    const type = props.account?.type;
+    return ledgerBalanceDialogCopy(isLedgerAccountType(type) ? type : "cash");
+});
 
 const amount = ref<number | null>(null);
 const errorMessage = ref("");
