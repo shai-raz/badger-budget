@@ -43,6 +43,10 @@ function pickSwatch(swatch: string) {
 // down (capture), and stop the Escape on the way up. Otherwise it reaches the hosting dialog and closes it with the panel.
 const panelOpen = ref(false);
 let escapeWhileOpen = false;
+
+// The panel is teleported to body and can't take focus, so a click on its padding would drop focus there and the next
+// Escape would reach no handler. Cancelling the mousedown keeps focus on the preview input.
+const panelPt = { panel: { onMousedown: (event: MouseEvent) => event.preventDefault() } };
 function noteEscape() {
     escapeWhileOpen = panelOpen.value;
 }
@@ -94,6 +98,7 @@ defineExpose({
             <ColorPicker
                 v-model="colorValue"
                 format="hex"
+                :pt="panelPt"
                 @show="panelOpen = true"
                 @hide="panelOpen = false"
                 @update:model-value="customRequested = true"

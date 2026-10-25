@@ -56,6 +56,14 @@ describe("CategoriesColorPicker swatches", () => {
         );
     });
 
+    it("keeps focus on the preview when a click lands on the colour panel's padding", () => {
+        // The panel is teleported and can't take focus; cancelling its mousedown keeps Escape on the preview input.
+        expect(picker).toMatch(
+            /const panelPt = \{ panel: \{ onMousedown: \(event: MouseEvent\) => event\.preventDefault\(\) \} \};/,
+        );
+        expect(picker).toMatch(/<ColorPicker[\s\S]*?:pt="panelPt"/);
+    });
+
     it("labels the custom button and marks it pressed", () => {
         expect(picker).toContain('aria-label="Custom color"');
         expect(picker).toContain(':aria-pressed="showCustom"');
