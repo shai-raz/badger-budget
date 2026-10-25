@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/vue-query";
-import type { Category } from "@badger/types";
+import type { Category, CreateCategoryDto } from "@badger/types";
 
 type CategoryCacheEntry = Pick<Category, "id"> & Partial<Category>;
 
@@ -7,7 +7,7 @@ export const useCreateCategoryMutation = () => {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: async (data: { name: string; color: string }) => {
+        mutationFn: async (data: CreateCategoryDto) => {
             const apiClient = useApiClient();
             return apiClient.createCategory(data);
         },
@@ -16,7 +16,7 @@ export const useCreateCategoryMutation = () => {
             const prev = queryClient.getQueryData(["categories"]);
             queryClient.setQueryData<CategoryCacheEntry[]>(["categories"], (old) => [
                 ...(old || []),
-                { id: "temp-id", ...newCategory },
+                { id: "temp-id", ...newCategory, icon: newCategory.icon ?? undefined },
             ]);
             return { prev };
         },

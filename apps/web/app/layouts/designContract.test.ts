@@ -416,7 +416,8 @@ describe("design contract: avatars", () => {
         "components/transactions/TransactionRow.vue",
         "components/dashboard/AccountTile.vue",
         "components/accounts/AccountRow.vue",
-        "components/accounts/AccountsFormModal.vue",
+        // The account form's avatar is the icon picker's trigger, which renders SharedEntityAvatar itself.
+        "components/shared/IconPicker.vue",
     ];
 
     it.each(AVATAR_SURFACES)("renders %s through SharedEntityAvatar", (rel) => {
