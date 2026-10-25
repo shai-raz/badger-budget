@@ -1,6 +1,26 @@
 {
     "releases": [
         {
+            "version": "0.3.0",
+            "date": "2026-10-25",
+            "items": [
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "savings account type (ledger like cash, transfer counterpart) (1/2)",
+                    "pr": 43
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "savings accounts in the account form, transfer picker and balance update (2/2)",
+                    "pr": 44
+                }
+            ]
+        },
+        {
             "version": "0.2.1",
             "date": "2026-10-25",
             "items": [
