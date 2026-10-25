@@ -157,6 +157,16 @@ export const AVATAR_ICONS: Record<AvatarIconName, Component> = {
     "circle-help": CircleQuestionMark,
 };
 
+export type AvatarSize = "xs" | "sm" | "md" | "lg";
+
+/** Box classes and glyph size (px) for each `EntityAvatar` size. */
+export const AVATAR_SIZES: Record<AvatarSize, { box: string; icon: number }> = {
+    xs: { box: "h-5 w-5", icon: 12 },
+    sm: { box: "h-7 w-7", icon: 16 },
+    md: { box: "h-9 w-9 md:h-10 md:w-10", icon: 18 },
+    lg: { box: "h-14 w-14", icon: 28 },
+};
+
 /**
  * Resolve a stored icon name to its Lucide component. Unknown names, `null`, and
  * legacy PrimeIcons/Font Awesome names (e.g. "tshirt") return the fallback's component.
