@@ -7,6 +7,7 @@ import { useAuthStore } from "~/stores/auth";
 import { reloadToNewBuild } from "~/utils/reloadToNewBuild";
 import {
     PENDING_UPGRADE_KEY,
+    announcesDone,
     doneToastDue,
     parsePendingUpgrade,
     upgradeActionState,
@@ -65,11 +66,16 @@ export const useUpgrade = () => {
         stored.value = null;
     };
 
-    // Never clears the shared entry: other tabs on the old build still need it to show Reload. Only this tab's
-    // marker is written, so the done toast shows once here.
+    // Never clears the shared entry: other tabs on the old build still need it to show Reload. The first tab to see
+    // the upgrade finish records completedAt there, so later loads read done quietly. This tab's own marker keeps
+    // the done toast to once per upgrade here.
     const claimDoneToast = (): boolean => {
         const current = pending.value;
         if (!current || !doneToastDue(current, doneShownFor.value)) return false;
+        if (!announcesDone(current, reloadedHere.value)) return false;
+        if (current.completedAt === undefined) {
+            stored.value = JSON.stringify({ ...current, completedAt: Date.now() });
+        }
         doneShownFor.value = current.startedAt;
         return true;
     };

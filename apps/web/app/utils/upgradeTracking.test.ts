@@ -3,6 +3,7 @@ import type { ISystemInfo } from "@badger/types";
 import {
     PENDING_UPGRADE_KEY,
     UPGRADE_POLL_MS,
+    announcesDone,
     closingStalledToastDismisses,
     doneToastDue,
     UPGRADE_STALL_MS,
@@ -54,6 +55,20 @@ describe("parsePendingUpgrade", () => {
 
     it("accepts a JSON string", () => {
         expect(parsePendingUpgrade(JSON.stringify(pending), "user-1")).toEqual(pending);
+    });
+
+    it("accepts a completedAt timestamp and keeps it", () => {
+        const completed = { ...pending, completedAt: pending.startedAt + 60_000 };
+        expect(parsePendingUpgrade(completed, "user-1")).toEqual(completed);
+    });
+
+    it("omits completedAt when the entry has none", () => {
+        expect(parsePendingUpgrade(pending, "user-1")).not.toHaveProperty("completedAt");
+    });
+
+    it("returns null for a mistyped completedAt", () => {
+        expect(parsePendingUpgrade({ ...pending, completedAt: "later" }, "user-1")).toBeNull();
+        expect(parsePendingUpgrade({ ...pending, completedAt: Number.NaN }, "user-1")).toBeNull();
     });
 
     it("accepts null target and from versions", () => {
@@ -168,6 +183,28 @@ describe("upgradePhase", () => {
         expect(upgradePhase(pending, null, buildA, now, true)).toBe("upgrading");
         expect(upgradePhase(pending, null, buildA, now, false)).toBe("upgrading");
     });
+
+    describe("for a completed entry", () => {
+        const completed = { ...pending, completedAt: pending.startedAt + 60_000 };
+        const after = pending.startedAt + 3_600_000;
+
+        it("is done on a new build at once, even before the info has loaded", () => {
+            expect(upgradePhase(completed, null, buildB, after, false)).toBe("done");
+        });
+
+        it("is ready on the old build without a reload, even before the info has loaded", () => {
+            expect(upgradePhase(completed, null, buildA, after, false)).toBe("ready");
+            expect(upgradePhase(completed, runningAt("0.6.0"), buildA, after, false)).toBe("ready");
+        });
+
+        it("is done on the old build only in the tab that reloaded for the upgrade", () => {
+            expect(upgradePhase(completed, null, buildA, after, true)).toBe("done");
+        });
+
+        it("is done in a new build tab that reloaded for the upgrade, after the info loads", () => {
+            expect(upgradePhase(completed, runningAt("0.6.0"), buildB, after, true)).toBe("done");
+        });
+    });
 });
 
 describe("closingStalledToastDismisses", () => {
@@ -197,6 +234,23 @@ describe("shared entry after another tab reaches done", () => {
         const otherTab = upgradePhase(pending, runningAt("0.6.0"), "build-a", pending.startedAt + 60_000, false);
         expect(reloadedTab).toBe("done");
         expect(otherTab).toBe("ready");
+    });
+});
+
+describe("announcesDone", () => {
+    const completed = { ...pending, completedAt: pending.startedAt + 60_000 };
+
+    it("is announced by the tab that reloaded for the upgrade", () => {
+        expect(announcesDone(completed, true)).toBe(true);
+        expect(announcesDone(pending, true)).toBe(true);
+    });
+
+    it("is announced by the first tab to see the upgrade finish", () => {
+        expect(announcesDone(pending, false)).toBe(true);
+    });
+
+    it("stays quiet for a completed entry loaded fresh by a tab that did not reload for it", () => {
+        expect(announcesDone(completed, false)).toBe(false);
     });
 });
 
