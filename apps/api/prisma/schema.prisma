@@ -646,3 +646,11 @@ model OAuthAccessToken {
   @@index([grantId])
   @@map("oauth_access_tokens")
 }
+
+// One row per one-shot data backfill that has run (see categories/category-icon-backfill.service.ts).
+model DataBackfill {
+  name      String   @id @db.VarChar(100)
+  appliedAt DateTime @default(now()) @map("applied_at") @db.Timestamp(6)
+
+  @@map("data_backfills")
+}

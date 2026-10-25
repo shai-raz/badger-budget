@@ -1,6 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { NotFoundException, ForbiddenException, BadRequestException } from "@nestjs/common";
 import { CategoriesService } from "./categories.service";
+import { CreateCategoryDto } from "./dto/category.dto";
 import { PrismaService } from "../prisma/prisma.service";
 
 describe("CategoriesService", () => {
@@ -96,9 +97,9 @@ describe("CategoriesService", () => {
 
     describe("create", () => {
         it("should create a user category", async () => {
-            const createDto = {
+            const createDto: CreateCategoryDto = {
                 name: "Test Category",
-                icon: "🏠",
+                icon: "house",
                 color: "#FF0000",
             };
 
@@ -113,6 +114,50 @@ describe("CategoriesService", () => {
                     userId: "test-user",
                     isSystem: false,
                 },
+            });
+        });
+
+        it("defaults the icon from the category name when none is given", async () => {
+            mockPrismaService.category.findFirst.mockResolvedValue(null);
+            mockPrismaService.category.create.mockResolvedValue(mockCategory);
+
+            await service.create("test-user", { name: "Groceries", color: "#FF0000" });
+
+            expect(mockPrismaService.category.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ name: "Groceries", icon: "shopping-cart" }),
+            });
+        });
+
+        it("falls back to the generic tag icon when the name matches nothing", async () => {
+            mockPrismaService.category.findFirst.mockResolvedValue(null);
+            mockPrismaService.category.create.mockResolvedValue(mockCategory);
+
+            await service.create("test-user", { name: "Xyzzy", color: "#FF0000" });
+
+            expect(mockPrismaService.category.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ name: "Xyzzy", icon: "tag" }),
+            });
+        });
+
+        it("keeps an explicit icon instead of the name-based default", async () => {
+            mockPrismaService.category.findFirst.mockResolvedValue(null);
+            mockPrismaService.category.create.mockResolvedValue(mockCategory);
+
+            await service.create("test-user", { name: "Groceries", color: "#FF0000", icon: "film" });
+
+            expect(mockPrismaService.category.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ icon: "film" }),
+            });
+        });
+
+        it("stores an explicit null icon as null, not the default", async () => {
+            mockPrismaService.category.findFirst.mockResolvedValue(null);
+            mockPrismaService.category.create.mockResolvedValue(mockCategory);
+
+            await service.create("test-user", { name: "Groceries", color: "#FF0000", icon: null });
+
+            expect(mockPrismaService.category.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ icon: null }),
             });
         });
     });
@@ -175,6 +220,19 @@ describe("CategoriesService", () => {
 
             expect(result.name).toBe("Updated Category");
             expect(mockPrismaService.category.update).toHaveBeenCalled();
+        });
+
+        it("passes a null icon through to clear it", async () => {
+            // Icon-only update: findOne is the only lookup (no duplicate-name check runs).
+            mockPrismaService.category.findFirst.mockResolvedValueOnce(mockCategory);
+            mockPrismaService.category.update.mockResolvedValue({ ...mockCategory, icon: null });
+
+            await service.update("category-id", "test-user", { icon: null });
+
+            expect(mockPrismaService.category.update).toHaveBeenCalledWith({
+                where: { id: "category-id" },
+                data: { icon: null },
+            });
         });
 
         it("should throw ForbiddenException when trying to update system category", async () => {

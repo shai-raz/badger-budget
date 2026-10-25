@@ -34,3 +34,27 @@ describe("account DTO account types", () => {
         }
     });
 });
+
+describe("account DTO icon validation", () => {
+    it("rejects an icon outside the registry on create", async () => {
+        const errors = await validate(buildCreate({ icon: "not-an-icon" }));
+        expect(errors.map((e) => e.property)).toContain("icon");
+    });
+
+    it("accepts a registry icon on create", async () => {
+        expect(await validate(buildCreate({ icon: "credit-card" }))).toHaveLength(0);
+    });
+
+    it("accepts an account create without an icon", async () => {
+        expect(await validate(buildCreate())).toHaveLength(0);
+    });
+
+    it("accepts a null icon on update (clears it)", async () => {
+        expect(await validate(buildUpdate({ icon: null }))).toHaveLength(0);
+    });
+
+    it("rejects an icon outside the registry on update", async () => {
+        const errors = await validate(buildUpdate({ icon: "not-an-icon" }));
+        expect(errors.map((e) => e.property)).toContain("icon");
+    });
+});
