@@ -102,6 +102,9 @@ describe("AuthService", () => {
         service = module.get<AuthService>(AuthService);
         prisma = module.get<PrismaService>(PrismaService);
         jwtService = module.get<JwtService>(JwtService);
+        // clearAllMocks keeps implementations, so reset the ones a test may replace (e.g. the concurrent sign-up test).
+        mockRegistrationPolicy.roleForNewUser.mockReset().mockResolvedValue(UserRole.USER);
+        mockPrismaService.$transaction.mockReset();
     });
 
     afterEach(() => {
@@ -259,7 +262,6 @@ describe("AuthService", () => {
                 { email: "first@example.com", role: UserRole.ADMIN },
                 { email: "second@example.com", role: UserRole.USER },
             ]);
-            mockRegistrationPolicy.roleForNewUser.mockResolvedValue(UserRole.USER);
         });
 
         it("should throw ForbiddenException before any lookup or hashing when registration is closed", async () => {
