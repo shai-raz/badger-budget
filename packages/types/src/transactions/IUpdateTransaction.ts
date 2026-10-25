@@ -14,7 +14,7 @@ export interface IUpdateTransaction {
     postedDate?: string | null;
     budgetId?: string | null;
     categoryId?: string | null;
-    /** Cash account for the linked mirror row. `null` clears the counterpart; omitted keeps it. */
+    /** Cash or savings account for the linked mirror row. `null` clears the counterpart; omitted keeps it. */
     counterpartAccountId?: string | null;
     /** Amount in the counterpart account's currency. Omitted keeps the current value. */
     counterpartAmount?: number;

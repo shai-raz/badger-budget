@@ -81,7 +81,7 @@ model Account {
   userId        String    @map("user_id") @db.Uuid
   name          String    @db.VarChar(255)
   accountNumber String?   @map("account_number") @db.VarChar(255)
-  type          String    @db.VarChar(20) // credit_card, bank, cash, unknown
+  type          String    @db.VarChar(20) // credit_card, bank, cash, savings, unknown
   icon          String?   @db.VarChar(50)
   color         String?   @db.VarChar(7)
   currencyId    String?   @map("currency_id") @db.Uuid

@@ -72,7 +72,7 @@ describe("AccountsService", () => {
         deletedAt: null,
         ...over,
     });
-    /** Mocks the two groupBy calls of computeCashStats: balance groups, then linked-row counts. */
+    /** Mocks the two groupBy calls of computeLedgerStats: balance groups, then linked-row counts. */
     const mockCashRows = (groups: unknown[], linked: unknown[] = []) =>
         mockPrismaService.transaction.groupBy.mockResolvedValueOnce(groups).mockResolvedValueOnce(linked);
 
@@ -88,11 +88,31 @@ describe("AccountsService", () => {
             expect(mockPrismaService.account.create).not.toHaveBeenCalled();
         });
 
+        it("rejects a savings account without a currency", async () => {
+            await expect(service.create("user-123", { name: "Pot", type: "savings" })).rejects.toThrow(
+                "A savings account needs a currency",
+            );
+            expect(mockPrismaService.account.create).not.toHaveBeenCalled();
+        });
+
+        it("creates a savings account with a currency and reports its ledger balance kind", async () => {
+            mockPrismaService.account.create.mockResolvedValue(cashRow({ id: "sav-1", name: "Pot", type: "savings" }));
+            mockCashRows([]);
+
+            const result = await service.create("user-123", { name: "Pot", type: "savings", currencyId: "cur-1" });
+
+            expect(result.type).toBe("savings");
+            expect(mockPrismaService.account.create).toHaveBeenCalledWith({
+                data: { name: "Pot", type: "savings", currencyId: "cur-1", userId: "user-123" },
+                include: { currency: true },
+            });
+        });
+
         it("should create an account", async () => {
             const userId = "user-123";
             const createDto = {
                 name: "Test Account",
-                type: "bank",
+                type: "bank" as const,
                 icon: "bank-icon",
                 color: "#FF5722",
             };
@@ -129,7 +149,7 @@ describe("AccountsService", () => {
             const userId = "user-123";
             const createDto = {
                 name: "Test Account",
-                type: "credit_card",
+                type: "credit_card" as const,
                 icon: "card-icon",
                 color: "#FF5722",
             };
@@ -268,6 +288,40 @@ describe("AccountsService", () => {
             expect(result.lastTransactionDate).toBeNull();
         });
 
+        it("overlays savings with account_balance and keeps cash as cash_on_hand in the same call", async () => {
+            const last = new Date("2026-06-01");
+            mockPrismaService.account.findMany.mockResolvedValue([
+                cashRow(),
+                cashRow({ id: "sav-1", name: "Pot", type: "savings" }),
+            ]);
+            mockCashRows(
+                [group("cash-1", "income", null, 100), group("sav-1", "income", null, 50, last)],
+                [{ accountId: "sav-1", _count: { _all: 1 } }],
+            );
+
+            const [cash, savings] = await service.findAll("user-123");
+
+            expect(cash.balance).toBe(100);
+            expect(cash.balanceKind).toBe("cash_on_hand");
+            expect(cash.hasLinkedTransfers).toBe(false);
+            expect(savings.balance).toBe(50);
+            expect(savings.balanceKind).toBe("account_balance");
+            expect(savings.hasTransactions).toBe(true);
+            expect(savings.hasLinkedTransfers).toBe(true);
+            expect(savings.lastTransactionDate).toEqual(last);
+            const where = mockPrismaService.transaction.groupBy.mock.calls[0][0].where;
+            expect(where).toEqual({ userId: "user-123", deletedAt: null, accountId: { in: ["cash-1", "sav-1"] } });
+        });
+
+        it("leaves a savings account with no rows without balance or kind", async () => {
+            mockPrismaService.account.findMany.mockResolvedValue([cashRow({ id: "sav-1", type: "savings" })]);
+            mockCashRows([]);
+            const [result] = await service.findAll("user-123");
+            expect(result.balance).toBeNull();
+            expect(result.balanceKind).toBeNull();
+            expect(result.lastTransactionDate).toBeNull();
+        });
+
         it("leaves non-cash accounts untouched and does not query when there is no cash account", async () => {
             mockPrismaService.account.findMany.mockResolvedValue([
                 cashRow({ id: "b1", type: "bank", balance: dec(5), balanceKind: "account_balance" }),
@@ -350,7 +404,7 @@ describe("AccountsService", () => {
                 mockPrismaService.account.findFirst.mockResolvedValue({ type: "cash", currencyId: "cur-1" });
                 linkedStats();
                 await expect(service.update("a1", "user-123", { currencyId: "cur-2" })).rejects.toThrow(
-                    "This cash account has linked transfers, so its currency can't change",
+                    "This account has linked transfers, so its currency can't change",
                 );
                 expect(mockPrismaService.account.update).not.toHaveBeenCalled();
             });
@@ -359,7 +413,7 @@ describe("AccountsService", () => {
                 mockPrismaService.account.findFirst.mockResolvedValue({ type: "cash", currencyId: "cur-1" });
                 linkedStats();
                 await expect(service.update("a1", "user-123", { type: "bank" })).rejects.toThrow(
-                    "This cash account has linked transfers, so its type can't change",
+                    "This account has linked transfers, so its type can't change",
                 );
             });
 
@@ -376,7 +430,7 @@ describe("AccountsService", () => {
                 mockPrismaService.account.findFirst.mockResolvedValue({ type: "cash", currencyId: "cur-1" });
                 mockCashRows([group("a1", "expense", null, 5)]);
                 await expect(service.update("a1", "user-123", { currencyId: "cur-2" })).rejects.toThrow(
-                    "This cash account has transactions, so its currency can't change",
+                    "This account has transactions, so its currency can't change",
                 );
                 expect(mockPrismaService.account.update).not.toHaveBeenCalled();
             });
@@ -399,12 +453,85 @@ describe("AccountsService", () => {
             });
         });
 
+        describe("savings accounts", () => {
+            const linked = () =>
+                mockCashRows([group("a1", "income", null, 5)], [{ accountId: "a1", _count: { _all: 1 } }]);
+
+            it("rejects a currency change on a savings account with transactions", async () => {
+                mockPrismaService.account.findFirst.mockResolvedValue({ type: "savings", currencyId: "cur-1" });
+                mockCashRows([group("a1", "expense", null, 5)]);
+                await expect(service.update("a1", "user-123", { currencyId: "cur-2" })).rejects.toThrow(
+                    "This account has transactions, so its currency can't change",
+                );
+                expect(mockPrismaService.account.update).not.toHaveBeenCalled();
+            });
+
+            it("rejects a currency change on a savings account with linked transfers", async () => {
+                mockPrismaService.account.findFirst.mockResolvedValue({ type: "savings", currencyId: "cur-1" });
+                linked();
+                await expect(service.update("a1", "user-123", { currencyId: "cur-2" })).rejects.toThrow(
+                    "This account has linked transfers, so its currency can't change",
+                );
+                expect(mockPrismaService.account.update).not.toHaveBeenCalled();
+            });
+
+            it("rejects a type change on a savings account with linked transfers", async () => {
+                mockPrismaService.account.findFirst.mockResolvedValue({ type: "savings", currencyId: "cur-1" });
+                linked();
+                await expect(service.update("a1", "user-123", { type: "bank" })).rejects.toThrow(
+                    "This account has linked transfers, so its type can't change",
+                );
+                expect(mockPrismaService.account.update).not.toHaveBeenCalled();
+            });
+
+            it("rejects turning a cash account with linked transfers into savings", async () => {
+                mockPrismaService.account.findFirst.mockResolvedValue({ type: "cash", currencyId: "cur-1" });
+                linked();
+                await expect(service.update("a1", "user-123", { type: "savings" })).rejects.toThrow(
+                    "This account has linked transfers, so its type can't change",
+                );
+                expect(mockPrismaService.account.update).not.toHaveBeenCalled();
+            });
+
+            it("allows turning an unlinked cash account into savings", async () => {
+                mockPrismaService.account.findFirst.mockResolvedValue({ type: "cash", currencyId: "cur-1" });
+                mockPrismaService.account.update.mockResolvedValue(cashRow({ id: "a1", type: "savings" }));
+                // Pre-update stats (none), then the response overlay for the now-savings row (none).
+                mockCashRows([]);
+                mockCashRows([]);
+                const result = await service.update("a1", "user-123", { type: "savings" });
+                expect(mockPrismaService.account.update).toHaveBeenCalledWith({
+                    where: { id: "a1" },
+                    data: { type: "savings" },
+                    include: { currency: true },
+                });
+                expect(result.type).toBe("savings");
+            });
+
+            it("rejects a bank account with a transaction in another currency becoming savings", async () => {
+                mockPrismaService.account.findFirst.mockResolvedValue({ type: "bank", currencyId: "cur-1" });
+                mockPrismaService.transaction.count.mockResolvedValue(1);
+                await expect(service.update("a1", "user-123", { type: "savings" })).rejects.toThrow(
+                    "This account has transactions in another currency, so it can't become a savings account",
+                );
+                expect(mockPrismaService.account.update).not.toHaveBeenCalled();
+            });
+
+            it("rejects a PATCH to savings that clears the currency", async () => {
+                mockPrismaService.account.findFirst.mockResolvedValue({ type: "bank", currencyId: "cur-1" });
+                await expect(
+                    service.update("a1", "user-123", { type: "savings", currencyId: null as unknown as string }),
+                ).rejects.toThrow("A savings account needs a currency");
+                expect(mockPrismaService.account.update).not.toHaveBeenCalled();
+            });
+        });
+
         describe("retyping to cash", () => {
             it("rejects a bank account with a transaction in another currency than its own", async () => {
                 mockPrismaService.account.findFirst.mockResolvedValue({ type: "bank", currencyId: "cur-1" });
                 mockPrismaService.transaction.count.mockResolvedValue(1);
                 await expect(service.update("a1", "user-123", { type: "cash" })).rejects.toThrow(
-                    "This account has transactions in another currency, so it can't become a cash wallet",
+                    "This account has transactions in another currency, so it can't become a cash account",
                 );
                 expect(mockPrismaService.transaction.count).toHaveBeenCalledWith({
                     where: { accountId: "a1", userId: "user-123", deletedAt: null, currencyId: { not: "cur-1" } },
@@ -509,7 +636,7 @@ describe("AccountsService", () => {
         });
     });
 
-    describe("updateCashBalance", () => {
+    describe("updateLedgerBalance", () => {
         const dto = (amount: number) => ({ amount, date: "2026-05-14" });
         const setup = (computed: number, balanceAfter: number) => {
             mockPrismaService.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(mockPrismaService));
@@ -522,7 +649,7 @@ describe("AccountsService", () => {
 
         it("records a shortfall as an uncategorized expense", async () => {
             setup(56.6, 20);
-            const result = await service.updateCashBalance("cash-1", "user-123", dto(20));
+            const result = await service.updateLedgerBalance("cash-1", "user-123", dto(20));
             expect(mockPrismaService.transaction.create).toHaveBeenCalledWith({
                 data: expect.objectContaining({
                     userId: "user-123",
@@ -542,7 +669,7 @@ describe("AccountsService", () => {
 
         it("records a surplus as a transfer in", async () => {
             setup(56.6, 100);
-            const result = await service.updateCashBalance("cash-1", "user-123", dto(100));
+            const result = await service.updateLedgerBalance("cash-1", "user-123", dto(100));
             expect(mockPrismaService.transaction.create).toHaveBeenCalledWith({
                 data: expect.objectContaining({
                     type: "transfer",
@@ -557,16 +684,83 @@ describe("AccountsService", () => {
 
         it("creates nothing when the balance already matches to the cent", async () => {
             setup(56.6000001, 56.6);
-            const result = await service.updateCashBalance("cash-1", "user-123", dto(56.6));
+            const result = await service.updateLedgerBalance("cash-1", "user-123", dto(56.6));
             expect(mockPrismaService.transaction.create).not.toHaveBeenCalled();
             expect(result.adjustment).toBeNull();
         });
 
-        it("rejects a non-cash account", async () => {
+        describe("savings accounts", () => {
+            const savingsRow = (over: Record<string, unknown> = {}) =>
+                cashRow({ id: "sav-1", name: "Pot", type: "savings", ...over });
+            const setupSavings = (computed: number, balanceAfter: number) => {
+                mockPrismaService.$transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
+                    cb(mockPrismaService),
+                );
+                mockPrismaService.account.findFirst.mockResolvedValue(savingsRow());
+                mockPrismaService.account.update.mockResolvedValue(savingsRow());
+                mockPrismaService.transaction.create.mockResolvedValue({ id: "adj-1" });
+                mockCashRows([group("sav-1", "income", null, computed)]);
+                mockCashRows([group("sav-1", "income", null, balanceAfter)]);
+            };
+
+            it("records a rise as a transfer in", async () => {
+                setupSavings(100, 150);
+                const result = await service.updateLedgerBalance("sav-1", "user-123", dto(150));
+                expect(mockPrismaService.transaction.create).toHaveBeenCalledWith({
+                    data: expect.objectContaining({
+                        accountId: "sav-1",
+                        type: "transfer",
+                        transferDirection: "in",
+                        amount: 50,
+                        description: "Savings adjustment",
+                        categoryId: null,
+                    }),
+                });
+                expect(result.adjustment).toEqual({ id: "adj-1", type: "transfer", amount: 50 });
+                expect(result.account.balance).toBe(150);
+                expect(result.account.balanceKind).toBe("account_balance");
+            });
+
+            it("records a drop as a transfer out, not an expense", async () => {
+                setupSavings(100, 70);
+                const result = await service.updateLedgerBalance("sav-1", "user-123", dto(70));
+                expect(mockPrismaService.transaction.create).toHaveBeenCalledWith({
+                    data: expect.objectContaining({
+                        type: "transfer",
+                        transferDirection: "out",
+                        amount: 30,
+                        description: "Savings adjustment",
+                        categoryId: null,
+                    }),
+                });
+                expect(result.adjustment).toEqual({ id: "adj-1", type: "transfer", amount: 30 });
+            });
+
+            it("creates nothing when the balance already matches", async () => {
+                setupSavings(100, 100);
+                const result = await service.updateLedgerBalance("sav-1", "user-123", dto(100));
+                expect(mockPrismaService.transaction.create).not.toHaveBeenCalled();
+                expect(result.adjustment).toBeNull();
+                expect(result.account.balanceKind).toBe("account_balance");
+            });
+
+            it("rejects a savings account without a currency", async () => {
+                mockPrismaService.$transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
+                    cb(mockPrismaService),
+                );
+                mockPrismaService.account.findFirst.mockResolvedValue(savingsRow({ currencyId: null }));
+                await expect(service.updateLedgerBalance("sav-1", "user-123", dto(5))).rejects.toThrow(
+                    "A savings account needs a currency",
+                );
+                expect(mockPrismaService.transaction.create).not.toHaveBeenCalled();
+            });
+        });
+
+        it("rejects a non-ledger account", async () => {
             mockPrismaService.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(mockPrismaService));
             mockPrismaService.account.findFirst.mockResolvedValue(cashRow({ type: "bank" }));
-            await expect(service.updateCashBalance("cash-1", "user-123", dto(5))).rejects.toThrow(
-                "Only cash accounts have a balance you can update",
+            await expect(service.updateLedgerBalance("cash-1", "user-123", dto(5))).rejects.toThrow(
+                "Only cash and savings accounts have a balance you can update",
             );
             expect(mockPrismaService.transaction.create).not.toHaveBeenCalled();
         });
@@ -574,7 +768,7 @@ describe("AccountsService", () => {
         it("throws NotFound for a missing account", async () => {
             mockPrismaService.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(mockPrismaService));
             mockPrismaService.account.findFirst.mockResolvedValue(null);
-            await expect(service.updateCashBalance("nope", "user-123", dto(5))).rejects.toThrow(NotFoundException);
+            await expect(service.updateLedgerBalance("nope", "user-123", dto(5))).rejects.toThrow(NotFoundException);
         });
     });
 
@@ -583,7 +777,16 @@ describe("AccountsService", () => {
             mockPrismaService.account.findFirst.mockResolvedValue(cashRow());
             mockCashRows([group("cash-1", "income", null, 5)], [{ accountId: "cash-1", _count: { _all: 1 } }]);
             await expect(service.remove("cash-1", "user-123")).rejects.toThrow(
-                "This cash account has linked transfers. Revert or re-point them before deleting it.",
+                "This account has linked transfers. Revert or re-point them before deleting it.",
+            );
+            expect(mockPrismaService.account.update).not.toHaveBeenCalled();
+        });
+
+        it("rejects deleting a linked savings account", async () => {
+            mockPrismaService.account.findFirst.mockResolvedValue(cashRow({ id: "sav-1", type: "savings" }));
+            mockCashRows([group("sav-1", "income", null, 5)], [{ accountId: "sav-1", _count: { _all: 1 } }]);
+            await expect(service.remove("sav-1", "user-123")).rejects.toThrow(
+                "This account has linked transfers. Revert or re-point them before deleting it.",
             );
             expect(mockPrismaService.account.update).not.toHaveBeenCalled();
         });

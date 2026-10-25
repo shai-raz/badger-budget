@@ -2,7 +2,7 @@ import { IsDateString, IsNumber, Min } from "class-validator";
 import { Type } from "class-transformer";
 import { ApiProperty } from "@nestjs/swagger";
 
-export class UpdateCashBalanceDto {
+export class UpdateLedgerBalanceDto {
     @ApiProperty({ example: 20, description: "The cash amount the user actually has on hand now." })
     @Type(() => Number)
     @IsNumber()

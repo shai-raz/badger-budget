@@ -1,5 +1,6 @@
 import type { Account, Currency, Prisma } from "@prisma/client";
 import { AccountResponseDto } from "../transactions/dto/account-response.dto";
+import { parseAccountType } from "@badger/shared-data";
 import type { BalanceKind } from "@badger/shared-data";
 
 /**
@@ -18,11 +19,11 @@ function decimalToNumberOrNull(value: Prisma.Decimal | null | undefined): number
 export function toAccountResponse(row: Account & { currency: Currency | null }): AccountResponseDto {
     return {
         ...row,
-        type: row.type as AccountResponseDto["type"],
+        type: parseAccountType(row.type),
         balanceKind: row.balanceKind as BalanceKind | null,
         balance: decimalToNumberOrNull(row.balance),
         cardFrame: decimalToNumberOrNull(row.cardFrame),
-        // Cash-only computed fields; AccountsService overlays real values (see cash-balance.ts).
+        // Ledger-only computed fields; AccountsService overlays real values (see ledger-balance.ts).
         hasLinkedTransfers: false,
         hasTransactions: false,
         lastTransactionDate: null,

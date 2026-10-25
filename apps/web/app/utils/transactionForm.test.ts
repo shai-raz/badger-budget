@@ -611,6 +611,7 @@ describe("counterpart form logic", () => {
             id: "m",
             accountId: "w",
             accountName: "Wallet",
+            accountType: "cash" as const,
             amount: "50.00" as unknown as number,
             currencyId: "cur-ils",
         };

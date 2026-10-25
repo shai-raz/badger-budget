@@ -28,6 +28,7 @@ import {
 } from "./reimbursement-netting";
 import { assertReimbursementEditAllowed } from "./reimbursement-edit-guard";
 import { lockReimbursements } from "./reimbursement-lock";
+import { isLedgerAccountType, parseAccountType } from "@badger/shared-data";
 
 /** Filters accepted by the transaction list endpoint (superset of legacy params). */
 export interface ListTransactionsFilters {
@@ -143,7 +144,7 @@ const transactionInclude = {
             accountId: true,
             amount: true,
             currencyId: true,
-            account: { select: { name: true } },
+            account: { select: { name: true, type: true } },
         },
     },
     counterpartOf: {
@@ -221,6 +222,7 @@ export class TransactionsService {
                       id: counterpart.id,
                       accountId: counterpart.accountId,
                       accountName: counterpart.account.name,
+                      accountType: parseAccountType(counterpart.account.type),
                       amount: Number(counterpart.amount),
                       currencyId: counterpart.currencyId,
                   }
@@ -409,7 +411,7 @@ export class TransactionsService {
      * like the web client's `Total.vue`. `currencyCode` is a best-effort display
      * hint from the most recent matching transaction (fallback "ILS").
      *
-     * Linked transfer legs (source + cash-wallet mirror) are excluded from
+     * Linked transfer legs (source + ledger mirror) are excluded from
      * `transferred` in the all-accounts view, so a cross-currency pair can't
      * distort it and a same-currency pair stays neutral. With an `accountId`
      * filter they count as money leaving or entering that account.
@@ -476,7 +478,7 @@ export class TransactionsService {
         expenses = fromCents(toCents(expenses) - toCents(this.decimalToNumber(asExpense._sum?.amount)));
         income = fromCents(toCents(income) - toCents(this.decimalToNumber(asIncome._sum?.amount)));
 
-        // Linked transfer legs (a source and its cash-wallet mirror) are backed
+        // Linked transfer legs (a source and its ledger mirror) are backed
         // out of `transferred` in the all-accounts view: a same-currency pair is
         // neutral and a cross-currency pair would otherwise distort the sum.
         if (!filters?.accountId) {
@@ -839,8 +841,8 @@ export class TransactionsService {
     }
 
     /**
-     * The account must belong to the user, and a cash account only holds transactions in its own
-     * currency (cash has no FX of its own, so mixing currencies would corrupt the on-hand balance).
+     * The account must belong to the user, and a ledger account (cash or savings) only holds transactions in
+     * its own currency (it has no FX of its own, so mixing currencies would corrupt its computed balance).
      */
     private async assertAccountCurrency(db: any, userId: string, accountId: string, currencyId: string): Promise<void> {
         const account = await db.account.findFirst({
@@ -850,9 +852,9 @@ export class TransactionsService {
         if (!account) {
             throw new BadRequestException("Account not found");
         }
-        if (account.type === "cash" && currencyId !== account.currencyId) {
+        if (isLedgerAccountType(account.type) && currencyId !== account.currencyId) {
             throw new BadRequestException(
-                `Transactions on a cash account must be in its currency (${account.currency?.code ?? "unknown"})`,
+                `Transactions on a ${account.type} account must be in its currency (${account.currency?.code ?? "unknown"})`,
             );
         }
     }

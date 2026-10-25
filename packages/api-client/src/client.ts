@@ -25,8 +25,8 @@ import type {
     ISyncJob,
     SpendingReport,
     IAccountResponse,
-    IUpdateCashBalance,
-    ICashBalanceUpdateResponse,
+    IUpdateLedgerBalance,
+    ILedgerBalanceUpdateResponse,
     IOAuthConsentRequest,
     IOAuthDecisionResponse,
     IOAuthConnection,
@@ -237,8 +237,8 @@ export class ApiClient {
         return response.data;
     }
 
-    async updateCashBalance(id: string, data: IUpdateCashBalance): Promise<ICashBalanceUpdateResponse> {
-        const response = await this.client.post(`/accounts/${id}/cash-balance`, data);
+    async updateLedgerBalance(id: string, data: IUpdateLedgerBalance): Promise<ILedgerBalanceUpdateResponse> {
+        const response = await this.client.post(`/accounts/${id}/balance`, data);
         return response.data;
     }
 

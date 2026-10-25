@@ -1,11 +1,11 @@
-import type { BalanceKind } from "@badger/shared-data";
+import type { AccountType, BalanceKind } from "@badger/shared-data";
 import type { ICurrencyResponse } from "./ICurrencyResponse";
 
 export interface IAccountResponse {
     id: string;
     name: string;
     accountNumber: string | null;
-    type: "credit_card" | "bank" | "cash" | "unknown";
+    type: AccountType;
     icon: string | null;
     color: string | null;
     currencyId: string | null;
@@ -22,11 +22,11 @@ export interface IAccountResponse {
     cardFrame: number | null;
     /** IBS `cardType` — bankIssued | companyIssued. Cal-only. */
     cardIssuer: string | null;
-    /** Cash only: true when any non-deleted row on the account is a transfer mirror or has a counterpart. */
+    /** Cash and savings (ledger accounts) only: true when any non-deleted row on the account is a transfer mirror or has a counterpart. */
     hasLinkedTransfers: boolean;
-    /** Cash only: true when the account has any non-deleted transaction (pins its currency). */
+    /** Cash and savings (ledger accounts) only: true when the account has any non-deleted transaction (pins its currency). */
     hasTransactions: boolean;
-    /** Cash only: the latest `transactionDate` on the account. */
+    /** Cash and savings (ledger accounts) only: the latest `transactionDate` on the account. */
     lastTransactionDate: Date | null;
     createdAt: Date;
     updatedAt: Date;

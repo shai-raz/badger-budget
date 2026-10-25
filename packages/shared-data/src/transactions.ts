@@ -7,6 +7,8 @@ export const TRANSACTION_ADDITIONAL_DESCRIPTION_MAX_LENGTH = 150;
 export const CASH_SHORTFALL_DESCRIPTION = "Untracked cash spending";
 /** Description of the transfer-in recorded when a cash balance is set above the computed one. */
 export const CASH_SURPLUS_DESCRIPTION = "Cash adjustment";
+/** Description of the transfer recorded when a savings balance is set above or below the computed one (in either direction). */
+export const SAVINGS_ADJUSTMENT_DESCRIPTION = "Savings adjustment";
 
 /**
  * Cal's additionalDescription for card cash withdrawals (ATM). Deliberately the full phrase: the shorter "משיכ"

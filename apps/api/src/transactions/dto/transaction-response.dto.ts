@@ -5,6 +5,7 @@ import { CategoryResponseDto } from "./category-response.dto";
 import { BudgetResponseDto } from "./budget-response.dto";
 import { TransactionAttachmentResponseDto } from "./transaction-attachment-response.dto";
 import type { ITransactionReimbursement, ITransactionResponse } from "@badger/types";
+import type { AccountType } from "@badger/shared-data";
 import { TRANSACTION_NOTES_MAX_LENGTH } from "@badger/shared-data";
 
 export class TransactionResponseDto implements ITransactionResponse {
@@ -118,6 +119,7 @@ export class TransactionResponseDto implements ITransactionResponse {
         id: string;
         accountId: string;
         accountName: string;
+        accountType: AccountType;
         amount: number;
         currencyId: string;
     } | null;

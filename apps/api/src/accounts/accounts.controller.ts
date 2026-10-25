@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, HttpCode, HttpStatus, UseGuards } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from "@nestjs/swagger";
-import { UpdateCashBalanceDto } from "./dto/update-cash-balance.dto";
+import { UpdateLedgerBalanceDto } from "./dto/update-ledger-balance.dto";
 import { AccountsService } from "./accounts.service";
 import { CreateAccountDto, UpdateAccountDto } from "./dto/account.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
@@ -43,14 +43,14 @@ export class AccountsController {
         return this.accountsService.update(id, user.id, updateAccountDto);
     }
 
-    @Post(":id/cash-balance")
+    @Post(":id/balance")
     @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: "Set a cash account's balance; records the difference as an adjustment" })
+    @ApiOperation({ summary: "Set a cash or savings account's balance; records the difference as an adjustment" })
     @ApiResponse({ status: 200, description: "Updated account and the adjustment transaction, if any" })
-    @ApiResponse({ status: 400, description: "Not a cash account" })
+    @ApiResponse({ status: 400, description: "Not a cash or savings account" })
     @ApiResponse({ status: 404, description: "Account not found" })
-    updateCashBalance(@Param("id") id: string, @Body() dto: UpdateCashBalanceDto, @CurrentUser() user: any) {
-        return this.accountsService.updateCashBalance(id, user.id, dto);
+    updateLedgerBalance(@Param("id") id: string, @Body() dto: UpdateLedgerBalanceDto, @CurrentUser() user: any) {
+        return this.accountsService.updateLedgerBalance(id, user.id, dto);
     }
 
     @Delete(":id")

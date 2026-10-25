@@ -1,5 +1,7 @@
 import { IsString, IsNotEmpty, IsOptional, IsIn, IsUUID } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { ACCOUNT_TYPES } from "@badger/shared-data";
+import type { AccountType } from "@badger/shared-data";
 
 export class CreateAccountDto {
     @ApiProperty({ example: "My Visa Card" })
@@ -16,12 +18,12 @@ export class CreateAccountDto {
     accountNumber?: string;
 
     @ApiProperty({
-        enum: ["credit_card", "bank", "cash", "unknown"],
+        enum: [...ACCOUNT_TYPES],
         example: "credit_card",
         description: "Account type. 'unknown' is reserved for system use only.",
     })
-    @IsIn(["credit_card", "bank", "cash", "unknown"])
-    type: string;
+    @IsIn([...ACCOUNT_TYPES])
+    type: AccountType;
 
     @ApiPropertyOptional({ example: "credit-card" })
     @IsString()
@@ -35,7 +37,7 @@ export class CreateAccountDto {
 
     @ApiPropertyOptional({
         description:
-            "Currency ID for this account (the currency amounts are charged in). Required for cash accounts, whose transactions must use it.",
+            "Currency ID for this account (the currency amounts are charged in). Required for cash and savings accounts, whose transactions must use it.",
     })
     @IsUUID()
     @IsOptional()
@@ -48,10 +50,10 @@ export class UpdateAccountDto {
     @IsOptional()
     name?: string;
 
-    @ApiPropertyOptional({ enum: ["credit_card", "bank", "cash", "unknown"] })
-    @IsIn(["credit_card", "bank", "cash", "unknown"])
+    @ApiPropertyOptional({ enum: [...ACCOUNT_TYPES] })
+    @IsIn([...ACCOUNT_TYPES])
     @IsOptional()
-    type?: string;
+    type?: AccountType;
 
     @ApiPropertyOptional()
     @IsString()
@@ -65,7 +67,7 @@ export class UpdateAccountDto {
 
     @ApiPropertyOptional({
         description:
-            "Currency ID for this account (the currency amounts are charged in). Required for cash accounts, whose transactions must use it.",
+            "Currency ID for this account (the currency amounts are charged in). Required for cash and savings accounts, whose transactions must use it.",
     })
     @IsUUID()
     @IsOptional()

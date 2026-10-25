@@ -1,5 +1,6 @@
 import { BadRequestException } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
+import { isLedgerAccountType } from "@badger/shared-data";
 
 export interface CounterpartSourceState {
     id: string;
@@ -98,8 +99,8 @@ export async function reconcileCounterpart(
         throw new BadRequestException("Counterpart account not found");
     }
     if (mustValidate) {
-        if (wallet.type !== "cash") {
-            throw new BadRequestException("The counterpart must be one of your cash accounts");
+        if (!isLedgerAccountType(wallet.type)) {
+            throw new BadRequestException("The counterpart must be one of your cash or savings accounts");
         }
     }
     // Always checked: a source-only accountId change can land on the existing counterpart's account.
@@ -107,7 +108,7 @@ export async function reconcileCounterpart(
         throw new BadRequestException("The counterpart must be a different account");
     }
     if (!wallet.currencyId) {
-        throw new BadRequestException("Set a currency on this cash account first");
+        throw new BadRequestException("Set a currency on this account first");
     }
 
     let amount: number;
@@ -122,7 +123,7 @@ export async function reconcileCounterpart(
                 where: { id: wallet.currencyId },
                 select: { code: true },
             });
-            throw new BadRequestException(`Enter the amount received in ${currency?.code ?? "the wallet's currency"}`);
+            throw new BadRequestException(`Enter the amount received in ${currency?.code ?? "the account's currency"}`);
         }
         amount = fallback;
     }

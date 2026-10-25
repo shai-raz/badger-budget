@@ -71,7 +71,7 @@ Both card-payoff flows (`MarkCardPayoff` on a transaction, and Settings → Appl
 
 ## Cash wallets
 
-A cash account's balance (`balanceKind: "cash_on_hand"`) is computed by the API; a negative value means "Balance not set". The Update action (dashboard tile/row and accounts page, `AccountsUpdateCashBalanceDialog` via `useUpdateCashBalance`) posts the new amount to `POST /accounts/:id/cash-balance`; the client never computes the difference. Cash accounts require a currency and keep one currency for their whole life: a wallet with `hasTransactions` has its currency locked in `AccountsFormModal`, and one with `hasLinkedTransfers` also has its type locked; the API enforces both. The accounts page's rows and tiles open one ⋮ menu (Edit, Update balance for cash, Delete); a wallet with linked transfers has Delete disabled there, with a tooltip.
+A cash account's balance (`balanceKind: "cash_on_hand"`) is computed by the API; a negative value means "Balance not set". The Update action (dashboard tile/row and accounts page, `AccountsUpdateCashBalanceDialog` via `useUpdateCashBalance`) posts the new amount to `POST /accounts/:id/balance`; the client never computes the difference. Cash accounts require a currency and keep one currency for their whole life: a wallet with `hasTransactions` has its currency locked in `AccountsFormModal`, and one with `hasLinkedTransfers` also has its type locked; the API enforces both. The accounts page's rows and tiles open one ⋮ menu (Edit, Update balance for cash, Delete); a wallet with linked transfers has Delete disabled there, with a tooltip.
 
 ## OAuth consent and MCP settings
 
