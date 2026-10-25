@@ -119,6 +119,38 @@ describe("parseDeployWebhookConfig", () => {
         expectNoValueLeak(result.warnings, [URL_VALUE, TOKEN_VALUE, "bad header"]);
     });
 
+    it("disables the feature with a warning when the URL embeds credentials", () => {
+        const credentialedUrl = "https://user:pa55-secret@hooks.example.test/deploy/hook-path";
+        const result = parseDeployWebhookConfig({ DEPLOY_WEBHOOK_URL: credentialedUrl });
+        expect(result.config).toBeNull();
+        expect(result.warnings).toEqual([
+            "DEPLOY_WEBHOOK_URL must not contain credentials; use DEPLOY_WEBHOOK_TOKEN (and DEPLOY_WEBHOOK_TOKEN_HEADER) instead; in-app upgrade is disabled",
+        ]);
+        expectNoValueLeak(result.warnings, [credentialedUrl, "user", "pa55-secret"]);
+    });
+
+    it("disables the feature with a warning when the URL has only a username", () => {
+        const result = parseDeployWebhookConfig({ DEPLOY_WEBHOOK_URL: "https://user@hooks.example.test/deploy" });
+        expect(result.config).toBeNull();
+        expect(result.warnings).toHaveLength(1);
+        expect(result.warnings[0]).toContain("DEPLOY_WEBHOOK_URL must not contain credentials");
+    });
+
+    it("disables the feature with a warning when the token contains a line break or NUL", () => {
+        for (const badToken of ["abc\r\ndef", "abc\ndef", "abc\0def"]) {
+            const result = parseDeployWebhookConfig({
+                DEPLOY_WEBHOOK_URL: URL_VALUE,
+                DEPLOY_WEBHOOK_TOKEN: badToken,
+                DEPLOY_WEBHOOK_TOKEN_HEADER: "x-api-key",
+            });
+            expect(result.config).toBeNull();
+            expect(result.warnings).toEqual([
+                "DEPLOY_WEBHOOK_TOKEN must not contain line breaks or NUL; in-app upgrade is disabled",
+            ]);
+            expectNoValueLeak(result.warnings, [badToken, "abc", "def"]);
+        }
+    });
+
     it("adds a JSON body and content-type when DEPLOY_WEBHOOK_BODY is valid JSON", () => {
         const result = parseDeployWebhookConfig({
             DEPLOY_WEBHOOK_URL: URL_VALUE,

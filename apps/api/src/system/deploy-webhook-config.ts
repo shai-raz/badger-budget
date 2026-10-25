@@ -44,11 +44,21 @@ export function parseDeployWebhookConfig(env: Record<string, string | undefined>
     if (parsedUrl === undefined || (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:")) {
         return disabled("DEPLOY_WEBHOOK_URL is not a valid http(s) URL; in-app upgrade is disabled");
     }
+    // fetch refuses any URL that carries userinfo, so every upgrade click would fail as invalid-request.
+    if (parsedUrl.username !== "" || parsedUrl.password !== "") {
+        return disabled(
+            "DEPLOY_WEBHOOK_URL must not contain credentials; use DEPLOY_WEBHOOK_TOKEN (and DEPLOY_WEBHOOK_TOKEN_HEADER) instead; in-app upgrade is disabled",
+        );
+    }
 
     const headers: Record<string, string> = {};
 
     const token = readVar(env, "DEPLOY_WEBHOOK_TOKEN");
     if (token !== undefined) {
+        // A header value with CR, LF or NUL makes fetch reject the request on every click.
+        if (/[\r\n\0]/.test(token)) {
+            return disabled("DEPLOY_WEBHOOK_TOKEN must not contain line breaks or NUL; in-app upgrade is disabled");
+        }
         const headerName = readVar(env, "DEPLOY_WEBHOOK_TOKEN_HEADER");
         if (headerName === undefined) {
             headers.authorization = `Bearer ${token}`;
