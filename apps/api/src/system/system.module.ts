@@ -4,6 +4,7 @@ import { BUNDLED_CHANGELOG_PATH, CHANGELOG_READER, ChangelogService, readChangel
 import { SystemController } from "./system.controller";
 import { SystemService } from "./system.service";
 import { UpdateCheckService } from "./update-check.service";
+import { UpgradeService } from "./upgrade.service";
 
 @Module({
     imports: [AuthModule],
@@ -12,6 +13,7 @@ import { UpdateCheckService } from "./update-check.service";
         SystemService,
         UpdateCheckService,
         ChangelogService,
+        UpgradeService,
         { provide: CHANGELOG_READER, useValue: () => readChangelogFile(BUNDLED_CHANGELOG_PATH) },
     ],
 })

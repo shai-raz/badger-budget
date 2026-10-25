@@ -53,3 +53,9 @@ export interface IChangelogResponse {
 export interface IChangelogSeenResponse {
     lastSeenVersion: string | null;
 }
+
+/** POST /api/v1/system/upgrade: the host's deploy webhook accepted the request. */
+export interface ISystemUpgradeResponse {
+    /** Latest release version without the leading v when known; null otherwise. */
+    targetVersion: string | null;
+}
