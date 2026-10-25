@@ -1,18 +1,19 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import type { ScrapedAccountType } from "@badger/shared-data";
+import type { AccountType, LedgerAccountType, ScrapedAccountType } from "@badger/shared-data";
 import { PrismaService } from "../prisma/prisma.service";
 import {
     CASH_SHORTFALL_DESCRIPTION,
     CASH_SURPLUS_DESCRIPTION,
     SAVINGS_ADJUSTMENT_DESCRIPTION,
     isLedgerAccountType,
+    parseAccountType,
 } from "@badger/shared-data";
-import type { ICashBalanceUpdateResponse } from "@badger/types";
+import type { ILedgerBalanceUpdateResponse } from "@badger/types";
 import { CreateAccountDto, UpdateAccountDto } from "./dto/account.dto";
-import { UpdateCashBalanceDto } from "./dto/update-cash-balance.dto";
+import { UpdateLedgerBalanceDto } from "./dto/update-ledger-balance.dto";
 import { AccountResponseDto } from "../transactions/dto/account-response.dto";
 import { toAccountResponse } from "./account-response.mapper";
-import { computeCashStats } from "./cash-balance";
+import { computeLedgerStats } from "./ledger-balance";
 import type { Account, Currency, Prisma } from "@prisma/client";
 
 type BalanceAdjustmentFields =
@@ -20,7 +21,7 @@ type BalanceAdjustmentFields =
     | { type: "transfer"; transferDirection: "in" | "out"; description: string };
 
 /** The transaction fields recorded when a ledger account's balance is set to a new value (diff is in cents). */
-function describeBalanceAdjustment(accountType: string, diff: number): BalanceAdjustmentFields {
+function describeBalanceAdjustment(accountType: LedgerAccountType, diff: number): BalanceAdjustmentFields {
     if (accountType === "savings") {
         return {
             type: "transfer",
@@ -39,7 +40,7 @@ export class AccountsService {
     constructor(private prisma: PrismaService) {}
 
     /** Ledger accounts (cash, savings) always have a currency (their transactions must use it). */
-    private assertLedgerHasCurrency(type: string, currencyId: string | null | undefined): void {
+    private assertLedgerHasCurrency(type: AccountType, currencyId: string | null | undefined): void {
         if (isLedgerAccountType(type) && !currencyId) {
             throw new BadRequestException(`A ${type} account needs a currency`);
         }
@@ -50,13 +51,13 @@ export class AccountsService {
      * last transaction date, linked flag) on ledger accounts that have transactions. Cash reports
      * `cash_on_hand`; savings reports `account_balance`.
      */
-    private async withCashStats(
+    private async withLedgerStats(
         userId: string,
         rows: Array<Account & { currency: Currency | null }>,
         db: Prisma.TransactionClient | PrismaService = this.prisma,
     ): Promise<AccountResponseDto[]> {
         const ledgerIds = rows.filter((r) => isLedgerAccountType(r.type)).map((r) => r.id);
-        const stats = await computeCashStats(db, userId, ledgerIds);
+        const stats = await computeLedgerStats(db, userId, ledgerIds);
         return rows.map((row) => {
             const response = toAccountResponse(row);
             const s = isLedgerAccountType(row.type) ? stats.get(row.id) : undefined;
@@ -73,9 +74,9 @@ export class AccountsService {
         });
     }
 
-    /** Cash stats for one account; undefined when it has no non-deleted transactions. */
-    private async cashStatsFor(userId: string, accountId: string) {
-        return (await computeCashStats(this.prisma, userId, [accountId])).get(accountId);
+    /** Ledger stats for one account; undefined when it has no non-deleted transactions. */
+    private async ledgerStatsFor(userId: string, accountId: string) {
+        return (await computeLedgerStats(this.prisma, userId, [accountId])).get(accountId);
     }
 
     async create(userId: string, createAccountDto: CreateAccountDto): Promise<AccountResponseDto> {
@@ -88,7 +89,7 @@ export class AccountsService {
             include: { currency: true },
         });
 
-        return (await this.withCashStats(userId, [account]))[0];
+        return (await this.withLedgerStats(userId, [account]))[0];
     }
 
     async findAll(userId: string): Promise<AccountResponseDto[]> {
@@ -101,7 +102,7 @@ export class AccountsService {
             include: { currency: true },
         });
 
-        return this.withCashStats(userId, accounts);
+        return this.withLedgerStats(userId, accounts);
     }
 
     async findOne(id: string, userId: string): Promise<AccountResponseDto> {
@@ -118,7 +119,7 @@ export class AccountsService {
             throw new NotFoundException(`Account with ID ${id} not found`);
         }
 
-        return (await this.withCashStats(userId, [account]))[0];
+        return (await this.withLedgerStats(userId, [account]))[0];
     }
 
     async update(id: string, userId: string, updateAccountDto: UpdateAccountDto): Promise<AccountResponseDto> {
@@ -130,7 +131,7 @@ export class AccountsService {
             throw new NotFoundException(`Account with ID ${id} not found`);
         }
         this.assertLedgerHasCurrency(
-            updateAccountDto.type ?? current.type,
+            updateAccountDto.type ?? parseAccountType(current.type),
             updateAccountDto.currencyId !== undefined ? updateAccountDto.currencyId : current.currencyId,
         );
 
@@ -142,7 +143,7 @@ export class AccountsService {
                 updateAccountDto.currencyId !== undefined && updateAccountDto.currencyId !== current.currencyId;
             // A type change between ledger types (cash <-> savings) still counts as a type change.
             const typeChanges = updateAccountDto.type !== undefined && updateAccountDto.type !== current.type;
-            const stats = currencyChanges || typeChanges ? await this.cashStatsFor(userId, id) : undefined;
+            const stats = currencyChanges || typeChanges ? await this.ledgerStatsFor(userId, id) : undefined;
             if (stats?.hasLinkedTransfers) {
                 if (currencyChanges) {
                     throw new BadRequestException("This account has linked transfers, so its currency can't change");
@@ -175,7 +176,7 @@ export class AccountsService {
             include: { currency: true },
         });
 
-        return (await this.withCashStats(userId, [account]))[0];
+        return (await this.withLedgerStats(userId, [account]))[0];
     }
 
     /**
@@ -220,11 +221,11 @@ export class AccountsService {
      * direction is a transfer (in or out), recorded as a "Savings adjustment". Concurrent calls serialize
      * on the account row.
      */
-    async updateCashBalance(
+    async updateLedgerBalance(
         id: string,
         userId: string,
-        dto: UpdateCashBalanceDto,
-    ): Promise<ICashBalanceUpdateResponse> {
+        dto: UpdateLedgerBalanceDto,
+    ): Promise<ILedgerBalanceUpdateResponse> {
         return this.prisma.$transaction(async (tx) => {
             const account = await tx.account.findFirst({
                 where: { id, userId, deletedAt: null },
@@ -243,10 +244,10 @@ export class AccountsService {
             // Takes the row lock so concurrent updates serialize.
             await tx.account.update({ where: { id }, data: { updatedAt: new Date() } });
 
-            const current = (await computeCashStats(tx, userId, [id])).get(id)?.balance ?? 0;
+            const current = (await computeLedgerStats(tx, userId, [id])).get(id)?.balance ?? 0;
             const diff = Math.round(dto.amount * 100) - Math.round(current * 100);
 
-            let adjustment: ICashBalanceUpdateResponse["adjustment"] = null;
+            let adjustment: ILedgerBalanceUpdateResponse["adjustment"] = null;
             if (diff !== 0) {
                 const fields = describeBalanceAdjustment(account.type, diff);
                 const amount = Math.abs(diff) / 100;
@@ -264,8 +265,8 @@ export class AccountsService {
                 adjustment = { id: created.id, type: fields.type, amount };
             }
 
-            const [response] = await this.withCashStats(userId, [account], tx);
-            return { account: response as ICashBalanceUpdateResponse["account"], adjustment };
+            const [response] = await this.withLedgerStats(userId, [account], tx);
+            return { account: response as ILedgerBalanceUpdateResponse["account"], adjustment };
         });
     }
 

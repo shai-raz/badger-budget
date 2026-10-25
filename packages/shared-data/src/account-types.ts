@@ -9,3 +9,11 @@ export type LedgerAccountType = (typeof LEDGER_ACCOUNT_TYPES)[number];
 export function isLedgerAccountType(type: string | null | undefined): type is LedgerAccountType {
     return (LEDGER_ACCOUNT_TYPES as readonly string[]).includes(type ?? "");
 }
+
+/**
+ * Narrows a raw `Account.type` string read from the database. Anything that isn't a known type comes back as
+ * `"unknown"` rather than being trusted, so callers never need a cast.
+ */
+export function parseAccountType(raw: string): AccountType {
+    return (ACCOUNT_TYPES as readonly string[]).includes(raw) ? (raw as AccountType) : "unknown";
+}

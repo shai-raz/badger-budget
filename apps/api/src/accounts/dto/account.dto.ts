@@ -1,6 +1,7 @@
 import { IsString, IsNotEmpty, IsOptional, IsIn, IsUUID } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { ACCOUNT_TYPES } from "@badger/shared-data";
+import type { AccountType } from "@badger/shared-data";
 
 export class CreateAccountDto {
     @ApiProperty({ example: "My Visa Card" })
@@ -22,7 +23,7 @@ export class CreateAccountDto {
         description: "Account type. 'unknown' is reserved for system use only.",
     })
     @IsIn([...ACCOUNT_TYPES])
-    type: string;
+    type: AccountType;
 
     @ApiPropertyOptional({ example: "credit-card" })
     @IsString()
@@ -52,7 +53,7 @@ export class UpdateAccountDto {
     @ApiPropertyOptional({ enum: [...ACCOUNT_TYPES] })
     @IsIn([...ACCOUNT_TYPES])
     @IsOptional()
-    type?: string;
+    type?: AccountType;
 
     @ApiPropertyOptional()
     @IsString()

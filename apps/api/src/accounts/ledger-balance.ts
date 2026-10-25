@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import type { PrismaService } from "../prisma/prisma.service";
 
-export interface CashAccountStats {
+export interface LedgerAccountStats {
     balance: number;
     lastTransactionDate: Date;
     hasLinkedTransfers: boolean;
@@ -12,12 +12,12 @@ export interface CashAccountStats {
  * (hidden included): income and transfers in add, expenses and transfers out subtract (a transfer
  * with a null direction counts as out). Accounts with no rows are absent from the result.
  */
-export async function computeCashStats(
+export async function computeLedgerStats(
     db: Prisma.TransactionClient | PrismaService,
     userId: string,
     accountIds: string[],
-): Promise<Map<string, CashAccountStats>> {
-    const stats = new Map<string, CashAccountStats>();
+): Promise<Map<string, LedgerAccountStats>> {
+    const stats = new Map<string, LedgerAccountStats>();
     if (accountIds.length === 0) return stats;
 
     const where = { userId, deletedAt: null, accountId: { in: accountIds } };

@@ -72,7 +72,7 @@ describe("AccountsService", () => {
         deletedAt: null,
         ...over,
     });
-    /** Mocks the two groupBy calls of computeCashStats: balance groups, then linked-row counts. */
+    /** Mocks the two groupBy calls of computeLedgerStats: balance groups, then linked-row counts. */
     const mockCashRows = (groups: unknown[], linked: unknown[] = []) =>
         mockPrismaService.transaction.groupBy.mockResolvedValueOnce(groups).mockResolvedValueOnce(linked);
 
@@ -112,7 +112,7 @@ describe("AccountsService", () => {
             const userId = "user-123";
             const createDto = {
                 name: "Test Account",
-                type: "bank",
+                type: "bank" as const,
                 icon: "bank-icon",
                 color: "#FF5722",
             };
@@ -149,7 +149,7 @@ describe("AccountsService", () => {
             const userId = "user-123";
             const createDto = {
                 name: "Test Account",
-                type: "credit_card",
+                type: "credit_card" as const,
                 icon: "card-icon",
                 color: "#FF5722",
             };
@@ -636,7 +636,7 @@ describe("AccountsService", () => {
         });
     });
 
-    describe("updateCashBalance", () => {
+    describe("updateLedgerBalance", () => {
         const dto = (amount: number) => ({ amount, date: "2026-05-14" });
         const setup = (computed: number, balanceAfter: number) => {
             mockPrismaService.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(mockPrismaService));
@@ -649,7 +649,7 @@ describe("AccountsService", () => {
 
         it("records a shortfall as an uncategorized expense", async () => {
             setup(56.6, 20);
-            const result = await service.updateCashBalance("cash-1", "user-123", dto(20));
+            const result = await service.updateLedgerBalance("cash-1", "user-123", dto(20));
             expect(mockPrismaService.transaction.create).toHaveBeenCalledWith({
                 data: expect.objectContaining({
                     userId: "user-123",
@@ -669,7 +669,7 @@ describe("AccountsService", () => {
 
         it("records a surplus as a transfer in", async () => {
             setup(56.6, 100);
-            const result = await service.updateCashBalance("cash-1", "user-123", dto(100));
+            const result = await service.updateLedgerBalance("cash-1", "user-123", dto(100));
             expect(mockPrismaService.transaction.create).toHaveBeenCalledWith({
                 data: expect.objectContaining({
                     type: "transfer",
@@ -684,7 +684,7 @@ describe("AccountsService", () => {
 
         it("creates nothing when the balance already matches to the cent", async () => {
             setup(56.6000001, 56.6);
-            const result = await service.updateCashBalance("cash-1", "user-123", dto(56.6));
+            const result = await service.updateLedgerBalance("cash-1", "user-123", dto(56.6));
             expect(mockPrismaService.transaction.create).not.toHaveBeenCalled();
             expect(result.adjustment).toBeNull();
         });
@@ -705,7 +705,7 @@ describe("AccountsService", () => {
 
             it("records a rise as a transfer in", async () => {
                 setupSavings(100, 150);
-                const result = await service.updateCashBalance("sav-1", "user-123", dto(150));
+                const result = await service.updateLedgerBalance("sav-1", "user-123", dto(150));
                 expect(mockPrismaService.transaction.create).toHaveBeenCalledWith({
                     data: expect.objectContaining({
                         accountId: "sav-1",
@@ -723,7 +723,7 @@ describe("AccountsService", () => {
 
             it("records a drop as a transfer out, not an expense", async () => {
                 setupSavings(100, 70);
-                const result = await service.updateCashBalance("sav-1", "user-123", dto(70));
+                const result = await service.updateLedgerBalance("sav-1", "user-123", dto(70));
                 expect(mockPrismaService.transaction.create).toHaveBeenCalledWith({
                     data: expect.objectContaining({
                         type: "transfer",
@@ -738,7 +738,7 @@ describe("AccountsService", () => {
 
             it("creates nothing when the balance already matches", async () => {
                 setupSavings(100, 100);
-                const result = await service.updateCashBalance("sav-1", "user-123", dto(100));
+                const result = await service.updateLedgerBalance("sav-1", "user-123", dto(100));
                 expect(mockPrismaService.transaction.create).not.toHaveBeenCalled();
                 expect(result.adjustment).toBeNull();
                 expect(result.account.balanceKind).toBe("account_balance");
@@ -749,7 +749,7 @@ describe("AccountsService", () => {
                     cb(mockPrismaService),
                 );
                 mockPrismaService.account.findFirst.mockResolvedValue(savingsRow({ currencyId: null }));
-                await expect(service.updateCashBalance("sav-1", "user-123", dto(5))).rejects.toThrow(
+                await expect(service.updateLedgerBalance("sav-1", "user-123", dto(5))).rejects.toThrow(
                     "A savings account needs a currency",
                 );
                 expect(mockPrismaService.transaction.create).not.toHaveBeenCalled();
@@ -759,7 +759,7 @@ describe("AccountsService", () => {
         it("rejects a non-ledger account", async () => {
             mockPrismaService.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(mockPrismaService));
             mockPrismaService.account.findFirst.mockResolvedValue(cashRow({ type: "bank" }));
-            await expect(service.updateCashBalance("cash-1", "user-123", dto(5))).rejects.toThrow(
+            await expect(service.updateLedgerBalance("cash-1", "user-123", dto(5))).rejects.toThrow(
                 "Only cash and savings accounts have a balance you can update",
             );
             expect(mockPrismaService.transaction.create).not.toHaveBeenCalled();
@@ -768,7 +768,7 @@ describe("AccountsService", () => {
         it("throws NotFound for a missing account", async () => {
             mockPrismaService.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(mockPrismaService));
             mockPrismaService.account.findFirst.mockResolvedValue(null);
-            await expect(service.updateCashBalance("nope", "user-123", dto(5))).rejects.toThrow(NotFoundException);
+            await expect(service.updateLedgerBalance("nope", "user-123", dto(5))).rejects.toThrow(NotFoundException);
         });
     });
 

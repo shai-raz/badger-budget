@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/vue-query";
 import { useApiClient } from "../useApiClient";
-import type { IAccountResponse, IUpdateCashBalance } from "@badger/types";
+import type { IAccountResponse, IUpdateLedgerBalance } from "@badger/types";
 import { transactionKeys } from "../transactions/useTransactions";
 import { accountKeys } from "./accountKeys";
 
@@ -71,7 +71,8 @@ export function useUpdateCashBalance() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ id, data }: { id: string; data: IUpdateCashBalance }) => apiClient.updateCashBalance(id, data),
+        mutationFn: ({ id, data }: { id: string; data: IUpdateLedgerBalance }) =>
+            apiClient.updateLedgerBalance(id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: accountKeys.all });
             queryClient.invalidateQueries({ queryKey: transactionKeys.all });

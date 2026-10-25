@@ -28,8 +28,7 @@ import {
 } from "./reimbursement-netting";
 import { assertReimbursementEditAllowed } from "./reimbursement-edit-guard";
 import { lockReimbursements } from "./reimbursement-lock";
-import type { AccountType } from "@badger/shared-data";
-import { isLedgerAccountType } from "@badger/shared-data";
+import { isLedgerAccountType, parseAccountType } from "@badger/shared-data";
 
 /** Filters accepted by the transaction list endpoint (superset of legacy params). */
 export interface ListTransactionsFilters {
@@ -223,7 +222,7 @@ export class TransactionsService {
                       id: counterpart.id,
                       accountId: counterpart.accountId,
                       accountName: counterpart.account.name,
-                      accountType: counterpart.account.type as AccountType,
+                      accountType: parseAccountType(counterpart.account.type),
                       amount: Number(counterpart.amount),
                       currencyId: counterpart.currencyId,
                   }
