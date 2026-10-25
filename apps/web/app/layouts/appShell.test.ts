@@ -171,7 +171,7 @@ describe("app shell viewport contract", () => {
         expect(pageHeader).toContain("<h1");
     });
 
-    // The update item lives in the sidebar bottom group and the drawer list, and opens the layout-mounted dialog.
+    // The update item lives in the sidebar bottom group and the drawer footer, and opens the layout-mounted dialog.
     it("renders the update nav item from NAV_ACTIONS in the sidebar and drawer, opening UpdateDialog", () => {
         expect(sidebar).toContain("NAV_ACTIONS.update");
         expect(sidebar).toContain("openDialog()");
@@ -182,11 +182,21 @@ describe("app shell viewport contract", () => {
         expect(layout).toContain("<UpdateDialog />");
     });
 
-    // The drawer nav fills the drawer's content height so the update item's mt-auto group sits directly above
-    // the footer divider, matching the sidebar.
-    it("pins the drawer's update item to the bottom of a full-height nav, above the footer divider", () => {
-        expect(navDrawer).toMatch(/<nav[^>]*class="flex h-full flex-col/);
-        expect(navDrawer).toContain('<div class="mt-auto">');
+    // The drawer's actions open its footer, directly above the theme switch's divider, rather than ending the
+    // nav list: there the content and footer paddings left a gap between them and the footer.
+    it("puts the drawer's actions at the top of its footer, above the theme switch", () => {
+        const nav = navDrawer.slice(navDrawer.indexOf("<nav"), navDrawer.indexOf("</nav>"));
+        const footer = navDrawer.slice(navDrawer.indexOf("#footer"));
+        expect(nav).not.toContain("NAV_ACTIONS");
+        expect(footer.indexOf("NAV_ACTIONS.update")).toBeGreaterThan(-1);
+        expect(footer.indexOf("NAV_ACTIONS.whatsNew")).toBeGreaterThan(footer.indexOf("NAV_ACTIONS.update"));
+        expect(footer.indexOf("Dark mode")).toBeGreaterThan(footer.indexOf("NAV_ACTIONS.whatsNew"));
+    });
+
+    // Routes and actions share one row class, so every row's text lines up with the footer's "Dark mode".
+    it("gives the drawer's routes and actions the same row class", () => {
+        expect(navDrawer.match(/:class="\[?DRAWER_ROW_CLASS/g)).toHaveLength(3);
+        expect(navDrawer).not.toContain("NAV_LINK_CLASS");
     });
 
     // After a manual check finds nothing newer, the header and footer stop offering an update.
