@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { IAccountResponse, ICurrencyResponse } from "@badger/types";
-import { isLedgerAccountType, type AccountType } from "@badger/shared-data";
+import { isAvatarIconName, isLedgerAccountType, type AccountType } from "@badger/shared-data";
 import { useToast } from "primevue/usetoast";
 import { accountFallbackIcon } from "~/utils/avatarIcons";
 
@@ -111,10 +111,12 @@ const handleSave = async () => {
     apiError.value = null;
 
     try {
+        const iconName = accountIcon.value.trim();
         const payload = {
             name: accountName.value.trim(),
             type: accountType.value,
-            icon: accountIcon.value.trim() || undefined,
+            // Free text until the icon picker lands; only registry names are sent.
+            icon: isAvatarIconName(iconName) ? iconName : undefined,
             color: accountColor.value.trim() || undefined,
             currencyId: accountCurrencyId.value || undefined,
         };

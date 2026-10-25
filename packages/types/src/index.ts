@@ -1,3 +1,5 @@
+import type { AvatarIconName } from "@badger/shared-data";
+
 // User & Authentication
 export interface User {
     id: string;
@@ -69,7 +71,8 @@ export interface Category {
 export interface CreateCategoryDto {
     name: string;
     color: string;
-    icon?: string;
+    /** null clears the icon; omitted lets the server pick one from the name. */
+    icon?: AvatarIconName | null;
 }
 
 export interface UpdateCategoryDto extends Partial<CreateCategoryDto> {}
