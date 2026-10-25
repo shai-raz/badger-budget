@@ -9,6 +9,7 @@ Nuxt 4.5 SPA frontend (Vite 8 / Rolldown, Lightning CSS minification). `nuxt` is
 - **Instance feature flags**: `useInstanceConfig()` (`composables/useInstanceConfig.ts`) wraps the public, signed-out `GET /config` (`registrationOpen`, `googleSheetsEnabled`, `fxEnabled`). Gate UI on the pure helpers in `utils/appConfig.ts`: the login register link shows only when registration is confirmed open, `/auth/register` leaves for login when it is closed, and `app.vue` runs the Google Sheets sync only when Sheets is configured. Unknown (loading or failed) config hides or skips rather than guessing.
 - **Charts**: Chart.js 4 + chartjs-plugin-datalabels
 - **Utilities**: VueUse (`@vueuse/nuxt`)
+- **Bank sync**: `useBankSyncFlow()` is provided by the `app` layout. `BankSyncSyncFlowHost` holds the PIN dialog and passkey offer; sync controls require that layout.
 - **Bank-sync passkey unlock**: lives in `useSyncUnlock` plus the pure `utils/syncPasskey*` modules (WebAuthn PRF → HKDF → AES-GCM wrapped PIN); the PIN is never persisted client-side.
 - **PWA**: `@vite-pwa/nuxt` — installable, SPA-fallback offline navigation (`/api`, `/.well-known` and `/oauth` excluded from the fallback). Icons in `public/` are the light logo's mark on white; the `any` icons sit on a white disc so they still read on the dark manifest `background_color` of the Android splash.
 - **Loading screen**: `app/spa-loading-template.html` shows the stacked logo, theme-matched, until the app mounts.
@@ -101,7 +102,7 @@ custom breakpoints object in place of `breakpointsTailwind` everywhere above.
 Mechanics only. The visual rules (titles, close, focus policy, sentence case) are in [DESIGN.md](DESIGN.md#dialogs-and-forms).
 
 - Global `pt.dialog` in `nuxt.config.ts` carries the title styling and the fullscreen-below-`md` root. `Dialog` has no fullscreen prop beyond width, which is why this is a global `pt` rather than per-instance props. `ConfirmDialog` is excluded automatically (`.p-confirmdialog`).
-- Compact dialogs and tiny prompts opt out of fullscreen with `class="dialog-compact"` (plus `max-w-[95vw]`): `DeleteCategoryDialog`, `MarkCardPayoff`, `PasskeysCard` (Add passkey), `SyncButton` (Sync PIN), `UpdateLedgerBalanceDialog`, `UpdateDialog`.
+- Compact dialogs and tiny prompts opt out of fullscreen with `class="dialog-compact"` (plus `max-w-[95vw]`): `DeleteCategoryDialog`, `MarkCardPayoff`, `PasskeysCard` (Add passkey), `BankSyncSyncFlowHost` (Sync PIN), `UpdateLedgerBalanceDialog`, `UpdateDialog`.
 - Dialog content is a scroll container with no top padding, which clipped a first-child `Message`'s outline; the theme's `dialog` header/content padding moves 0.25rem from the header to the content to fix that. The root pads the `env(safe-area-inset-*)` insets.
 - Focus: PrimeVue's `Dialog` focuses the first `[autofocus]` in its content, else the close button. `SharedFormDialog` (`components/shared/FormDialog.vue`) sets that from its required `initialFocus`: `field` marks the form's first input `autofocus`; `dialog` gives a `tabindex="-1" autofocus` body wrapper, so focus lands on the dialog itself.
 - Form dialogs use `SharedFormDialog`: a `Dialog` with the API-error banner above the body and Cancel/Save in a pinned `#footer`.

@@ -104,6 +104,21 @@ export class BankSyncController {
         await this.bankSyncService.deleteConnection(user.id, id);
     }
 
+    @Post("connections/:id/sync")
+    @ApiOperation({ summary: "Trigger a background sync for one active connection" })
+    @ApiResponse({ status: 201, description: "Sync started; returns jobId" })
+    @ApiResponse({ status: 400, description: "Connection paused or no PIN configured" })
+    @ApiResponse({ status: 401, description: "Invalid PIN" })
+    @ApiResponse({ status: 404, description: "Connection not found" })
+    @ApiResponse({ status: 409, description: "A sync is already in progress" })
+    triggerConnectionSync(
+        @Param("id", ParseUUIDPipe) id: string,
+        @Body() dto: TriggerSyncDto,
+        @CurrentUser() user: { id: string },
+    ) {
+        return this.bankSyncService.triggerConnectionSync(user.id, id, dto.pin, dto.defaultCurrencyCode);
+    }
+
     @Post("sync")
     @ApiOperation({ summary: "Trigger a background bank sync for all active connections" })
     @ApiResponse({

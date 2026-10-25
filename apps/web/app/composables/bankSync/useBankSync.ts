@@ -92,6 +92,21 @@ export function useTriggerSyncMutation() {
     });
 }
 
+export function useTriggerConnectionSyncMutation() {
+    const apiClient = useApiClient();
+    return useMutation({
+        mutationFn: ({
+            connectionId,
+            pin,
+            defaultCurrencyCode,
+        }: {
+            connectionId: string;
+            pin: string;
+            defaultCurrencyCode?: string;
+        }) => apiClient.triggerConnectionSync(connectionId, pin, defaultCurrencyCode),
+    });
+}
+
 export function useSetSyncPinMutation() {
     const apiClient = useApiClient();
     const queryClient = useQueryClient();
