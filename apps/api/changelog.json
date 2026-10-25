@@ -1,6 +1,19 @@
 {
     "releases": [
         {
+            "version": "0.4.0",
+            "date": "2026-10-25",
+            "items": [
+                {
+                    "type": "feat",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "sync individual bank connections",
+                    "pr": 50
+                }
+            ]
+        },
+        {
             "version": "0.3.1",
             "date": "2026-10-25",
             "items": [
