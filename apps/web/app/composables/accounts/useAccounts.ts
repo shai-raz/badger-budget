@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/vue-query";
 import { useApiClient } from "../useApiClient";
 import type { IAccountResponse, IUpdateLedgerBalance } from "@badger/types";
-import type { AccountType } from "@badger/shared-data";
+import type { AccountType, AvatarIconName } from "@badger/shared-data";
 import { transactionKeys } from "../transactions/useTransactions";
 import { accountKeys } from "./accountKeys";
 
@@ -26,7 +26,7 @@ export function useCreateAccount() {
             name: string;
             accountNumber?: string;
             type: AccountType;
-            icon?: string;
+            icon?: AvatarIconName | null;
             color?: string;
             currencyId?: string;
         }) => apiClient.createAccount(data),
@@ -46,7 +46,13 @@ export function useUpdateAccount() {
             data,
         }: {
             id: string;
-            data: Partial<{ name: string; type: AccountType; icon: string; color: string; currencyId: string }>;
+            data: Partial<{
+                name: string;
+                type: AccountType;
+                icon: AvatarIconName | null;
+                color: string;
+                currencyId: string;
+            }>;
         }) => apiClient.updateAccount(id, data),
         onSuccess: (_, { id }) => {
             queryClient.invalidateQueries({ queryKey: accountKeys.lists() });

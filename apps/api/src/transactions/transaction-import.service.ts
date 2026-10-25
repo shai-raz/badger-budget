@@ -4,7 +4,7 @@ import { CardPayoffPatternsService } from "../card-payoff-patterns/card-payoff-p
 import { SyncResultDto } from "../google-sheets/dto";
 import { Decimal } from "@prisma/client/runtime/library";
 import { findMatchingCategoryId } from "@badger/utils";
-import { DEFAULT_CURRENCY_CODE } from "@badger/shared-data";
+import { DEFAULT_CURRENCY_CODE, defaultCategoryIcon } from "@badger/shared-data";
 import { resolveCategoryId } from "../google-sheets/category-resolution";
 import { resolveDefaultAccountCurrencyId } from "../accounts/default-account-currency";
 
@@ -284,7 +284,7 @@ export class TransactionImportService {
                                     Math.floor(Math.random() * 16777215)
                                         .toString(16)
                                         .padStart(6, "0"),
-                                icon: "tag",
+                                icon: defaultCategoryIcon(candidate.originalCategory!),
                             },
                         }),
                 });

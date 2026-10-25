@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { IAccountResponse, ICurrencyResponse } from "@badger/types";
-import { isLedgerAccountType, type AccountType } from "@badger/shared-data";
+import { isAvatarIconName, isLedgerAccountType, type AccountType, type AvatarIconName } from "@badger/shared-data";
 import { useToast } from "primevue/usetoast";
 import { accountFallbackIcon } from "~/utils/avatarIcons";
+import { iconPatch } from "~/utils/iconPicker";
 
 const props = defineProps<{
     visible: boolean;
@@ -21,7 +22,10 @@ const updateMutation = useUpdateAccount();
 
 const accountName = ref("");
 const accountType = ref<AccountType>("bank");
-const accountIcon = ref("");
+// null means "Default for type": the avatar follows the account type.
+const accountIcon = ref<AvatarIconName | null>(null);
+// Once the user picks an icon or Default, the stored value is only sent when it actually changed.
+const iconTouched = ref(false);
 const accountColor = ref("#3B82F6");
 const accountCurrencyId = ref<string | null>(null);
 const saving = ref(false);
@@ -64,10 +68,17 @@ const canSave = computed(() => {
     return accountName.value.trim().length > 0 && accountType.value.length > 0 && !currencyMissing.value;
 });
 
+// Follows the selected type live, so the "Default for type" tile and the avatar change with it.
+const defaultIconTile = computed(() => ({
+    icon: accountFallbackIcon(accountType.value),
+    label: "Default for type",
+}));
+
 const resetForm = () => {
     accountName.value = "";
     accountType.value = "bank";
-    accountIcon.value = "";
+    accountIcon.value = null;
+    iconTouched.value = false;
     accountColor.value = "#3B82F6";
     accountCurrencyId.value = null;
     currencyTouched.value = false;
@@ -77,7 +88,9 @@ const loadAccount = () => {
     if (props.account) {
         accountName.value = props.account.name;
         accountType.value = props.account.type;
-        accountIcon.value = props.account.icon || "";
+        // Legacy or unknown stored names show as the default, and are not sent back unless the user picks.
+        accountIcon.value = isAvatarIconName(props.account.icon) ? props.account.icon : null;
+        iconTouched.value = false;
         accountColor.value = props.account.color || "#3B82F6";
         accountCurrencyId.value = props.account.currencyId || null;
         currencyTouched.value = false;
@@ -111,10 +124,9 @@ const handleSave = async () => {
     apiError.value = null;
 
     try {
-        const payload = {
+        const fields = {
             name: accountName.value.trim(),
             type: accountType.value,
-            icon: accountIcon.value.trim() || undefined,
             color: accountColor.value.trim() || undefined,
             currencyId: accountCurrencyId.value || undefined,
         };
@@ -122,7 +134,10 @@ const handleSave = async () => {
         if (isEditMode.value && props.account) {
             await updateMutation.mutateAsync({
                 id: props.account.id,
-                data: payload,
+                data: {
+                    ...fields,
+                    ...iconPatch(props.account.icon, accountIcon.value, iconTouched.value),
+                },
             });
             toast.add({
                 severity: "success",
@@ -131,7 +146,10 @@ const handleSave = async () => {
                 life: 3000,
             });
         } else {
-            await createMutation.mutateAsync(payload);
+            await createMutation.mutateAsync({
+                ...fields,
+                ...(accountIcon.value ? { icon: accountIcon.value } : {}),
+            });
             toast.add({
                 severity: "success",
                 summary: "Success",
@@ -208,25 +226,19 @@ const handleSave = async () => {
             </div>
 
             <div>
-                <label
-                    for="account-icon"
+                <span
+                    id="account-icon-label"
                     class="block text-sm font-medium mb-2"
-                    >Icon (optional)</label
+                    >Icon (optional)</span
                 >
-                <div class="flex items-center gap-3">
-                    <InputText
-                        id="account-icon"
-                        v-model="accountIcon"
-                        placeholder="e.g. wallet"
-                        class="flex-1"
-                    />
-                    <SharedEntityAvatar
-                        :icon="accountIcon"
-                        :color="accountColor"
-                        :fallback="accountFallbackIcon(accountType)"
-                    />
-                </div>
-                <p class="mt-1 text-xs text-muted-color">Leave empty to use the default icon.</p>
+                <SharedIconPicker
+                    v-model="accountIcon"
+                    :color="accountColor"
+                    :fallback="accountFallbackIcon(accountType)"
+                    :default-tile="defaultIconTile"
+                    aria-label="Account icon"
+                    @update:model-value="iconTouched = true"
+                />
             </div>
 
             <div>

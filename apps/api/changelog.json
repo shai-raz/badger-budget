@@ -1,6 +1,33 @@
 {
     "releases": [
         {
+            "version": "0.5.0",
+            "date": "2026-10-25",
+            "items": [
+                {
+                    "type": "feat",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "avatar icon registry, name-to-icon matcher and API icon rules (1/3)",
+                    "pr": 51
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "icon picker and color swatches in the category and account forms (2/3)",
+                    "pr": 52
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "inline category customization and icons in category surfaces (3/3)",
+                    "pr": 53
+                }
+            ]
+        },
+        {
             "version": "0.4.0",
             "date": "2026-10-25",
             "items": [

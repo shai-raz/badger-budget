@@ -13,6 +13,8 @@ import type {
     ICategoryMappingRule,
     DeleteCategoryOptions,
     CategoryUsageResponse,
+    CreateCategoryDto,
+    UpdateCategoryDto,
     ICardPayoffPattern,
     ICashWithdrawalPattern,
     ICreateCardPayoffPattern,
@@ -41,7 +43,7 @@ import type {
     IChangelogResponse,
     IChangelogSeenResponse,
 } from "@badger/types";
-import type { AccountType } from "@badger/shared-data";
+import type { AccountType, AvatarIconName } from "@badger/shared-data";
 
 export interface ApiClientConfig {
     baseURL: string;
@@ -230,7 +232,7 @@ export class ApiClient {
         name: string;
         accountNumber?: string;
         type: AccountType;
-        icon?: string;
+        icon?: AvatarIconName | null;
         color?: string;
         currencyId?: string;
     }) {
@@ -245,7 +247,13 @@ export class ApiClient {
 
     async updateAccount(
         id: string,
-        data: Partial<{ name: string; type: AccountType; icon: string; color: string; currencyId: string }>,
+        data: Partial<{
+            name: string;
+            type: AccountType;
+            icon: AvatarIconName | null;
+            color: string;
+            currencyId: string;
+        }>,
     ) {
         const response = await this.client.patch(`/accounts/${id}`, data);
         return response.data;
@@ -266,12 +274,12 @@ export class ApiClient {
         return response.data;
     }
 
-    async createCategory(data: { name: string; color: string; icon?: string }) {
+    async createCategory(data: CreateCategoryDto) {
         const response = await this.client.post("/categories", data);
         return response.data;
     }
 
-    async updateCategory(id: string, data: Partial<{ name: string; color: string; icon: string }>) {
+    async updateCategory(id: string, data: UpdateCategoryDto) {
         const response = await this.client.patch(`/categories/${id}`, data);
         return response.data;
     }

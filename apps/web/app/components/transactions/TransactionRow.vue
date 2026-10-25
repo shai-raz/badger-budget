@@ -87,6 +87,7 @@ const handleMenuToggle = (event: Event) => {
                 v-if="showPill"
                 :name="categoryName"
                 :color="category?.color"
+                :show-icon="false"
                 class="mt-0.5 md:hidden"
             />
             <div class="truncate text-[12.5px] text-muted-color">
@@ -108,6 +109,7 @@ const handleMenuToggle = (event: Event) => {
             v-if="showPill"
             :name="categoryName"
             :color="category?.color"
+            :show-icon="false"
             class="hidden md:inline-flex"
         />
 

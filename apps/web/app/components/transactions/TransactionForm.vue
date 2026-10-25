@@ -6,7 +6,7 @@ import { getLocaleCurrencyCode } from "../../utils/locale-currency";
 import { accountTypeCaption } from "../../utils/accountBalance";
 import LockHint from "./LockHint.vue";
 import { matchesCashWithdrawal, pickCashWallet } from "../../utils/cashWithdrawal";
-import { pickNewCategoryColor, type PendingCategory } from "../../utils/pendingCategory";
+import { nextPendingCategory, type PendingCategory } from "../../utils/pendingCategory";
 import {
     LOCKED_DIRECTION_TOOLTIP,
     LOCKED_FIELD_TOOLTIP,
@@ -53,7 +53,12 @@ const props = defineProps<{
     prefill?: TransactionFormPrefill;
 }>();
 
-const emit = defineEmits<{ dirtyChange: [dirty: boolean]; createRule: [] }>();
+const emit = defineEmits<{
+    dirtyChange: [dirty: boolean];
+    createRule: [];
+    /** The deferred category dialog opened or closed, so the hosting dialog stops claiming Escape meanwhile. */
+    customiseOpenChange: [open: boolean];
+}>();
 
 const isEdit = computed(() => !!props.transaction);
 
@@ -99,14 +104,21 @@ const pendingName = computed<string | null>({
     get: () => pendingCategory.value?.name ?? null,
     set: (n) => {
         pendingCategory.value = n
-            ? {
-                  name: n,
-                  color:
-                      pendingCategory.value?.color ??
-                      pickNewCategoryColor(((categories.value ?? []) as Category[]).map((c) => c.color)),
-              }
+            ? nextPendingCategory(
+                  pendingCategory.value,
+                  n,
+                  ((categories.value ?? []) as Category[]).map((c) => c.color),
+              )
             : null;
     },
+});
+// Opens the deferred category dialog to customise the pending category (saved only with the transaction).
+const customiseOpen = ref(false);
+watch(customiseOpen, (open) => emit("customiseOpenChange", open));
+// The host keeps Escape suspended while its child is open. If this form unmounts with that child still open, the watch
+// never fires again, so release the host here.
+onBeforeUnmount(() => {
+    if (customiseOpen.value) emit("customiseOpenChange", false);
 });
 const dirty = computed(
     () => isEdit.value && (isEditDirty(initialValues, values, constraints) || !!pendingCategory.value),
@@ -585,15 +597,37 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
                     @click="emit('createRule')"
                 />
             </div>
-            <CategoriesCategorySelect
-                v-model="values.categoryId"
-                v-model:pending-name="pendingName"
-                creatable
-                :pending-color="pendingCategory?.color"
-                input-id="tx-category"
-                :keep-id="initialValues.categoryId ?? undefined"
-                show-clear
-                :disabled="disabled || isLocked('categoryId')"
+            <div class="flex items-center gap-2">
+                <CategoriesCategorySelect
+                    v-model="values.categoryId"
+                    v-model:pending-name="pendingName"
+                    creatable
+                    :pending-color="pendingCategory?.color"
+                    :pending-icon="pendingCategory?.icon"
+                    input-id="tx-category"
+                    :keep-id="initialValues.categoryId ?? undefined"
+                    show-clear
+                    class="min-w-0 flex-1"
+                    :disabled="disabled || isLocked('categoryId')"
+                />
+                <Button
+                    v-if="pendingCategory"
+                    v-tooltip.top="'Customise new category'"
+                    icon="pi pi-pencil"
+                    text
+                    rounded
+                    severity="secondary"
+                    type="button"
+                    aria-label="Customise new category"
+                    :disabled="disabled"
+                    @click="customiseOpen = true"
+                />
+            </div>
+            <CategoriesFormModal
+                v-model:visible="customiseOpen"
+                deferred
+                :pending="pendingCategory"
+                @done="(v) => (pendingCategory = v)"
             />
         </div>
 

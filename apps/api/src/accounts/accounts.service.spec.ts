@@ -2,6 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { AccountsService } from "./accounts.service";
+import { CreateAccountDto } from "./dto/account.dto";
 import { PrismaService } from "../prisma/prisma.service";
 
 describe("AccountsService", () => {
@@ -110,10 +111,10 @@ describe("AccountsService", () => {
 
         it("should create an account", async () => {
             const userId = "user-123";
-            const createDto = {
+            const createDto: CreateAccountDto = {
                 name: "Test Account",
-                type: "bank" as const,
-                icon: "bank-icon",
+                type: "bank",
+                icon: "landmark",
                 color: "#FF5722",
             };
 
@@ -147,10 +148,10 @@ describe("AccountsService", () => {
 
         it("converts a Decimal balance/cardFrame on the created row to numbers", async () => {
             const userId = "user-123";
-            const createDto = {
+            const createDto: CreateAccountDto = {
                 name: "Test Account",
-                type: "credit_card" as const,
-                icon: "card-icon",
+                type: "credit_card",
+                icon: "credit-card",
                 color: "#FF5722",
             };
 

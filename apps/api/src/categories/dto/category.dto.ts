@@ -1,5 +1,7 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsUUID } from "class-validator";
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsIn, IsUUID } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { AVATAR_ICON_NAMES } from "@badger/shared-data";
+import type { AvatarIconName } from "@badger/shared-data";
 
 export class CreateCategoryDto {
     @ApiProperty({ example: "Gym Membership" })
@@ -12,10 +14,15 @@ export class CreateCategoryDto {
     @IsNotEmpty()
     color: string;
 
-    @ApiPropertyOptional({ example: "dumbbell" })
-    @IsString()
+    @ApiPropertyOptional({
+        enum: [...AVATAR_ICON_NAMES],
+        nullable: true,
+        example: "dumbbell",
+        description: "Avatar icon from the shared registry. Omit to get a name-based default.",
+    })
+    @IsIn([...AVATAR_ICON_NAMES])
     @IsOptional()
-    icon?: string;
+    icon?: AvatarIconName | null;
 }
 
 export class UpdateCategoryDto {
@@ -29,10 +36,14 @@ export class UpdateCategoryDto {
     @IsOptional()
     color?: string;
 
-    @ApiPropertyOptional()
-    @IsString()
+    @ApiPropertyOptional({
+        enum: [...AVATAR_ICON_NAMES],
+        nullable: true,
+        description: "Avatar icon from the shared registry. Pass null to clear.",
+    })
+    @IsIn([...AVATAR_ICON_NAMES])
     @IsOptional()
-    icon?: string;
+    icon?: AvatarIconName | null;
 }
 
 export class DeleteCategoryDto {

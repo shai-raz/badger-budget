@@ -1,0 +1,39 @@
+// Source-text contract for the shared form dialog's Escape handling. The web test runner is Vitest in a node
+// environment with no DOM, so the dialog is checked against its source, not mounted.
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+const source = (name: string) => readFileSync(fileURLToPath(new URL(name, import.meta.url)), "utf8");
+
+describe("FormDialog Escape", () => {
+    const dialog = source("./FormDialog.vue");
+
+    it("keeps PrimeVue's own Escape close unless isolated", () => {
+        expect(dialog).toContain("isolateEscape: false");
+    });
+
+    it("holds PrimeVue's Escape close off while a stacked dialog is open", () => {
+        expect(dialog).toContain("suspendEscape: false");
+        expect(dialog).toContain(':close-on-escape="isolateEscape || suspendEscape ? false : !busy"');
+    });
+
+    it("claims Escape on the mask so a parent dialog never sees it", () => {
+        expect(dialog).toMatch(
+            /const dialogPt = computed\(\(\) =>\s*props\.isolateEscape \? \{ mask: \{ tabindex: -1, onKeydown: onMaskKeydown \} \} : undefined,?\s*\);/,
+        );
+        expect(dialog).toContain(':pt="dialogPt"');
+        expect(dialog).toMatch(
+            /const onMaskKeydown = \(event: KeyboardEvent\) => \{\s*if \(event\.key !== "Escape"\) return;\s*event\.stopPropagation\(\);\s*event\.preventDefault\(\);/,
+        );
+    });
+
+    it("keeps focus focusable on the mask so a click on the dimmed area does not drop it to body", () => {
+        expect(dialog).toContain("mask: { tabindex: -1, onKeydown: onMaskKeydown }");
+        expect(dialog).not.toContain("root: { tabindex: -1");
+    });
+
+    it("closes through the same path as the header close, and not while busy", () => {
+        expect(dialog).toMatch(/if \(!props\.busy\) emit\("update:visible", false\);/);
+    });
+});

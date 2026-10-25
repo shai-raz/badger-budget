@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AVATAR_ICON_NAMES, type AvatarIconName } from "@badger/shared-data";
-import { AVATAR_ICONS, accountFallbackIcon, resolveAvatarIcon } from "./avatarIcons";
+import { AVATAR_ICONS, AVATAR_SIZES, accountFallbackIcon, resolveAvatarIcon } from "./avatarIcons";
 
 describe("AVATAR_ICONS", () => {
     it("maps every registry name to a defined component", () => {
@@ -53,5 +53,17 @@ describe("accountFallbackIcon", () => {
 
     it("falls back to landmark for the unknown type", () => {
         expect(accountFallbackIcon("unknown")).toBe("landmark");
+    });
+});
+
+describe("AVATAR_SIZES", () => {
+    it("gives xs and sm the chip and picker-tile boxes and glyph sizes", () => {
+        expect(AVATAR_SIZES.xs).toEqual({ box: "h-5 w-5", icon: 12 });
+        expect(AVATAR_SIZES.sm).toEqual({ box: "h-7 w-7", icon: 16 });
+    });
+
+    it("keeps md and lg unchanged", () => {
+        expect(AVATAR_SIZES.md.box).toBe("h-9 w-9 md:h-10 md:w-10");
+        expect(AVATAR_SIZES.lg).toEqual({ box: "h-14 w-14", icon: 28 });
     });
 });
