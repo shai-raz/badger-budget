@@ -1,6 +1,33 @@
 {
     "releases": [
         {
+            "version": "0.2.1",
+            "date": "2026-10-25",
+            "items": [
+                {
+                    "type": "ci",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "build each release image once instead of twice",
+                    "pr": 41
+                },
+                {
+                    "type": "ci",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "skip the image build on main pushes that don't change the image",
+                    "pr": 42
+                },
+                {
+                    "type": "fix",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "line up the mobile drawer's actions with its footer",
+                    "pr": 46
+                }
+            ]
+        },
+        {
             "version": "0.2.0",
             "date": "2026-10-24",
             "items": [
