@@ -61,8 +61,9 @@ describe("category form icon", () => {
 describe("category form deferred mode", () => {
     const form = source("./FormModal.vue");
 
-    it("isolates Escape so a stacked parent dialog stays open", () => {
-        expect(form).toContain("isolate-escape");
+    it("isolates Escape only while deferred, so the plain categories dialog keeps Escape", () => {
+        expect(form).toContain(':isolate-escape="deferred"');
+        expect(form).not.toMatch(/^\s*isolate-escape\s*$/m);
     });
 
     it("titles the dialog New category and labels its save action Done", () => {

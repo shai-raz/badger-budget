@@ -62,7 +62,11 @@ const onRootKeydown = (event: KeyboardEvent) => {
     event.preventDefault();
     if (!props.busy) emit("update:visible", false);
 };
-const dialogPt = computed(() => (props.isolateEscape ? { root: { onKeydown: onRootKeydown } } : undefined));
+// The root is focusable so a click on its non-focusable parts (labels, gaps, the title) keeps focus inside it.
+// Without that, focus drops to <body>, the root never sees the next Escape, and it reaches the dialog underneath.
+const dialogPt = computed(() =>
+    props.isolateEscape ? { root: { tabindex: -1, onKeydown: onRootKeydown } } : undefined,
+);
 </script>
 
 <template>

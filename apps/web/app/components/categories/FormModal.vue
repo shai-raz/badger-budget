@@ -192,7 +192,7 @@ const handleSave = async () => {
         :initial-focus="isEditMode ? 'dialog' : 'field'"
         :save-label="deferred ? 'Done' : 'Save'"
         :save-disabled="!canSave"
-        isolate-escape
+        :isolate-escape="deferred"
         @update:visible="handleClose"
         @save="handleSave"
     >

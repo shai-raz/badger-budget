@@ -15,8 +15,8 @@ describe("FormDialog Escape", () => {
     });
 
     it("claims Escape on the dialog root so a parent dialog never sees it", () => {
-        expect(dialog).toContain(
-            "const dialogPt = computed(() => (props.isolateEscape ? { root: { onKeydown: onRootKeydown } } : undefined));",
+        expect(dialog).toMatch(
+            /const dialogPt = computed\(\(\) =>\s*props\.isolateEscape \? \{ root: \{ tabindex: -1, onKeydown: onRootKeydown \} \} : undefined,?\s*\);/,
         );
         expect(dialog).toContain(':pt="dialogPt"');
         expect(dialog).toMatch(

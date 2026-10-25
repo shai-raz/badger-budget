@@ -451,7 +451,7 @@ describe("design contract: avatars", () => {
         expect(source).toContain(':pending-icon="pendingCategory?.icon"');
         expect(source).toContain('aria-label="Customise new category"');
         expect(source).toContain("<CategoriesFormModal");
-        expect(source).toContain("deferred");
+        expect(source).toMatch(/<CategoriesFormModal\s+v-model:visible="customiseOpen"\s+deferred/);
         expect(source).toContain(':pending="pendingCategory"');
         expect(source).toContain('@done="(v) => (pendingCategory = v)"');
     });
