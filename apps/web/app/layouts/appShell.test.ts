@@ -111,6 +111,12 @@ describe("app shell viewport contract", () => {
         expect(layout).toContain('import CashFollowupToast from "~/components/transactions/CashFollowupToast.vue"');
     });
 
+    // Same reason: Nuxt would auto-register it as LayoutUpgradeToast, so the bare tag would not resolve.
+    it("imports UpgradeToast explicitly and mounts it once in the layout", () => {
+        expect(layout).toContain('import UpgradeToast from "~/components/layout/UpgradeToast.vue"');
+        expect(layout.match(/<UpgradeToast/g)).toHaveLength(1);
+    });
+
     // Dialog content has no top padding in Aura, which clipped a first-child Message's outline.
     it("gives dialog content a top padding so first-child Message outlines are not clipped", () => {
         expect(themePreset).toContain('padding: "0.25rem 1.25rem 1.25rem 1.25rem"');
