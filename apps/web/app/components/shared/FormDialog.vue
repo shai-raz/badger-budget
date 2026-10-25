@@ -25,6 +25,8 @@ interface Props {
     /** Defaults to `busy`. */
     saveLoading?: boolean;
     width?: string;
+    /** Claims Escape for this dialog alone, for a dialog stacked on another. Off by default. */
+    isolateEscape?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -36,6 +38,7 @@ const props = withDefaults(defineProps<Props>(), {
     saveDisabled: false,
     saveLoading: undefined,
     width: "36rem",
+    isolateEscape: false,
 });
 
 const emit = defineEmits<{
@@ -46,6 +49,20 @@ const emit = defineEmits<{
 
 const bodyFocus = computed(() => (props.initialFocus === "dialog" ? { tabindex: -1, autofocus: true } : {}));
 const isSaving = computed(() => props.saveLoading ?? props.busy);
+
+/**
+ * PrimeVue's Dialog closes on Escape from a document-level keydown listener with no check for the topmost dialog,
+ * so the Escape for a dialog stacked on top would also close the one underneath. With `isolateEscape` the Dialog's
+ * own Escape handling is off, and this root handler claims the key: it stops the event before it reaches the
+ * document, then closes this dialog the same way the header ✕ does (unless a request is in flight).
+ */
+const onRootKeydown = (event: KeyboardEvent) => {
+    if (event.key !== "Escape") return;
+    event.stopPropagation();
+    event.preventDefault();
+    if (!props.busy) emit("update:visible", false);
+};
+const dialogPt = computed(() => (props.isolateEscape ? { root: { onKeydown: onRootKeydown } } : undefined));
 </script>
 
 <template>
@@ -56,7 +73,8 @@ const isSaving = computed(() => props.saveLoading ?? props.busy);
         :draggable="false"
         :style="{ width }"
         :closable="!busy"
-        :close-on-escape="!busy"
+        :close-on-escape="isolateEscape ? false : !busy"
+        :pt="dialogPt"
         @update:visible="emit('update:visible', $event)"
         @hide="emit('hide')"
     >
