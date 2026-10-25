@@ -79,12 +79,14 @@ defineExpose({
             <ColorPicker
                 v-model="colorValue"
                 format="hex"
+                @update:model-value="customRequested = true"
             />
             <InputText
                 v-model="colorValue"
                 placeholder="#3B82F6"
                 aria-label="Hex color"
                 class="flex-1"
+                @update:model-value="customRequested = true"
             />
         </div>
     </div>

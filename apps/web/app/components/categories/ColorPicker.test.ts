@@ -34,6 +34,12 @@ describe("CategoriesColorPicker swatches", () => {
         expect(picker).toMatch(/<div\s+v-if="showCustom"[\s\S]*?<ColorPicker[\s\S]*?<InputText/);
     });
 
+    it("keeps the custom row open while it is being edited, even when the typed hex matches a swatch", () => {
+        // Typing a palette hex into an off-palette custom row must not unmount the focused input.
+        expect(picker).toMatch(/<ColorPicker[\s\S]*?@update:model-value="customRequested = true"/);
+        expect(picker).toMatch(/<InputText[\s\S]*?@update:model-value="customRequested = true"/);
+    });
+
     it("labels the custom button and marks it pressed", () => {
         expect(picker).toContain('aria-label="Custom color"');
         expect(picker).toContain(':aria-pressed="showCustom"');
