@@ -5,7 +5,7 @@ import { UPGRADE_TOAST_GROUP, useUpgrade } from "~/composables/useUpgrade";
 import { useSystemInfo } from "~/composables/useSystemInfo";
 import { useAuthStore } from "~/stores/auth";
 import { BELOW_MD } from "~/utils/breakpoints";
-import { closingStalledToastDismisses, upgradePollInterval } from "~/utils/upgradeTracking";
+import { closingStalledToastDismisses, stalledToastIsStale, upgradePollInterval } from "~/utils/upgradeTracking";
 
 type UpgradeToastKind = "ready" | "stalled";
 interface UpgradeToastData {
@@ -44,7 +44,7 @@ let readyToastShown = false;
 
 const toast = useToast();
 const authStore = useAuthStore();
-const { info, phase, pending, reloadNow, clear } = useUpgrade();
+const { info, phase, pending, reloadNow, clear, claimDoneToast } = useUpgrade();
 const reloading = ref(false);
 
 // Polls only while an upgrade is in flight; the query is shared with useUpdateNotice, so no extra request is made.
@@ -70,8 +70,10 @@ const onClose = (event: { message: ToastMessageOptions }) => {
 
 watch(
     phase,
-    (next) => {
+    (next, prev) => {
         const target = pending.value?.targetVersion ?? null;
+        // A re-trigger in another tab moves a stalled upgrade back to upgrading; this tab's stalled toast is stale.
+        if (stalledToastIsStale(prev, next)) toast.removeGroup(UPGRADE_TOAST_GROUP);
         if (next === "ready") {
             if (readyToastShown) return;
             readyToastShown = true;
@@ -96,7 +98,7 @@ watch(
                 data: { kind: "stalled", startedAt: pending.value?.startedAt },
             } as ToastMessageOptions & { data: UpgradeToastData });
         } else if (next === "done") {
-            clear();
+            if (!claimDoneToast()) return;
             toast.removeGroup(UPGRADE_TOAST_GROUP);
             const version = info.value?.version;
             if (version) {

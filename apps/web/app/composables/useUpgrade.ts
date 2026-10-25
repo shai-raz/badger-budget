@@ -7,6 +7,7 @@ import { useAuthStore } from "~/stores/auth";
 import { reloadToNewBuild } from "~/utils/reloadToNewBuild";
 import {
     PENDING_UPGRADE_KEY,
+    doneToastDue,
     parsePendingUpgrade,
     upgradeActionState,
     upgradePhase,
@@ -16,6 +17,8 @@ import {
 export const UPGRADE_TOAST_GROUP = "upgrade";
 /** sessionStorage key holding the startedAt of the upgrade this tab reloaded for. Per tab, so other tabs do not inherit it. */
 const RELOADED_FOR_KEY = "upgradeReloadedFor";
+/** sessionStorage key holding the startedAt whose done toast this tab already showed. Per tab, like RELOADED_FOR_KEY. */
+const DONE_SHOWN_FOR_KEY = "upgradeDoneShownFor";
 
 /** Shared upgrade state for this browser: the pending upgrade, its phase, and the trigger/reload actions. */
 export const useUpgrade = () => {
@@ -28,6 +31,7 @@ export const useUpgrade = () => {
     const stored = useLocalStorage<string | null>(PENDING_UPGRADE_KEY, null);
     // Synchronous write: the marker must be stored before the reload it guards starts.
     const reloadedFor = useSessionStorage<number | null>(RELOADED_FOR_KEY, null, { flush: "sync" });
+    const doneShownFor = useSessionStorage<number | null>(DONE_SHOWN_FOR_KEY, null, { flush: "sync" });
     const now = useNow({ interval: 15_000 });
 
     const pending = computed(() => parsePendingUpgrade(stored.value, authStore.user?.id ?? null));
@@ -61,6 +65,15 @@ export const useUpgrade = () => {
         stored.value = null;
     };
 
+    // Never clears the shared entry: other tabs on the old build still need it to show Reload. Only this tab's
+    // marker is written, so the done toast shows once here.
+    const claimDoneToast = (): boolean => {
+        const current = pending.value;
+        if (!current || !doneToastDue(current, doneShownFor.value)) return false;
+        doneShownFor.value = current.startedAt;
+        return true;
+    };
+
     // Marks this tab before the reload, so the page that loads the new build reads it as done rather than ready again.
     const reloadNow = async () => {
         const current = pending.value;
@@ -86,6 +99,7 @@ export const useUpgrade = () => {
         trigger: () => triggerMutation.mutateAsync(),
         triggerPending: triggerMutation.isPending,
         clear,
+        claimDoneToast,
         reloadNow,
         showStarted,
     };

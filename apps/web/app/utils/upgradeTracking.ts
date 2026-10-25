@@ -105,6 +105,22 @@ export function closingStalledToastDismisses(
     return data?.kind === "stalled" && p !== null && data.startedAt === p.startedAt;
 }
 
+/** The stalled toast is stale once the phase leaves stalled, e.g. another tab re-triggered or this one reloaded. */
+export function stalledToastIsStale(
+    prev: UpgradePhase | null | undefined,
+    next: UpgradePhase | null | undefined,
+): boolean {
+    return prev === "stalled" && next !== "stalled";
+}
+
+/**
+ * The done toast shows once per upgrade per tab. `shownFor` is the startedAt this tab last announced, kept in
+ * sessionStorage, so a later load of the same tab does not repeat it.
+ */
+export function doneToastDue(p: PendingUpgrade, shownFor: number | null): boolean {
+    return shownFor !== p.startedAt;
+}
+
 /** The Upgrade action exists only when the host has a webhook and an update is out; it is disabled while the upgrade runs. */
 export function upgradeActionState(info: ISystemInfo | null, phase: UpgradePhase | null): UpgradeActionState {
     if (info?.upgradeAvailable !== true || info.updateAvailable !== true) return "hidden";

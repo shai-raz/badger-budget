@@ -4,8 +4,10 @@ import {
     PENDING_UPGRADE_KEY,
     UPGRADE_POLL_MS,
     closingStalledToastDismisses,
+    doneToastDue,
     UPGRADE_STALL_MS,
     parsePendingUpgrade,
+    stalledToastIsStale,
     upgradeActionState,
     upgradeBadgeVisible,
     updateDialogMode,
@@ -185,6 +187,48 @@ describe("closingStalledToastDismisses", () => {
 
     it("does nothing when no upgrade is tracked", () => {
         expect(closingStalledToastDismisses({ kind: "stalled", startedAt: pending.startedAt }, null)).toBe(false);
+    });
+});
+
+describe("shared entry after another tab reaches done", () => {
+    // The done branch in UpgradeToast must not clear the shared entry: this is the phase another tab still derives.
+    it("keeps the tab on the old build at ready after the reloaded tab reached done", () => {
+        const reloadedTab = upgradePhase(pending, runningAt("0.6.0"), "build-b", pending.startedAt + 60_000, false);
+        const otherTab = upgradePhase(pending, runningAt("0.6.0"), "build-a", pending.startedAt + 60_000, false);
+        expect(reloadedTab).toBe("done");
+        expect(otherTab).toBe("ready");
+    });
+});
+
+describe("doneToastDue", () => {
+    it("is due in a tab that has not shown the done toast for this upgrade", () => {
+        expect(doneToastDue(pending, null)).toBe(true);
+    });
+
+    it("is not due again in the same tab for the same upgrade", () => {
+        expect(doneToastDue(pending, pending.startedAt)).toBe(false);
+    });
+
+    it("is due for a newer upgrade even after an earlier one was shown", () => {
+        expect(doneToastDue({ ...pending, startedAt: pending.startedAt + 3_600_000 }, pending.startedAt)).toBe(true);
+    });
+});
+
+describe("stalledToastIsStale", () => {
+    it("is stale once a stalled upgrade re-triggers in another tab", () => {
+        expect(stalledToastIsStale("stalled", "upgrading")).toBe(true);
+    });
+
+    it("is stale when a stalled upgrade finishes or is cleared", () => {
+        expect(stalledToastIsStale("stalled", "done")).toBe(true);
+        expect(stalledToastIsStale("stalled", "ready")).toBe(true);
+        expect(stalledToastIsStale("stalled", null)).toBe(true);
+    });
+
+    it("is not stale while the phase stays stalled, or when it was never stalled", () => {
+        expect(stalledToastIsStale("stalled", "stalled")).toBe(false);
+        expect(stalledToastIsStale("upgrading", "stalled")).toBe(false);
+        expect(stalledToastIsStale(undefined, "upgrading")).toBe(false);
     });
 });
 
