@@ -16,8 +16,6 @@ export interface PendingUpgrade {
     /** Nuxt build id of the page that triggered the upgrade. */
     fromBuildId: string;
     startedAt: number;
-    /** Set just before this browser reloads into the new build. */
-    reloadedAt?: number;
 }
 
 export type UpgradePhase = "upgrading" | "ready" | "stalled" | "done";
@@ -48,22 +46,14 @@ export function parsePendingUpgrade(raw: unknown, userId: string | null): Pendin
     }
     if (!isRecord(value)) return null;
 
-    const { userId: storedUserId, targetVersion, fromVersion, fromBuildId, startedAt, reloadedAt } = value;
+    const { userId: storedUserId, targetVersion, fromVersion, fromBuildId, startedAt } = value;
     if (storedUserId !== userId) return null;
     if (targetVersion !== null && typeof targetVersion !== "string") return null;
     if (fromVersion !== null && typeof fromVersion !== "string") return null;
     if (typeof fromBuildId !== "string") return null;
     if (typeof startedAt !== "number" || !Number.isFinite(startedAt)) return null;
-    if (reloadedAt !== undefined && (typeof reloadedAt !== "number" || !Number.isFinite(reloadedAt))) return null;
 
-    return {
-        userId,
-        targetVersion,
-        fromVersion,
-        fromBuildId,
-        startedAt,
-        ...(reloadedAt !== undefined ? { reloadedAt } : {}),
-    };
+    return { userId, targetVersion, fromVersion, fromBuildId, startedAt };
 }
 
 /** True when the running version has reached the upgrade target (or moved off the version it started from, without a target). */
@@ -82,14 +72,37 @@ export function versionReached(p: PendingUpgrade, running: string | null): boole
     return running !== p.fromVersion;
 }
 
-/** Where the upgrade stands for this browser. `info` null (not loaded yet) counts as not reached. */
-export function upgradePhase(p: PendingUpgrade, info: ISystemInfo | null, buildId: string, now: number): UpgradePhase {
-    if (info !== null && versionReached(p, info.version)) {
-        // A reload already happened, or the page runs a different build: nothing left to do.
-        if (buildId !== p.fromBuildId || p.reloadedAt !== undefined) return "done";
+/**
+ * Where the upgrade stands for this browser.
+ * `reloadedHere` is true only in the tab that reloaded for this upgrade (a per-tab marker), so other tabs on the
+ * old build still read ready. `info` null (not loaded yet) is never stalled: the version is unknown, so a reloaded
+ * page cannot tell a slow upgrade from a finished one.
+ */
+export function upgradePhase(
+    p: PendingUpgrade,
+    info: ISystemInfo | null,
+    buildId: string,
+    now: number,
+    reloadedHere: boolean,
+): UpgradePhase {
+    if (info === null) return "upgrading";
+    if (versionReached(p, info.version)) {
+        // This tab reloaded already, or the page runs a different build: nothing left to do.
+        if (buildId !== p.fromBuildId || reloadedHere) return "done";
         return "ready";
     }
     return now - p.startedAt >= UPGRADE_STALL_MS ? "stalled" : "upgrading";
+}
+
+/**
+ * Closing a stalled toast dismisses the tracked upgrade only when that toast was raised for the upgrade still
+ * tracked, so a stale toast left from an earlier attempt cannot wipe a newer one.
+ */
+export function closingStalledToastDismisses(
+    data: { kind?: string; startedAt?: number } | undefined,
+    p: PendingUpgrade | null,
+): boolean {
+    return data?.kind === "stalled" && p !== null && data.startedAt === p.startedAt;
 }
 
 /** The Upgrade action exists only when the host has a webhook and an update is out; it is disabled while the upgrade runs. */

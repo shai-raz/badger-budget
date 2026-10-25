@@ -73,6 +73,8 @@ const handleUpgrade = async () => {
         const started = await trigger();
         confirming.value = false;
         closeDialog();
+        // A new attempt replaces any stalled or ready toast left from the last one.
+        toast.removeGroup(UPGRADE_TOAST_GROUP);
         showStarted(started.targetVersion);
     } catch (err: unknown) {
         confirming.value = false;

@@ -5,11 +5,13 @@ import { UPGRADE_TOAST_GROUP, useUpgrade } from "~/composables/useUpgrade";
 import { useSystemInfo } from "~/composables/useSystemInfo";
 import { useAuthStore } from "~/stores/auth";
 import { BELOW_MD } from "~/utils/breakpoints";
-import { upgradePollInterval } from "~/utils/upgradeTracking";
+import { closingStalledToastDismisses, upgradePollInterval } from "~/utils/upgradeTracking";
 
 type UpgradeToastKind = "ready" | "stalled";
 interface UpgradeToastData {
     kind: UpgradeToastKind;
+    /** The upgrade a stalled toast was raised for, so closing it cannot clear a newer upgrade. */
+    startedAt?: number;
 }
 
 // AppBottomBar measured about 53px at 320 and 375px; 3.75rem leaves room for a wrapped label on top of the
@@ -59,10 +61,11 @@ const onReload = async () => {
     }
 };
 
-// Closing the stalled toast dismisses the tracked upgrade. Removing a group does not emit close, so the
-// done/ready transitions below never trigger this.
+// Closing the stalled toast dismisses the tracked upgrade it was raised for. Removing a group does not emit close,
+// so the done/ready transitions below never trigger this.
 const onClose = (event: { message: ToastMessageOptions }) => {
-    if (kindOf(event.message) === "stalled") clear();
+    const data = (event.message as ToastMessageOptions & { data?: UpgradeToastData }).data;
+    if (closingStalledToastDismisses(data, pending.value)) clear();
 };
 
 watch(
@@ -90,7 +93,7 @@ watch(
                 detail: from
                     ? `Still on v${from}. Check your host's deployment logs.`
                     : "The new version has not started. Check your host's deployment logs.",
-                data: { kind: "stalled" },
+                data: { kind: "stalled", startedAt: pending.value?.startedAt },
             } as ToastMessageOptions & { data: UpgradeToastData });
         } else if (next === "done") {
             clear();

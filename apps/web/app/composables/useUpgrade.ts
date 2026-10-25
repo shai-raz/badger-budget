@@ -14,6 +14,8 @@ import {
 } from "~/utils/upgradeTracking";
 
 export const UPGRADE_TOAST_GROUP = "upgrade";
+/** sessionStorage key holding the startedAt of the upgrade this tab reloaded for. Per tab, so other tabs do not inherit it. */
+const RELOADED_FOR_KEY = "upgradeReloadedFor";
 
 /** Shared upgrade state for this browser: the pending upgrade, its phase, and the trigger/reload actions. */
 export const useUpgrade = () => {
@@ -24,11 +26,16 @@ export const useUpgrade = () => {
     const { info } = useUpdateNotice();
     // Per-browser memory of the upgrade this browser started. The server stays the source of truth.
     const stored = useLocalStorage<string | null>(PENDING_UPGRADE_KEY, null);
+    // Synchronous write: the marker must be stored before the reload it guards starts.
+    const reloadedFor = useSessionStorage<number | null>(RELOADED_FOR_KEY, null, { flush: "sync" });
     const now = useNow({ interval: 15_000 });
 
     const pending = computed(() => parsePendingUpgrade(stored.value, authStore.user?.id ?? null));
+    const reloadedHere = computed(() => pending.value !== null && reloadedFor.value === pending.value.startedAt);
     const phase = computed(() =>
-        pending.value ? upgradePhase(pending.value, info.value, buildId, now.value.getTime()) : null,
+        pending.value
+            ? upgradePhase(pending.value, info.value, buildId, now.value.getTime(), reloadedHere.value)
+            : null,
     );
     const actionState = computed(() => upgradeActionState(info.value, phase.value));
 
@@ -54,10 +61,10 @@ export const useUpgrade = () => {
         stored.value = null;
     };
 
-    // Stamps the reload first, so the page that loads the new build reads it as done rather than ready again.
+    // Marks this tab before the reload, so the page that loads the new build reads it as done rather than ready again.
     const reloadNow = async () => {
         const current = pending.value;
-        if (current) stored.value = JSON.stringify({ ...current, reloadedAt: Date.now() });
+        if (current) reloadedFor.value = current.startedAt;
         await reloadToNewBuild();
     };
 

@@ -3,6 +3,7 @@ import type { ISystemInfo } from "@badger/types";
 import {
     PENDING_UPGRADE_KEY,
     UPGRADE_POLL_MS,
+    closingStalledToastDismisses,
     UPGRADE_STALL_MS,
     parsePendingUpgrade,
     upgradeActionState,
@@ -53,11 +54,6 @@ describe("parsePendingUpgrade", () => {
         expect(parsePendingUpgrade(JSON.stringify(pending), "user-1")).toEqual(pending);
     });
 
-    it("keeps reloadedAt when present", () => {
-        const reloaded = { ...pending, reloadedAt: 1_500_000 };
-        expect(parsePendingUpgrade(reloaded, "user-1")).toEqual(reloaded);
-    });
-
     it("accepts null target and from versions", () => {
         const unknown = { ...pending, targetVersion: null, fromVersion: null };
         expect(parsePendingUpgrade(unknown, "user-1")).toEqual(unknown);
@@ -80,7 +76,6 @@ describe("parsePendingUpgrade", () => {
         expect(parsePendingUpgrade({ ...pending, startedAt: Number.NaN }, "user-1")).toBeNull();
         expect(parsePendingUpgrade({ ...pending, startedAt: Number.POSITIVE_INFINITY }, "user-1")).toBeNull();
         expect(parsePendingUpgrade({ ...pending, targetVersion: 6 }, "user-1")).toBeNull();
-        expect(parsePendingUpgrade({ ...pending, reloadedAt: "soon" }, "user-1")).toBeNull();
         expect(
             parsePendingUpgrade(
                 { userId: "user-1", fromVersion: null, fromBuildId: "build-a", startedAt: 1 },
@@ -134,36 +129,62 @@ describe("versionReached", () => {
 describe("upgradePhase", () => {
     const buildA = "build-a";
     const buildB = "build-b";
+    const later = pending.startedAt + 60_000;
 
     it("is upgrading while the running version is still old", () => {
-        expect(upgradePhase(pending, runningAt("0.5.0"), buildA, pending.startedAt + 60_000)).toBe("upgrading");
+        expect(upgradePhase(pending, runningAt("0.5.0"), buildA, later, false)).toBe("upgrading");
     });
 
     it("is ready when the target is live but this page still runs the old build", () => {
-        expect(upgradePhase(pending, runningAt("0.6.0"), buildA, pending.startedAt + 60_000)).toBe("ready");
+        expect(upgradePhase(pending, runningAt("0.6.0"), buildA, later, false)).toBe("ready");
     });
 
     it("is done when the page runs a new build", () => {
-        expect(upgradePhase(pending, runningAt("0.6.0"), buildB, pending.startedAt + 60_000)).toBe("done");
+        expect(upgradePhase(pending, runningAt("0.6.0"), buildB, later, false)).toBe("done");
     });
 
-    it("is done when a reload already happened, even on the same build id", () => {
-        const reloaded = { ...pending, reloadedAt: pending.startedAt + 90_000 };
-        expect(upgradePhase(reloaded, runningAt("0.6.0"), buildA, pending.startedAt + 100_000)).toBe("done");
+    it("is done in the tab that reloaded for this upgrade, even on the same build id", () => {
+        expect(upgradePhase(pending, runningAt("0.6.0"), buildA, later, true)).toBe("done");
+    });
+
+    it("stays ready in another tab on the same build id, which did not reload", () => {
+        expect(upgradePhase(pending, runningAt("0.6.0"), buildA, later, false)).toBe("ready");
     });
 
     it("is stalled at exactly the stall threshold, and not one millisecond before", () => {
         const now = pending.startedAt + UPGRADE_STALL_MS;
-        expect(upgradePhase(pending, runningAt("0.5.0"), buildA, now)).toBe("stalled");
-        expect(upgradePhase(pending, runningAt("0.5.0"), buildA, now - 1)).toBe("upgrading");
+        expect(upgradePhase(pending, runningAt("0.5.0"), buildA, now, false)).toBe("stalled");
+        expect(upgradePhase(pending, runningAt("0.5.0"), buildA, now - 1, false)).toBe("upgrading");
     });
 
     it("is upgrading, not stalled, while the info has not loaded yet", () => {
-        expect(upgradePhase(pending, null, buildA, pending.startedAt + 60_000)).toBe("upgrading");
+        expect(upgradePhase(pending, null, buildA, later, false)).toBe("upgrading");
     });
 
-    it("is stalled after the threshold while the info has not loaded yet", () => {
-        expect(upgradePhase(pending, null, buildA, pending.startedAt + UPGRADE_STALL_MS)).toBe("stalled");
+    it("is still upgrading past the threshold while the info has not loaded, so a reloaded finished upgrade never flashes stalled", () => {
+        const now = pending.startedAt + UPGRADE_STALL_MS;
+        expect(upgradePhase(pending, null, buildA, now, true)).toBe("upgrading");
+        expect(upgradePhase(pending, null, buildA, now, false)).toBe("upgrading");
+    });
+});
+
+describe("closingStalledToastDismisses", () => {
+    it("dismisses the upgrade when the stalled toast was raised for the tracked upgrade", () => {
+        expect(closingStalledToastDismisses({ kind: "stalled", startedAt: pending.startedAt }, pending)).toBe(true);
+    });
+
+    it("leaves a newer upgrade alone when the toast belongs to an earlier attempt", () => {
+        const newer = { ...pending, startedAt: pending.startedAt + 3_600_000 };
+        expect(closingStalledToastDismisses({ kind: "stalled", startedAt: pending.startedAt }, newer)).toBe(false);
+    });
+
+    it("ignores ready and info toasts, and toasts without data", () => {
+        expect(closingStalledToastDismisses({ kind: "ready", startedAt: pending.startedAt }, pending)).toBe(false);
+        expect(closingStalledToastDismisses(undefined, pending)).toBe(false);
+    });
+
+    it("does nothing when no upgrade is tracked", () => {
+        expect(closingStalledToastDismisses({ kind: "stalled", startedAt: pending.startedAt }, null)).toBe(false);
     });
 });
 
