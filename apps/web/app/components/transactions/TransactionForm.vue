@@ -115,6 +115,11 @@ const pendingName = computed<string | null>({
 // Opens the deferred category dialog to customise the pending category (saved only with the transaction).
 const customiseOpen = ref(false);
 watch(customiseOpen, (open) => emit("customiseOpenChange", open));
+// The host keeps Escape suspended while its child is open. If this form unmounts with that child still open, the watch
+// never fires again, so release the host here.
+onBeforeUnmount(() => {
+    if (customiseOpen.value) emit("customiseOpenChange", false);
+});
 const dirty = computed(
     () => isEdit.value && (isEditDirty(initialValues, values, constraints) || !!pendingCategory.value),
 );

@@ -38,6 +38,19 @@ function pickSwatch(swatch: string) {
     colorValue.value = swatch;
 }
 
+// Escape in the colour panel closes the panel (PrimeVue, from the preview input). Its hide lands in the DOM flush right
+// after that keydown, which runs before the Escape bubbles back up here. So note whether the panel was open on the way
+// down (capture), and stop the Escape on the way up. Otherwise it reaches the hosting dialog and closes it with the panel.
+const panelOpen = ref(false);
+let escapeWhileOpen = false;
+function noteEscape() {
+    escapeWhileOpen = panelOpen.value;
+}
+function stopEscapeWhileOpen(event: KeyboardEvent) {
+    if (escapeWhileOpen) event.stopPropagation();
+    escapeWhileOpen = false;
+}
+
 defineExpose({
     isValidHexColor: () => /^#[0-9A-Fa-f]{6}$/.test(colorValue.value),
 });
@@ -75,10 +88,14 @@ defineExpose({
         <div
             v-if="showCustom"
             class="flex items-center gap-3"
+            @keydown.esc.capture="noteEscape"
+            @keydown.esc="stopEscapeWhileOpen"
         >
             <ColorPicker
                 v-model="colorValue"
                 format="hex"
+                @show="panelOpen = true"
+                @hide="panelOpen = false"
                 @update:model-value="customRequested = true"
             />
             <InputText
