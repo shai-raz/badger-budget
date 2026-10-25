@@ -1,0 +1,221 @@
+import { describe, expect, it } from "vitest";
+import type { ISystemInfo } from "@badger/types";
+import {
+    PENDING_UPGRADE_KEY,
+    UPGRADE_POLL_MS,
+    UPGRADE_STALL_MS,
+    parsePendingUpgrade,
+    upgradeActionState,
+    upgradeNavLabel,
+    upgradePhase,
+    upgradePollInterval,
+    versionReached,
+    type PendingUpgrade,
+} from "./upgradeTracking";
+
+const pending: PendingUpgrade = {
+    userId: "user-1",
+    targetVersion: "0.6.0",
+    fromVersion: "0.5.0",
+    fromBuildId: "build-a",
+    startedAt: 1_000_000,
+};
+
+const info: ISystemInfo = {
+    version: "0.5.0",
+    commit: null,
+    latest: "0.6.0",
+    updateAvailable: true,
+    updateComparable: true,
+    checkedAt: "2026-10-20T10:00:00Z",
+    updateCheckEnabled: true,
+    upgradeAvailable: true,
+    releaseUrl: "https://github.com/shai-raz/badger-budget/releases/tag/v0.6.0",
+};
+
+const runningAt = (version: string | null): ISystemInfo => ({ ...info, version });
+
+describe("PENDING_UPGRADE_KEY", () => {
+    it("is the localStorage key the tracker uses", () => {
+        expect(PENDING_UPGRADE_KEY).toBe("pendingUpgrade");
+    });
+});
+
+describe("parsePendingUpgrade", () => {
+    it("accepts a well-formed object", () => {
+        expect(parsePendingUpgrade(pending, "user-1")).toEqual(pending);
+    });
+
+    it("accepts a JSON string", () => {
+        expect(parsePendingUpgrade(JSON.stringify(pending), "user-1")).toEqual(pending);
+    });
+
+    it("keeps reloadedAt when present", () => {
+        const reloaded = { ...pending, reloadedAt: 1_500_000 };
+        expect(parsePendingUpgrade(reloaded, "user-1")).toEqual(reloaded);
+    });
+
+    it("accepts null target and from versions", () => {
+        const unknown = { ...pending, targetVersion: null, fromVersion: null };
+        expect(parsePendingUpgrade(unknown, "user-1")).toEqual(unknown);
+    });
+
+    it("returns null for bad JSON", () => {
+        expect(parsePendingUpgrade("{not json", "user-1")).toBeNull();
+    });
+
+    it("returns null for values that are not objects", () => {
+        expect(parsePendingUpgrade(null, "user-1")).toBeNull();
+        expect(parsePendingUpgrade(undefined, "user-1")).toBeNull();
+        expect(parsePendingUpgrade("42", "user-1")).toBeNull();
+        expect(parsePendingUpgrade([pending], "user-1")).toBeNull();
+    });
+
+    it("returns null for missing or mistyped fields", () => {
+        expect(parsePendingUpgrade({ ...pending, fromBuildId: undefined }, "user-1")).toBeNull();
+        expect(parsePendingUpgrade({ ...pending, startedAt: "1000" }, "user-1")).toBeNull();
+        expect(parsePendingUpgrade({ ...pending, startedAt: Number.NaN }, "user-1")).toBeNull();
+        expect(parsePendingUpgrade({ ...pending, startedAt: Number.POSITIVE_INFINITY }, "user-1")).toBeNull();
+        expect(parsePendingUpgrade({ ...pending, targetVersion: 6 }, "user-1")).toBeNull();
+        expect(parsePendingUpgrade({ ...pending, reloadedAt: "soon" }, "user-1")).toBeNull();
+        expect(
+            parsePendingUpgrade(
+                { userId: "user-1", fromVersion: null, fromBuildId: "build-a", startedAt: 1 },
+                "user-1",
+            ),
+        ).toBeNull();
+    });
+
+    it("ignores another user's state in the same browser", () => {
+        expect(parsePendingUpgrade(pending, "user-2")).toBeNull();
+    });
+
+    it("returns null when there is no signed-in user", () => {
+        expect(parsePendingUpgrade(pending, null)).toBeNull();
+    });
+});
+
+describe("versionReached", () => {
+    it("compares base versions so a :latest build still matches its release", () => {
+        expect(versionReached(pending, "0.6.0-2-gabc1234")).toBe(true);
+        expect(versionReached(pending, "0.6.0")).toBe(true);
+    });
+
+    it("is false for an older base version", () => {
+        expect(versionReached(pending, "0.5.9")).toBe(false);
+        expect(versionReached(pending, "0.5.0-3-gabc1234")).toBe(false);
+    });
+
+    it("is true for a newer base version than the target", () => {
+        expect(versionReached(pending, "0.7.0")).toBe(true);
+        expect(versionReached(pending, "1.0.0")).toBe(true);
+    });
+
+    it("treats an unparseable running version as not reached", () => {
+        expect(versionReached(pending, "0.3.0-dev")).toBe(false);
+        expect(versionReached(pending, "dev")).toBe(false);
+    });
+
+    it("is false when the running version is unknown", () => {
+        expect(versionReached(pending, null)).toBe(false);
+        expect(versionReached({ ...pending, targetVersion: null }, null)).toBe(false);
+    });
+
+    it("without a target, is true once the running version differs from the starting one", () => {
+        const noTarget = { ...pending, targetVersion: null };
+        expect(versionReached(noTarget, "0.6.0")).toBe(true);
+        expect(versionReached(noTarget, "0.5.0")).toBe(false);
+    });
+});
+
+describe("upgradePhase", () => {
+    const buildA = "build-a";
+    const buildB = "build-b";
+
+    it("is upgrading while the running version is still old", () => {
+        expect(upgradePhase(pending, runningAt("0.5.0"), buildA, pending.startedAt + 60_000)).toBe("upgrading");
+    });
+
+    it("is ready when the target is live but this page still runs the old build", () => {
+        expect(upgradePhase(pending, runningAt("0.6.0"), buildA, pending.startedAt + 60_000)).toBe("ready");
+    });
+
+    it("is done when the page runs a new build", () => {
+        expect(upgradePhase(pending, runningAt("0.6.0"), buildB, pending.startedAt + 60_000)).toBe("done");
+    });
+
+    it("is done when a reload already happened, even on the same build id", () => {
+        const reloaded = { ...pending, reloadedAt: pending.startedAt + 90_000 };
+        expect(upgradePhase(reloaded, runningAt("0.6.0"), buildA, pending.startedAt + 100_000)).toBe("done");
+    });
+
+    it("is stalled at exactly the stall threshold, and not one millisecond before", () => {
+        const now = pending.startedAt + UPGRADE_STALL_MS;
+        expect(upgradePhase(pending, runningAt("0.5.0"), buildA, now)).toBe("stalled");
+        expect(upgradePhase(pending, runningAt("0.5.0"), buildA, now - 1)).toBe("upgrading");
+    });
+
+    it("is upgrading, not stalled, while the info has not loaded yet", () => {
+        expect(upgradePhase(pending, null, buildA, pending.startedAt + 60_000)).toBe("upgrading");
+    });
+
+    it("is stalled after the threshold while the info has not loaded yet", () => {
+        expect(upgradePhase(pending, null, buildA, pending.startedAt + UPGRADE_STALL_MS)).toBe("stalled");
+    });
+});
+
+describe("upgradeActionState", () => {
+    it("is hidden unless the host has an upgrade webhook", () => {
+        expect(upgradeActionState({ ...info, upgradeAvailable: false }, null)).toBe("hidden");
+        const withoutFlag: Partial<ISystemInfo> = { ...info };
+        delete withoutFlag.upgradeAvailable;
+        expect(upgradeActionState(withoutFlag as ISystemInfo, null)).toBe("hidden");
+    });
+
+    it("is hidden when no update is available", () => {
+        expect(upgradeActionState({ ...info, updateAvailable: false }, null)).toBe("hidden");
+    });
+
+    it("is hidden when the info has not loaded", () => {
+        expect(upgradeActionState(null, null)).toBe("hidden");
+        expect(upgradeActionState(null, "upgrading")).toBe("hidden");
+    });
+
+    it("is disabled while the upgrade is in progress", () => {
+        expect(upgradeActionState(info, "upgrading")).toBe("disabled");
+    });
+
+    it("is enabled when idle or stalled", () => {
+        expect(upgradeActionState(info, null)).toBe("enabled");
+        expect(upgradeActionState(info, "stalled")).toBe("enabled");
+    });
+});
+
+describe("upgradePollInterval", () => {
+    it("polls while upgrading or stalled", () => {
+        expect(upgradePollInterval("upgrading")).toBe(UPGRADE_POLL_MS);
+        expect(upgradePollInterval("stalled")).toBe(UPGRADE_POLL_MS);
+    });
+
+    it("does not poll otherwise", () => {
+        expect(upgradePollInterval("ready")).toBe(false);
+        expect(upgradePollInterval("done")).toBe(false);
+        expect(upgradePollInterval(null)).toBe(false);
+    });
+});
+
+describe("upgradeNavLabel", () => {
+    it("names the target version when known", () => {
+        expect(upgradeNavLabel("upgrading", "0.6.0")).toBe("Upgrading to v0.6.0…");
+        expect(upgradeNavLabel("ready", "0.6.0")).toBe("Reload to v0.6.0");
+    });
+
+    it("falls back to generic wording without a target", () => {
+        expect(upgradeNavLabel("upgrading", null)).toBe("Upgrading…");
+        expect(upgradeNavLabel("ready", null)).toBe("Reload to the new version");
+    });
+
+    it("labels the stalled state", () => {
+        expect(upgradeNavLabel("stalled", "0.6.0")).toBe("Upgrade stalled");
+    });
+});
