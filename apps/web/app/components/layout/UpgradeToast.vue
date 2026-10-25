@@ -12,8 +12,9 @@ interface UpgradeToastData {
     kind: UpgradeToastKind;
 }
 
-// AppBottomBar's rendered height (py-2, the text-xl icon, the text-xs label), about 60px. Below md the toast
-// sits above the bar; the bar is in flow, so this value is the only thing keeping the two apart.
+// AppBottomBar measured about 53px at 320 and 375px; 3.75rem leaves room for a wrapped label on top of the
+// 0.5rem gap. Below md the toast sits above the bar; the bar is in flow, so this value is the only thing keeping
+// the two apart.
 const BOTTOM_BAR_HEIGHT = "3.75rem";
 
 const upgradeToastBreakpoints = {
