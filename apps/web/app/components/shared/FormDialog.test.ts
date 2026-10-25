@@ -14,14 +14,19 @@ describe("FormDialog Escape", () => {
         expect(dialog).toContain(':close-on-escape="isolateEscape ? false : !busy"');
     });
 
-    it("claims Escape on the dialog root so a parent dialog never sees it", () => {
+    it("claims Escape on the mask so a parent dialog never sees it", () => {
         expect(dialog).toMatch(
-            /const dialogPt = computed\(\(\) =>\s*props\.isolateEscape \? \{ root: \{ tabindex: -1, onKeydown: onRootKeydown \} \} : undefined,?\s*\);/,
+            /const dialogPt = computed\(\(\) =>\s*props\.isolateEscape \? \{ mask: \{ tabindex: -1, onKeydown: onMaskKeydown \} \} : undefined,?\s*\);/,
         );
         expect(dialog).toContain(':pt="dialogPt"');
         expect(dialog).toMatch(
-            /function onRootKeydown|const onRootKeydown = \(event: KeyboardEvent\) => \{\s*if \(event\.key !== "Escape"\) return;\s*event\.stopPropagation\(\);\s*event\.preventDefault\(\);/,
+            /const onMaskKeydown = \(event: KeyboardEvent\) => \{\s*if \(event\.key !== "Escape"\) return;\s*event\.stopPropagation\(\);\s*event\.preventDefault\(\);/,
         );
+    });
+
+    it("keeps focus focusable on the mask so a click on the dimmed area does not drop it to body", () => {
+        expect(dialog).toContain("mask: { tabindex: -1, onKeydown: onMaskKeydown }");
+        expect(dialog).not.toContain("root: { tabindex: -1");
     });
 
     it("closes through the same path as the header close, and not while busy", () => {

@@ -53,19 +53,21 @@ const isSaving = computed(() => props.saveLoading ?? props.busy);
 /**
  * PrimeVue's Dialog closes on Escape from a document-level keydown listener with no check for the topmost dialog,
  * so the Escape for a dialog stacked on top would also close the one underneath. With `isolateEscape` the Dialog's
- * own Escape handling is off, and this root handler claims the key: it stops the event before it reaches the
+ * own Escape handling is off, and this mask handler claims the key: it stops the event before it reaches the
  * document, then closes this dialog the same way the header ✕ does (unless a request is in flight).
  */
-const onRootKeydown = (event: KeyboardEvent) => {
+const onMaskKeydown = (event: KeyboardEvent) => {
     if (event.key !== "Escape") return;
     event.stopPropagation();
     event.preventDefault();
     if (!props.busy) emit("update:visible", false);
 };
-// The root is focusable so a click on its non-focusable parts (labels, gaps, the title) keeps focus inside it.
-// Without that, focus drops to <body>, the root never sees the next Escape, and it reaches the dialog underneath.
+// The mask wraps the root and covers the whole viewport, so every click lands on it or inside it. It is focusable
+// so a click on the dimmed area or on the dialog's non-focusable parts (labels, gaps, the title) keeps focus within
+// the mask. Without that, focus drops to <body>, the keydown never reaches the mask, and Escape reaches the dialog
+// underneath. Keydown from inside the root bubbles through the mask, so one handler there covers both.
 const dialogPt = computed(() =>
-    props.isolateEscape ? { root: { tabindex: -1, onKeydown: onRootKeydown } } : undefined,
+    props.isolateEscape ? { mask: { tabindex: -1, onKeydown: onMaskKeydown } } : undefined,
 );
 </script>
 
