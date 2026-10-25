@@ -1,6 +1,19 @@
 {
     "releases": [
         {
+            "version": "0.3.1",
+            "date": "2026-10-25",
+            "items": [
+                {
+                    "type": "fix",
+                    "scope": "deploy",
+                    "breaking": false,
+                    "subject": "always pull the app image in the Coolify compose file",
+                    "pr": 48
+                }
+            ]
+        },
+        {
             "version": "0.3.0",
             "date": "2026-10-25",
             "items": [
