@@ -6,7 +6,9 @@ import {
     UPGRADE_STALL_MS,
     parsePendingUpgrade,
     upgradeActionState,
+    upgradeBadgeVisible,
     updateDialogMode,
+    updateNavItem,
     upgradeNavLabel,
     upgradePhase,
     upgradePollInterval,
@@ -245,5 +247,70 @@ describe("updateDialogMode", () => {
 
     it("never enters the confirm step when no update is available", () => {
         expect(updateDialogMode({ ...info, updateAvailable: false }, null, true)).toBe("normal");
+    });
+});
+
+describe("upgradeBadgeVisible", () => {
+    it("shows for a pending release, or for an upgrade that has not finished", () => {
+        expect(upgradeBadgeVisible(true, null)).toBe(true);
+        expect(upgradeBadgeVisible(false, "upgrading")).toBe(true);
+        expect(upgradeBadgeVisible(false, "ready")).toBe(true);
+        expect(upgradeBadgeVisible(false, "stalled")).toBe(true);
+    });
+
+    it("hides when nothing is pending and the upgrade is done or absent", () => {
+        expect(upgradeBadgeVisible(false, null)).toBe(false);
+        expect(upgradeBadgeVisible(false, "done")).toBe(false);
+    });
+});
+
+describe("updateNavItem", () => {
+    it("is the update item with its idle label and icon when no upgrade is tracked", () => {
+        expect(updateNavItem(true, null, "0.6.0")).toEqual({
+            show: true,
+            label: "Update available",
+            icon: "pi pi-arrow-circle-up",
+            tone: "primary",
+            action: "dialog",
+        });
+    });
+
+    it("is hidden when no release is pending and no upgrade is tracked", () => {
+        expect(updateNavItem(false, null, "0.6.0").show).toBe(false);
+        expect(updateNavItem(false, "done", "0.6.0").show).toBe(false);
+    });
+
+    it("keeps the idle label after an upgrade is done while a release is still pending", () => {
+        expect(updateNavItem(true, "done", "0.6.0")).toMatchObject({ show: true, label: "Update available" });
+    });
+
+    it("shows the upgrading item with a spinner and opens the dialog", () => {
+        expect(updateNavItem(false, "upgrading", "0.6.0")).toEqual({
+            show: true,
+            label: "Upgrading to v0.6.0…",
+            icon: "pi pi-spin pi-spinner",
+            tone: "primary",
+            action: "dialog",
+        });
+    });
+
+    it("shows the ready item, which reloads directly", () => {
+        expect(updateNavItem(false, "ready", "0.6.0")).toEqual({
+            show: true,
+            label: "Reload to v0.6.0",
+            icon: "pi pi-refresh",
+            tone: "primary",
+            action: "reload",
+        });
+    });
+
+    it("shows the stalled item in the warn tone, which opens the dialog", () => {
+        expect(updateNavItem(false, "stalled", null)).toEqual({
+            show: true,
+            label: "Upgrade stalled",
+            icon: "pi pi-exclamation-triangle",
+            tone: "warn",
+            action: "dialog",
+        });
     });
 });

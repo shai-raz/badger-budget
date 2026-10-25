@@ -1,4 +1,5 @@
 import type { ISystemInfo } from "@badger/types";
+import { NAV_ACTIONS } from "./navigation";
 
 /** localStorage key for the upgrade this browser triggered. Per-browser convenience only; the server stays the source of truth. */
 export const PENDING_UPGRADE_KEY = "pendingUpgrade";
@@ -103,7 +104,7 @@ export function upgradePollInterval(phase: UpgradePhase | null): number | false 
 }
 
 /** Navigation item label for the upgrade states. */
-export function upgradeNavLabel(phase: "upgrading" | "ready" | "stalled", targetVersion: string | null): string {
+export function upgradeNavLabel(phase: Exclude<UpgradePhase, "done">, targetVersion: string | null): string {
     switch (phase) {
         case "upgrading":
             return targetVersion ? `Upgrading to v${targetVersion}…` : "Upgrading…";
@@ -125,4 +126,45 @@ export function updateDialogMode(
     if (phase === "upgrading") return "upgrading";
     if (confirming && upgradeActionState(info, phase) === "enabled") return "confirm";
     return "normal";
+}
+
+/** The update badge and nav item show for a pending release, or for any upgrade that has not finished. */
+export function upgradeBadgeVisible(visible: boolean, phase: UpgradePhase | null): boolean {
+    return visible || (phase !== null && phase !== "done");
+}
+
+export interface UpdateNavItem {
+    show: boolean;
+    label: string;
+    icon: string;
+    /** `warn` marks a stalled upgrade; everything else uses the primary colour. */
+    tone: "primary" | "warn";
+    /** `reload` loads the new build straight away; `dialog` opens UpdateDialog. */
+    action: "dialog" | "reload";
+}
+
+/** The sidebar and drawer update item: its visibility, label, icon and what a click does, for every upgrade phase. */
+export function updateNavItem(
+    visible: boolean,
+    phase: UpgradePhase | null,
+    targetVersion: string | null,
+): UpdateNavItem {
+    const show = upgradeBadgeVisible(visible, phase);
+    if (phase === null || phase === "done") {
+        return {
+            show,
+            label: NAV_ACTIONS.update.label,
+            icon: NAV_ACTIONS.update.icon,
+            tone: "primary",
+            action: "dialog",
+        };
+    }
+    const icon = { upgrading: "pi pi-spin pi-spinner", ready: "pi pi-refresh", stalled: "pi pi-exclamation-triangle" };
+    return {
+        show,
+        label: upgradeNavLabel(phase, targetVersion),
+        icon: icon[phase],
+        tone: phase === "stalled" ? "warn" : "primary",
+        action: phase === "ready" ? "reload" : "dialog",
+    };
 }

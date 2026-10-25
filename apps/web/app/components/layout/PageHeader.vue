@@ -2,6 +2,7 @@
 import type { MenuItem } from "primevue/menuitem";
 import { resolveHeaderLeading } from "../../utils/pageHeader";
 import { hamburgerLabel } from "../../utils/updateNotice";
+import { upgradeBadgeVisible } from "../../utils/upgradeTracking";
 
 /**
  * Page header for every app-layout page. It renders into #page-top-bar, full width above the scroller.
@@ -32,8 +33,10 @@ const props = withDefaults(defineProps<Props>(), {
 const router = useRouter();
 const isDesktop = useIsDesktop();
 const { openDrawer } = useNavDrawer();
-// Hamburger badge: a pending release, shown only on the menu leading (top-level pages below md).
+// Hamburger badge: a pending release or an upgrade in flight, shown only on the menu leading (top-level pages below md).
 const { visible: updateVisible } = useUpdateNotice();
+const { phase } = useUpgrade();
+const badgeShown = computed(() => upgradeBadgeVisible(updateVisible.value, phase.value));
 const leading = computed(() => resolveHeaderLeading({ hasParent: !!props.backTo, isDesktop: isDesktop.value }));
 
 const goBack = () => {
@@ -69,14 +72,27 @@ const menu = ref<{ toggle: (event: Event) => void } | null>(null);
                         text
                         rounded
                         severity="secondary"
-                        :aria-label="hamburgerLabel(updateVisible)"
+                        :aria-label="hamburgerLabel(updateVisible, phase)"
                         @click="openDrawer"
                     />
                     <span
-                        v-if="updateVisible"
+                        v-if="badgeShown"
                         aria-hidden="true"
-                        class="pointer-events-none absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-surface-0 dark:ring-surface-900"
-                    />
+                        class="pointer-events-none absolute right-1.5 top-1.5 flex h-2.5 w-2.5 items-center justify-center"
+                    >
+                        <!-- The spinner fills the dot's box, so the header keeps its size while an upgrade runs. -->
+                        <i
+                            v-if="phase === 'upgrading'"
+                            class="pi pi-spin pi-spinner text-[0.625rem] text-primary"
+                        />
+                        <span
+                            v-else
+                            :class="[
+                                'h-2.5 w-2.5 rounded-full ring-2 ring-surface-0 dark:ring-surface-900',
+                                phase === 'stalled' ? 'bg-amber-500' : 'bg-primary',
+                            ]"
+                        />
+                    </span>
                 </span>
 
                 <h1 class="min-w-0 flex-1 truncate text-xl font-semibold">{{ title }}</h1>
