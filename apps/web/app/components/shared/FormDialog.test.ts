@@ -11,7 +11,11 @@ describe("FormDialog Escape", () => {
 
     it("keeps PrimeVue's own Escape close unless isolated", () => {
         expect(dialog).toContain("isolateEscape: false");
-        expect(dialog).toContain(':close-on-escape="isolateEscape ? false : !busy"');
+    });
+
+    it("holds PrimeVue's Escape close off while a stacked dialog is open", () => {
+        expect(dialog).toContain("suspendEscape: false");
+        expect(dialog).toContain(':close-on-escape="isolateEscape || suspendEscape ? false : !busy"');
     });
 
     it("claims Escape on the mask so a parent dialog never sees it", () => {

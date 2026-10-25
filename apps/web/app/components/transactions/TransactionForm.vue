@@ -53,7 +53,12 @@ const props = defineProps<{
     prefill?: TransactionFormPrefill;
 }>();
 
-const emit = defineEmits<{ dirtyChange: [dirty: boolean]; createRule: [] }>();
+const emit = defineEmits<{
+    dirtyChange: [dirty: boolean];
+    createRule: [];
+    /** The deferred category dialog opened or closed, so the hosting dialog stops claiming Escape meanwhile. */
+    customiseOpenChange: [open: boolean];
+}>();
 
 const isEdit = computed(() => !!props.transaction);
 
@@ -109,6 +114,7 @@ const pendingName = computed<string | null>({
 });
 // Opens the deferred category dialog to customise the pending category (saved only with the transaction).
 const customiseOpen = ref(false);
+watch(customiseOpen, (open) => emit("customiseOpenChange", open));
 const dirty = computed(
     () => isEdit.value && (isEditDirty(initialValues, values, constraints) || !!pendingCategory.value),
 );

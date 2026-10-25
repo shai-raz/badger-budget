@@ -28,6 +28,7 @@ const busy = computed(() => isPending.value || creatingCategory.value);
 
 const formRef = ref<InstanceType<typeof TransactionForm> | null>(null);
 const apiError = ref<string | null>(null);
+const customiseOpen = ref(false);
 
 const loading = computed(() => accountsLoading.value || currenciesLoading.value);
 const noAccounts = computed(() => !!accounts.value && accounts.value.length === 0);
@@ -66,6 +67,7 @@ const handleSave = async () => {
         initial-focus="field"
         :cancel-label="ready ? 'Cancel' : 'Close'"
         :show-save="ready"
+        :suspend-escape="customiseOpen"
         @update:visible="emit('update:visible', $event)"
         @hide="apiError = null"
         @save="handleSave"
@@ -104,6 +106,7 @@ const handleSave = async () => {
             :currencies="currencies!"
             :disabled="busy"
             :prefill="prefill"
+            @customise-open-change="customiseOpen = $event"
         />
 
         <Message

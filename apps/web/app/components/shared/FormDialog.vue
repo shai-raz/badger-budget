@@ -27,6 +27,11 @@ interface Props {
     width?: string;
     /** Claims Escape for this dialog alone, for a dialog stacked on another. Off by default. */
     isolateEscape?: boolean;
+    /**
+     * Holds Escape off for this dialog while a dialog stacked on it is open, so the Escape goes to the stacked one
+     * (or nowhere) whatever has focus. Needed when the stacked dialog's overlays are teleported outside its mask.
+     */
+    suspendEscape?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -39,6 +44,7 @@ const props = withDefaults(defineProps<Props>(), {
     saveLoading: undefined,
     width: "36rem",
     isolateEscape: false,
+    suspendEscape: false,
 });
 
 const emit = defineEmits<{
@@ -79,7 +85,7 @@ const dialogPt = computed(() =>
         :draggable="false"
         :style="{ width }"
         :closable="!busy"
-        :close-on-escape="isolateEscape ? false : !busy"
+        :close-on-escape="isolateEscape || suspendEscape ? false : !busy"
         :pt="dialogPt"
         @update:visible="emit('update:visible', $event)"
         @hide="emit('hide')"

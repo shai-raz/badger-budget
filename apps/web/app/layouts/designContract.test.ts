@@ -456,6 +456,21 @@ describe("design contract: avatars", () => {
         expect(source).toContain('@done="(v) => (pendingCategory = v)"');
     });
 
+    it("holds the hosting transaction dialog's Escape while the deferred category dialog is open", () => {
+        const form = readFileSync(`${appDir}/components/transactions/TransactionForm.vue`, "utf8");
+        expect(form).toContain('watch(customiseOpen, (open) => emit("customiseOpenChange", open));');
+        expect(form).toContain("customiseOpenChange: [open: boolean];");
+        for (const rel of [
+            "components/transactions/CreateTransactionDialog.vue",
+            "components/transactions/EditTransactionDialog.vue",
+        ]) {
+            const dialog = readFileSync(`${appDir}/${rel}`, "utf8");
+            expect(dialog).toContain("const customiseOpen = ref(false);");
+            expect(dialog).toContain('@customise-open-change="customiseOpen = $event"');
+            expect(dialog).toContain(':suspend-escape="customiseOpen"');
+        }
+    });
+
     it("builds no pi-<stored icon> class, which blanks the avatar", () => {
         const offenders = vueFiles(appDir).filter((rel) =>
             /pi-\$\{[^}]*\.icon/.test(readFileSync(`${appDir}/${rel}`, "utf8")),

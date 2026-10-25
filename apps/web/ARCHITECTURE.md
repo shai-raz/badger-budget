@@ -104,7 +104,7 @@ Mechanics only. The visual rules (titles, close, focus policy, sentence case) ar
 - Compact dialogs and tiny prompts opt out of fullscreen with `class="dialog-compact"` (plus `max-w-[95vw]`): `DeleteCategoryDialog`, `MarkCardPayoff`, `PasskeysCard` (Add passkey), `SyncButton` (Sync PIN), `UpdateLedgerBalanceDialog`, `UpdateDialog`.
 - Dialog content is a scroll container with no top padding, which clipped a first-child `Message`'s outline; the theme's `dialog` header/content padding moves 0.25rem from the header to the content to fix that. The root pads the `env(safe-area-inset-*)` insets.
 - Focus: PrimeVue's `Dialog` focuses the first `[autofocus]` in its content, else the close button. `SharedFormDialog` (`components/shared/FormDialog.vue`) sets that from its required `initialFocus`: `field` marks the form's first input `autofocus`; `dialog` gives a `tabindex="-1" autofocus` body wrapper, so focus lands on the dialog itself.
-- Form dialogs use `SharedFormDialog`: a `Dialog` with the API-error banner above the body and Cancel/Save in a pinned `#footer`. A dialog stacked on another (e.g. the category form opened from a transaction) sets `isolateEscape`, because PrimeVue closes on any Escape with no topmost check.
+- Form dialogs use `SharedFormDialog`: a `Dialog` with the API-error banner above the body and Cancel/Save in a pinned `#footer`. A dialog stacked on another (e.g. the category form opened from a transaction) sets `isolateEscape`, because PrimeVue closes on any Escape with no topmost check. The dialog underneath sets `suspendEscape` while that child is open, since the child's overlays (icon popover, colour panel) teleport to `<body>` and can leave focus outside its mask.
 
 ## Layout contract (`layouts/app.vue`)
 
