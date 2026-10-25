@@ -554,3 +554,49 @@ describe("design contract: budget create/edit dialog", () => {
         expect(source).toContain("isEdit.value && !!error.value && !budget.value");
     });
 });
+
+describe("savings accounts: counterpart picker and balance dialog", () => {
+    const txForm = readFileSync(`${appDir}/components/transactions/TransactionForm.vue`, "utf8");
+    const balanceDialog = readFileSync(`${appDir}/components/accounts/UpdateLedgerBalanceDialog.vue`, "utf8");
+
+    it("only hides Create Cash when a cash account already exists in the needed currency", () => {
+        expect(txForm).toContain('a.type === "cash" && a.currencyId === neededCurrencyId.value');
+    });
+
+    it("captions each counterpart option with its account type so cash and savings differ", () => {
+        expect(txForm).toContain("accountTypeCaption(slotProps.option.type)");
+        expect(txForm).toContain('tooltip="This account uses its own currency"');
+    });
+
+    it("takes the update-balance copy and prefill from the ledger helpers", () => {
+        expect(balanceDialog).toContain('ledgerBalanceDialogCopy(isLedgerAccountType(type) ? type : "cash")');
+        expect(balanceDialog).toContain("ledgerBalancePrefill(props.account)");
+        expect(balanceDialog).toContain(':header="copy.header"');
+        expect(balanceDialog).toContain("copy.value.successSummary");
+        expect(balanceDialog).toContain("copy.value.errorFallback");
+    });
+});
+
+describe("savings accounts: web wiring", () => {
+    // Savings is a ledger type like cash: form, menu and row/tile Update all key off isLedgerAccountType.
+    const formModal = readFileSync(`${appDir}/components/accounts/AccountsFormModal.vue`, "utf8");
+    const accountsPage = readFileSync(`${appDir}/pages/accounts/index.vue`, "utf8");
+    const tile = readFileSync(`${appDir}/components/dashboard/AccountTile.vue`, "utf8");
+    const row = readFileSync(`${appDir}/components/accounts/AccountRow.vue`, "utf8");
+
+    it("offers Savings in the account form and requires a currency for it", () => {
+        expect(formModal).toContain('{ label: "Savings", value: "savings" }');
+        expect(formModal).toContain("isLedgerAccountType(accountType.value)");
+        expect(formModal).toContain("Cash and savings accounts need a currency");
+    });
+
+    it("blocks deleting a ledger account with linked transfers and offers Update balance for it", () => {
+        expect(accountsPage).toContain("isLedgerAccountType(account.type) && account.hasLinkedTransfers");
+        expect(accountsPage).toContain("...(isLedgerAccountType(account.type)");
+    });
+
+    it("shows the Update action on the tile and row for ledger accounts", () => {
+        expect(tile).toContain('v-if="isLedgerAccountType(account.type) && !manageable"');
+        expect(row).toContain('v-if="isLedgerAccountType(account.type) && !manageable"');
+    });
+});

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { IAccountResponse } from "@badger/types";
+import { isLedgerAccountType } from "@badger/shared-data";
 import { accountCaption, getBalanceDisplay, formatChargeLine } from "~/utils/accountBalance";
 import { formatCurrency } from "~/utils/currency";
 import { formatTimeAgo, isStale } from "~/utils/relativeTime";
@@ -98,7 +99,7 @@ const stale = computed(() =>
                 </template>
 
                 <Button
-                    v-if="display.kind === 'cash_on_hand' && !manageable"
+                    v-if="isLedgerAccountType(account.type) && !manageable"
                     label="Update"
                     icon="pi pi-pencil"
                     size="small"

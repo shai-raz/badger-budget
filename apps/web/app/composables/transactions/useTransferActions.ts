@@ -60,7 +60,7 @@ export function useTransferActions(transaction: Ref<ITransactionResponse | null 
                 onSuccess: () =>
                     showSuccess(
                         current.counterpart
-                            ? "Reverted to a regular transaction; the linked cash entry was removed"
+                            ? `Reverted to a regular transaction; the linked entry on ${current.counterpart.accountName} was removed`
                             : "Reverted to a regular transaction",
                     ),
                 onError: showError,

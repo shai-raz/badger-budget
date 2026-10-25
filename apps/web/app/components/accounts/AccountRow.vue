@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { IAccountResponse } from "@badger/types";
+import { isLedgerAccountType } from "@badger/shared-data";
 import { accountRowSubtitle, getBalanceDisplay } from "~/utils/accountBalance";
 import { formatCurrency } from "~/utils/currency";
 import { formatTimeAgoCompact, isStale } from "~/utils/relativeTime";
@@ -8,7 +9,7 @@ import { accountFallbackIcon } from "~/utils/avatarIcons";
 /**
  * One account row, mobile. Overview and the Accounts page share it. An account with no balance
  * still renders: its caption stands in for the balance. `manageable` shows the ⋮ button; the parent
- * owns the menu it opens (and then the cash Update action lives in that menu, not on the row).
+ * owns the menu it opens (and then the Update balance action lives in that menu, not on the row).
  */
 const props = withDefaults(
     defineProps<{
@@ -78,7 +79,7 @@ const handleMenu = (event: Event) => emit("menuToggle", { account: props.account
                     {{ formatTimeAgoCompact(account.balanceUpdatedAt, now) }}
                 </p>
                 <Button
-                    v-if="display.kind === 'cash_on_hand' && !manageable"
+                    v-if="isLedgerAccountType(account.type) && !manageable"
                     label="Update"
                     icon="pi pi-pencil"
                     size="small"

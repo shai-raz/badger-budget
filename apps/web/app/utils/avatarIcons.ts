@@ -27,7 +27,7 @@ import {
     Utensils,
     Wallet,
 } from "@lucide/vue";
-import { isAvatarIconName, type AvatarIconName } from "@badger/shared-data";
+import { isAvatarIconName, type AccountType, type AvatarIconName } from "@badger/shared-data";
 
 /**
  * Lucide component for each stored avatar icon name. Named imports only, so the
@@ -71,17 +71,18 @@ export function resolveAvatarIcon(name: string | null | undefined, fallback: Ava
     return AVATAR_ICONS[isAvatarIconName(name) ? name : fallback];
 }
 
+const ACCOUNT_FALLBACK_ICONS: Record<AccountType, AvatarIconName> = {
+    bank: "landmark",
+    credit_card: "credit-card",
+    cash: "wallet",
+    savings: "piggy-bank",
+    unknown: "landmark",
+};
+
 /**
  * Default icon for an account with no stored icon, keyed by account type.
- * Cash accounts get a wallet, credit cards a card, and everything else a bank.
+ * Cash accounts get a wallet, savings a piggy bank, credit cards a card, and bank or unknown accounts a bank.
  */
-export function accountFallbackIcon(type: string | null | undefined): AvatarIconName {
-    switch (type) {
-        case "credit_card":
-            return "credit-card";
-        case "cash":
-            return "wallet";
-        default:
-            return "landmark";
-    }
+export function accountFallbackIcon(type: AccountType): AvatarIconName {
+    return ACCOUNT_FALLBACK_ICONS[type];
 }
