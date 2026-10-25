@@ -12,6 +12,8 @@ export interface ISystemInfo {
     /** ISO time of the last successful check. */
     checkedAt: string | null;
     updateCheckEnabled: boolean;
+    /** True only when DEPLOY_WEBHOOK_URL is configured and the caller is the admin. */
+    upgradeAvailable: boolean;
     /** html_url of the latest release. */
     releaseUrl: string | null;
 }

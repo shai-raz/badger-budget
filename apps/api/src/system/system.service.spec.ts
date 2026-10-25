@@ -1,9 +1,14 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
+import { UserRole } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { ChangelogService } from "./changelog.service";
 import { SystemService } from "./system.service";
 import { UpdateCheckService } from "./update-check.service";
+import { UpgradeService } from "./upgrade.service";
+
+const ADMIN = { role: UserRole.ADMIN };
+const MEMBER = { role: UserRole.USER };
 
 describe("SystemService", () => {
     let service: SystemService;
@@ -11,6 +16,7 @@ describe("SystemService", () => {
     let updateCheck: { getLatest: jest.Mock; forceCheck: jest.Mock; isEnabled: jest.Mock; getRepo: jest.Mock };
     let changelog: { getReleases: jest.Mock };
     let prisma: { user: { findUnique: jest.Mock; update: jest.Mock } };
+    let upgrade: { isConfigured: jest.Mock };
 
     const release = {
         latest: { version: "0.4.0", url: "https://example.test/releases/v0.4.0" },
@@ -25,6 +31,7 @@ describe("SystemService", () => {
                 { provide: UpdateCheckService, useValue: updateCheck },
                 { provide: ChangelogService, useValue: changelog },
                 { provide: PrismaService, useValue: prisma },
+                { provide: UpgradeService, useValue: upgrade },
             ],
         }).compile();
         return module.get(SystemService);
@@ -32,6 +39,7 @@ describe("SystemService", () => {
 
     beforeEach(async () => {
         env = {};
+        upgrade = { isConfigured: jest.fn().mockReturnValue(false) };
         updateCheck = {
             getLatest: jest.fn().mockResolvedValue(release),
             forceCheck: jest.fn().mockResolvedValue(release),
@@ -62,7 +70,7 @@ describe("SystemService", () => {
         env.APP_VERSION = "0.3.0";
         service = await build();
 
-        const info = await service.getInfo();
+        const info = await service.getInfo(ADMIN);
 
         expect(info).toEqual({
             version: "0.3.0",
@@ -72,6 +80,7 @@ describe("SystemService", () => {
             updateComparable: true,
             checkedAt: "2026-10-23T10:00:00.000Z",
             updateCheckEnabled: true,
+            upgradeAvailable: false,
             releaseUrl: "https://example.test/releases/v0.4.0",
         });
     });
@@ -81,11 +90,11 @@ describe("SystemService", () => {
         env.GIT_SHA = "9e42c5d7fa0123456789abcdef0123456789abcd";
         service = await build();
 
-        expect((await service.getInfo()).commit).toBe("9e42c5d7fa0123456789abcdef0123456789abcd");
+        expect((await service.getInfo(ADMIN)).commit).toBe("9e42c5d7fa0123456789abcdef0123456789abcd");
     });
 
     it("never reports an update for a dev build", async () => {
-        const info = await service.getInfo();
+        const info = await service.getInfo(ADMIN);
 
         expect(info.version).toMatch(/-dev$/);
         expect(info.updateAvailable).toBe(false);
@@ -98,7 +107,7 @@ describe("SystemService", () => {
         env.APP_VERSION = "0.3.0";
         service = await build();
 
-        const info = await service.getInfo();
+        const info = await service.getInfo(ADMIN);
 
         expect(info).toEqual(
             expect.objectContaining({
@@ -112,11 +121,11 @@ describe("SystemService", () => {
     });
 
     it("reads the cache on getInfo and forces a check on checkForUpdates", async () => {
-        await service.getInfo();
+        await service.getInfo(ADMIN);
         expect(updateCheck.getLatest).toHaveBeenCalledTimes(1);
         expect(updateCheck.forceCheck).not.toHaveBeenCalled();
 
-        await service.checkForUpdates();
+        await service.checkForUpdates(ADMIN);
         expect(updateCheck.forceCheck).toHaveBeenCalledTimes(1);
     });
 
@@ -126,6 +135,47 @@ describe("SystemService", () => {
 
         expect(service.getRunningVersion()).toEqual({ version: "0.3.0", commit: null });
         expect(service.getRepo()).toBe("shai-raz/badger-budget");
+    });
+
+    describe("upgradeAvailable", () => {
+        it("is true for the admin when the deploy webhook is configured", async () => {
+            upgrade.isConfigured.mockReturnValue(true);
+            service = await build();
+
+            expect((await service.getInfo(ADMIN)).upgradeAvailable).toBe(true);
+        });
+
+        it("is false for a non-admin even when the webhook is configured", async () => {
+            upgrade.isConfigured.mockReturnValue(true);
+            service = await build();
+
+            expect((await service.getInfo(MEMBER)).upgradeAvailable).toBe(false);
+        });
+
+        it("is false for the admin when the webhook is not configured", async () => {
+            expect((await service.getInfo(ADMIN)).upgradeAvailable).toBe(false);
+        });
+
+        it("applies the same rule on checkForUpdates", async () => {
+            upgrade.isConfigured.mockReturnValue(true);
+            service = await build();
+
+            expect((await service.checkForUpdates(ADMIN)).upgradeAvailable).toBe(true);
+            expect((await service.checkForUpdates(MEMBER)).upgradeAvailable).toBe(false);
+        });
+
+        it("never exposes the webhook URL or token in the info payload", async () => {
+            env.DEPLOY_WEBHOOK_URL = "https://deploy.example.test/hooks/secret-path";
+            env.DEPLOY_WEBHOOK_TOKEN = "tok-very-secret-value";
+            upgrade.isConfigured.mockReturnValue(true);
+            service = await build();
+
+            const json = JSON.stringify(await service.getInfo(ADMIN));
+
+            expect(json).not.toContain("deploy.example.test");
+            expect(json).not.toContain("secret-path");
+            expect(json).not.toContain("tok-very-secret-value");
+        });
     });
 
     describe("changelog", () => {
