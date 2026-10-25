@@ -120,7 +120,7 @@ const SELECTED_CLASS = "ring-2 ring-primary";
             :id="triggerId"
             ref="triggerEl"
             type="button"
-            class="relative shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            class="group relative shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary"
             :aria-label="ariaLabel"
             aria-haspopup="dialog"
             :aria-expanded="open"
@@ -133,7 +133,7 @@ const SELECTED_CLASS = "ring-2 ring-primary";
                 :fallback="fallback"
             />
             <span
-                class="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-surface-200 bg-surface-0 text-[10px] text-muted-color dark:border-surface-700 dark:bg-surface-900"
+                class="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-surface-100 text-xs text-muted-color ring-2 ring-surface-0 transition-colors group-hover:text-color group-focus-visible:text-color dark:bg-surface-700 dark:ring-surface-900"
                 aria-hidden="true"
             >
                 <i class="pi pi-pencil"></i>

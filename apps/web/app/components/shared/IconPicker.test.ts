@@ -19,6 +19,18 @@ describe("IconPicker trigger", () => {
         expect(picker).toContain('size="lg"');
         expect(picker).toContain("pi pi-pencil");
     });
+
+    it("gives the pencil badge room and a dialog-coloured cut-out ring", () => {
+        expect(picker).toContain("h-6 w-6");
+        expect(picker).toContain("-bottom-1 -right-1");
+        expect(picker).toContain("ring-2 ring-surface-0");
+        expect(picker).toContain("dark:ring-surface-900");
+        expect(picker).toContain("group-hover:text-color");
+        expect(picker).toContain("group-focus-visible:text-color");
+        expect(picker).toMatch(/class="group relative shrink-0 rounded-full[^"]*"/);
+        expect(picker).not.toContain("border-surface-200");
+        expect(picker).not.toContain("text-[10px]");
+    });
 });
 
 describe("IconPicker popover", () => {
