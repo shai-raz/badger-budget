@@ -6,6 +6,7 @@ import {
     UPGRADE_STALL_MS,
     parsePendingUpgrade,
     upgradeActionState,
+    updateDialogMode,
     upgradeNavLabel,
     upgradePhase,
     upgradePollInterval,
@@ -217,5 +218,32 @@ describe("upgradeNavLabel", () => {
 
     it("labels the stalled state", () => {
         expect(upgradeNavLabel("stalled", "0.6.0")).toBe("Upgrade stalled");
+    });
+});
+
+describe("updateDialogMode", () => {
+    it("shows the normal body when idle", () => {
+        expect(updateDialogMode(info, null, false)).toBe("normal");
+    });
+
+    it("shows the confirm step after Upgrade now, while the action is enabled", () => {
+        expect(updateDialogMode(info, null, true)).toBe("confirm");
+        expect(updateDialogMode(info, "stalled", true)).toBe("confirm");
+    });
+
+    it("shows the upgrading body while the upgrade runs, even with the confirm flag set", () => {
+        expect(updateDialogMode(info, "upgrading", false)).toBe("upgrading");
+        expect(updateDialogMode(info, "upgrading", true)).toBe("upgrading");
+    });
+
+    it("never enters the confirm step without an upgrade webhook", () => {
+        const noWebhook = { ...info, upgradeAvailable: false };
+        expect(upgradeActionState(noWebhook, null)).toBe("hidden");
+        expect(updateDialogMode(noWebhook, null, true)).toBe("normal");
+        expect(updateDialogMode(null, null, true)).toBe("normal");
+    });
+
+    it("never enters the confirm step when no update is available", () => {
+        expect(updateDialogMode({ ...info, updateAvailable: false }, null, true)).toBe("normal");
     });
 });

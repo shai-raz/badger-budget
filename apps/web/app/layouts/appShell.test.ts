@@ -207,8 +207,13 @@ describe("app shell viewport contract", () => {
 
     // After a manual check finds nothing newer, the header and footer stop offering an update.
     it("retitles UpdateDialog and drops Dismiss once the check is up to date", () => {
-        expect(updateDialog).toContain("upToDate ? 'No update available' : 'Update available'");
-        expect(updateDialog).toMatch(/v-if="!upToDate"\s+label="Dismiss for this version"/);
+        expect(updateDialog).toContain('return "No update available"');
+        expect(updateDialog).toMatch(/v-if="mode === 'normal' && !upToDate"\s+label="Dismiss for this version"/);
+    });
+
+    // Upgrade exists only where the action is not hidden: the confirm footer and the normal footer each gate it.
+    it("gates every Upgrade button in UpdateDialog on the action state", () => {
+        expect(updateDialog.match(/v-if="actionState !== 'hidden'"/g)).toHaveLength(2);
     });
 
     it("badges the hamburger with a decorative dot only while the update notice is visible", () => {

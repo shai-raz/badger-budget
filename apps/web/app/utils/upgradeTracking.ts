@@ -113,3 +113,16 @@ export function upgradeNavLabel(phase: "upgrading" | "ready" | "stalled", target
             return "Upgrade stalled";
     }
 }
+
+export type UpdateDialogMode = "normal" | "confirm" | "upgrading";
+
+/** What the update dialog body shows. The confirm step is reachable only while the Upgrade action is enabled. */
+export function updateDialogMode(
+    info: ISystemInfo | null,
+    phase: UpgradePhase | null,
+    confirming: boolean,
+): UpdateDialogMode {
+    if (phase === "upgrading") return "upgrading";
+    if (confirming && upgradeActionState(info, phase) === "enabled") return "confirm";
+    return "normal";
+}

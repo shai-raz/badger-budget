@@ -30,6 +30,7 @@ const ICONS: Record<string, string> = {
     success: "pi pi-check",
     info: "pi pi-info-circle",
     warn: "pi pi-exclamation-triangle",
+    error: "pi pi-times-circle",
 };
 
 const kindOf = (message: ToastMessageOptions) =>
