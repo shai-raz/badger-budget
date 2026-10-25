@@ -372,6 +372,7 @@ export class AuthService {
                 email: true,
                 firstName: true,
                 lastName: true,
+                role: true,
             },
         });
 
@@ -383,6 +384,7 @@ export class AuthService {
                 email: user!.email,
                 firstName: user!.firstName,
                 lastName: user!.lastName,
+                role: user!.role,
             },
         };
     }

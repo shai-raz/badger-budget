@@ -69,6 +69,7 @@ describe("AuthService", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
+        role: UserRole.USER,
     };
 
     beforeEach(async () => {
@@ -319,6 +320,25 @@ describe("AuthService", () => {
             expect(result).toHaveProperty("accessToken");
             expect(result).toHaveProperty("refreshToken");
             expect(result).toHaveProperty("user");
+            expect(result.user).toEqual({
+                id: mockUser.id,
+                email: mockUser.email,
+                firstName: mockUser.firstName,
+                lastName: mockUser.lastName,
+                role: UserRole.USER,
+            });
+        });
+
+        it("returns the stored role of an admin on login", async () => {
+            const adminUser = { ...mockUser, role: UserRole.ADMIN };
+            mockPrismaService.user.findUnique.mockResolvedValueOnce(adminUser).mockResolvedValueOnce(adminUser);
+            (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+            mockJwtService.sign.mockReturnValueOnce("access-token").mockReturnValueOnce("refresh-token");
+            mockPrismaService.refreshToken.create.mockResolvedValue({});
+
+            const result = await service.login({ email: mockUser.email, password: "password123" });
+
+            expect(result.user.role).toBe(UserRole.ADMIN);
         });
 
         it("should throw UnauthorizedException if user not found", async () => {

@@ -105,7 +105,7 @@ Deploy from the root `Dockerfile` or the published image, with port `8080`, a pe
 
 ## Registration
 
-Registration is open until the first non-demo account exists. After that, `POST /auth/register` returns 403 unless `ALLOW_REGISTRATION=true`. The demo account does not count toward this.
+Registration is open until the first non-demo account exists. After that, `POST /auth/register` returns 403 unless `ALLOW_REGISTRATION=true`. The demo account does not count toward this. The first registered user is the instance admin.
 
 To let more people sign up, set `ALLOW_REGISTRATION=true` in `.env` and run `docker compose up -d`. Set it back to empty to close registration again.
 
