@@ -107,6 +107,8 @@ const pendingName = computed<string | null>({
             : null;
     },
 });
+// Opens the deferred category dialog to customise the pending category (saved only with the transaction).
+const customiseOpen = ref(false);
 const dirty = computed(
     () => isEdit.value && (isEditDirty(initialValues, values, constraints) || !!pendingCategory.value),
 );
@@ -584,15 +586,37 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
                     @click="emit('createRule')"
                 />
             </div>
-            <CategoriesCategorySelect
-                v-model="values.categoryId"
-                v-model:pending-name="pendingName"
-                creatable
-                :pending-color="pendingCategory?.color"
-                input-id="tx-category"
-                :keep-id="initialValues.categoryId ?? undefined"
-                show-clear
-                :disabled="disabled || isLocked('categoryId')"
+            <div class="flex items-center gap-2">
+                <CategoriesCategorySelect
+                    v-model="values.categoryId"
+                    v-model:pending-name="pendingName"
+                    creatable
+                    :pending-color="pendingCategory?.color"
+                    :pending-icon="pendingCategory?.icon"
+                    input-id="tx-category"
+                    :keep-id="initialValues.categoryId ?? undefined"
+                    show-clear
+                    class="min-w-0 flex-1"
+                    :disabled="disabled || isLocked('categoryId')"
+                />
+                <Button
+                    v-if="pendingCategory"
+                    v-tooltip.top="'Customise new category'"
+                    icon="pi pi-pencil"
+                    text
+                    rounded
+                    severity="secondary"
+                    type="button"
+                    aria-label="Customise new category"
+                    :disabled="disabled"
+                    @click="customiseOpen = true"
+                />
+            </div>
+            <CategoriesFormModal
+                v-model:visible="customiseOpen"
+                deferred
+                :pending="pendingCategory"
+                @done="(v) => (pendingCategory = v)"
             />
         </div>
 

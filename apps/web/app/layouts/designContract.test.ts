@@ -424,6 +424,23 @@ describe("design contract: avatars", () => {
         expect(readFileSync(`${appDir}/${rel}`, "utf8")).toContain("<SharedEntityAvatar");
     });
 
+    it("renders the category select's pending, selected and option rows through SharedEntityAvatar", () => {
+        const source = readFileSync(`${appDir}/components/categories/CategorySelect.vue`, "utf8");
+        expect(source.split("<SharedEntityAvatar").length - 1).toBe(3);
+        expect(source).not.toContain("w-4 h-4 rounded-full");
+        expect(source).toContain(':fallback="DEFAULT_CATEGORY_AVATAR_ICON"');
+    });
+
+    it("customises a pending transaction category through the pencil and the deferred category dialog", () => {
+        const source = readFileSync(`${appDir}/components/transactions/TransactionForm.vue`, "utf8");
+        expect(source).toContain(':pending-icon="pendingCategory?.icon"');
+        expect(source).toContain('aria-label="Customise new category"');
+        expect(source).toContain("<CategoriesFormModal");
+        expect(source).toContain("deferred");
+        expect(source).toContain(':pending="pendingCategory"');
+        expect(source).toContain('@done="(v) => (pendingCategory = v)"');
+    });
+
     it("builds no pi-<stored icon> class, which blanks the avatar", () => {
         const offenders = vueFiles(appDir).filter((rel) =>
             /pi-\$\{[^}]*\.icon/.test(readFileSync(`${appDir}/${rel}`, "utf8")),

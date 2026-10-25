@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Category } from "@badger/types";
+import { DEFAULT_CATEGORY_AVATAR_ICON, type AvatarIconName } from "@badger/shared-data";
 
 interface Props {
     /** Hide this category from the options (e.g. the one being deleted). */
@@ -10,8 +11,10 @@ interface Props {
     placeholder?: string;
     /** Offer a synthetic "+ Create '<filter text>'" option; picking it sets `pendingName`. */
     creatable?: boolean;
-    /** Swatch colour for the pending category in the value slot. */
+    /** Avatar colour for the pending category in the value slot. */
     pendingColor?: string;
+    /** Avatar icon for the pending category in the value slot. */
+    pendingIcon?: AvatarIconName;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -20,6 +23,7 @@ const props = withDefaults(defineProps<Props>(), {
     keepId: undefined,
     creatable: false,
     pendingColor: undefined,
+    pendingIcon: undefined,
 });
 
 const modelValue = defineModel<string | null>();
@@ -96,10 +100,12 @@ const optionPt = {
                 v-if="pendingName"
                 class="flex items-center gap-2"
             >
-                <div
-                    class="w-4 h-4 rounded-full bg-surface-300 dark:bg-surface-600"
-                    :style="pendingColor ? { backgroundColor: pendingColor } : undefined"
-                ></div>
+                <SharedEntityAvatar
+                    size="xs"
+                    :icon="pendingIcon"
+                    :color="pendingColor"
+                    :fallback="DEFAULT_CATEGORY_AVATAR_ICON"
+                />
                 <span>{{ pendingName }}</span>
                 <Tag
                     value="New"
@@ -111,10 +117,12 @@ const optionPt = {
                 v-else-if="slotProps.value && selectedCategory"
                 class="flex items-center gap-2"
             >
-                <div
-                    class="w-4 h-4 rounded-full"
-                    :style="{ backgroundColor: selectedCategory.color }"
-                ></div>
+                <SharedEntityAvatar
+                    size="xs"
+                    :icon="selectedCategory.icon"
+                    :color="selectedCategory.color"
+                    :fallback="DEFAULT_CATEGORY_AVATAR_ICON"
+                />
                 <span>{{ selectedCategory.name }}</span>
             </div>
             <span v-else>{{ slotProps.placeholder }}</span>
@@ -134,10 +142,12 @@ const optionPt = {
                 v-else
                 class="flex items-center gap-2"
             >
-                <div
-                    class="w-4 h-4 rounded-full"
-                    :style="{ backgroundColor: slotProps.option.color }"
-                ></div>
+                <SharedEntityAvatar
+                    size="xs"
+                    :icon="slotProps.option.icon"
+                    :color="slotProps.option.color"
+                    :fallback="DEFAULT_CATEGORY_AVATAR_ICON"
+                />
                 <span>{{ slotProps.option.name }}</span>
             </div>
         </template>
