@@ -28,6 +28,8 @@ Jest also transforms through `@swc/jest` (inline config in `apps/api/package.jso
 
 ## Bank sync
 
+`POST /bank-sync/sync` syncs all active connections; `POST /bank-sync/connections/:id/sync` syncs one owned, active connection. Both require the sync PIN, return `{ jobId }`, and share the background pipeline and per-user active-job guard. Paused connections must be resumed first. There are no automatic job retries.
+
 The `bank-sync` module automates transaction import from Israeli banks via `israeli-bank-scrapers` + `puppeteer-extra` (with stealth plugin). Key pieces:
 
 - `crypto` module encrypts stored scraper credentials (`credential-crypto.service.ts`), keyed off `CREDENTIAL_ENCRYPTION_PEPPER`.

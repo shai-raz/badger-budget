@@ -613,6 +613,14 @@ export class ApiClient {
         return response.data;
     }
 
+    async triggerConnectionSync(connectionId: string, pin: string, defaultCurrencyCode?: string) {
+        const response = await this.client.post<{ jobId: string }>(`/bank-sync/connections/${connectionId}/sync`, {
+            pin,
+            defaultCurrencyCode,
+        });
+        return response.data;
+    }
+
     async getSyncJob(jobId: string) {
         const response = await this.client.get<ISyncJob>(`/bank-sync/sync/jobs/${jobId}`);
         return response.data;

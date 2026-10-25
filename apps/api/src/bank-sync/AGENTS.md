@@ -2,6 +2,7 @@
 
 Automates transaction import from Israeli banks via `israeli-bank-scrapers` + `puppeteer-extra` (stealth plugin). See the root `apps/api/ARCHITECTURE.md` for the high-level picture; this file is implementation-level notes.
 
+- Full and single-connection sync use the same `startSyncJob` / `runSyncJob` pipeline. Targeted sync accepts only an owned, active, non-deleted connection; either entry point returns 409 while a user job is pending/running. Each run creates fresh job rows.
 - Scraper credentials are never stored in plaintext — they're encrypted with a user-chosen sync **PIN** (separate from their login password) via `crypto/AGENTS.md`. If a user hasn't set a PIN yet (`getSyncPinStatus`), connections can't be created.
 - `ScraperConnection` rows hold the encrypted blob; `UserSyncSecret` holds the PIN verifier. Losing/rotating the PIN (`setPinOrChange`) runs in a transaction, re-encrypts the verifier, and deletes all the user's `SyncPasskey` rows when a secret already existed, but does **not** re-encrypt existing connection credentials — check how PIN rotation interacts with already-stored credentials before touching that flow.
 - `SyncPasskey` rows store only a browser-side PRF-wrapped PIN plus a per-credential `prfSalt`; there is no server-side WebAuthn. Registration is gated by `verifyPin`, capped at `MAX_PASSKEYS` (`@badger/shared-data`) per user, and a duplicate `credentialId` returns 409.

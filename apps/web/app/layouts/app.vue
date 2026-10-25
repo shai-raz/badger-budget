@@ -1,13 +1,16 @@
 <script setup lang="ts">
+import { provideBankSyncFlow } from "~/composables/bankSync/useBankSyncFlow";
 import AppBottomBar from "~/components/layout/AppBottomBar.vue";
 import AppSidebar from "~/components/layout/AppSidebar.vue";
 import NavDrawer from "~/components/layout/NavDrawer.vue";
 import BudgetFormDialog from "~/components/budgets/BudgetFormDialog.vue";
+import BankSyncSyncFlowHost from "~/components/bankSync/SyncFlowHost.vue";
 import CashFollowupToast from "~/components/transactions/CashFollowupToast.vue";
 
 // `definePageMeta({ fullBleed: true })` opts a page out of the scroller's
 // mobile padding so its sections can span the full screen width (see below).
 const route = useRoute();
+provideBankSyncFlow();
 
 // Below md, the toast spans the screen with 1rem gutters instead of its fixed
 // 25rem top-right box. PrimeVue turns this into a `max-width` media query.
@@ -66,6 +69,7 @@ useHead({ bodyAttrs: { class: "app-layout-body" } });
         <AppBottomBar class="md:hidden" />
         <NavDrawer />
         <BudgetFormDialog />
+        <BankSyncSyncFlowHost />
     </div>
 </template>
 

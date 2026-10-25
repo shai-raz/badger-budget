@@ -42,6 +42,7 @@ const SYNC_JOB_INCLUDE = {
 @Injectable()
 export class BankSyncService {
     private readonly logger = new Logger(BankSyncService.name);
+    private readonly startingSyncs = new Set<string>();
 
     constructor(
         private readonly prisma: PrismaService,
@@ -267,32 +268,57 @@ export class BankSyncService {
     }
 
     async triggerSync(userId: string, pin: string, defaultCurrencyCode?: string): Promise<{ jobId: string }> {
-        // 1. Verify PIN
+        // Verify PIN
         await this.verifyUserPin(userId, pin);
 
-        // 2. Block concurrent syncs
-        const activeJob = await this.prisma.syncJob.findFirst({
-            where: { userId, status: { in: ["pending", "running"] } },
-        });
-        if (activeJob) throw new ConflictException("A sync is already in progress");
-
-        // 3. Get active connections
+        // Get active connections
         const connections = await this.prisma.scraperConnection.findMany({
             where: { userId, isActive: true, deletedAt: null },
         });
         if (connections.length === 0) throw new BadRequestException("No active scraper connections");
 
-        // 4. Create SyncJob
-        const job = await this.prisma.syncJob.create({
-            data: { userId, status: "pending" },
+        return this.startSyncJob(userId, connections, pin, defaultCurrencyCode);
+    }
+
+    async triggerConnectionSync(
+        userId: string,
+        connectionId: string,
+        pin: string,
+        defaultCurrencyCode?: string,
+    ): Promise<{ jobId: string }> {
+        await this.verifyUserPin(userId, pin);
+        const connection = await this.prisma.scraperConnection.findFirst({
+            where: { id: connectionId, userId, deletedAt: null },
         });
+        if (!connection) throw new NotFoundException("Scraper connection not found");
+        if (!connection.isActive) throw new BadRequestException("Resume this connection before syncing");
+        return this.startSyncJob(userId, [connection], pin, defaultCurrencyCode);
+    }
 
-        // 5. Run in background (don't await)
-        this.runSyncJob(job.id, userId, connections, pin, defaultCurrencyCode).catch((err) =>
-            this.logger.error(`Sync job ${job.id} failed`, err),
-        );
-
-        return { jobId: job.id };
+    private async startSyncJob(
+        userId: string,
+        connections: ScraperConnection[],
+        pin: string,
+        defaultCurrencyCode?: string,
+    ): Promise<{ jobId: string }> {
+        // Reserve before the first await so simultaneous entry points cannot both create a job.
+        if (this.startingSyncs.has(userId)) throw new ConflictException("A sync is already in progress");
+        this.startingSyncs.add(userId);
+        try {
+            const activeJob = await this.prisma.syncJob.findFirst({
+                where: { userId, status: { in: ["pending", "running"] } },
+            });
+            if (activeJob) throw new ConflictException("A sync is already in progress");
+            const job = await this.prisma.syncJob.create({
+                data: { userId, status: "pending" },
+            });
+            this.runSyncJob(job.id, userId, connections, pin, defaultCurrencyCode).catch((err) =>
+                this.logger.error(`Sync job ${job.id} failed`, err),
+            );
+            return { jobId: job.id };
+        } finally {
+            this.startingSyncs.delete(userId);
+        }
     }
 
     private async runSyncJob(

@@ -13,7 +13,7 @@ const lastSyncedAt = computed(() => latestSyncedAt(connections.value));
 </script>
 
 <template>
-    <!-- Mount one SyncButton only: it owns a Toast and the PIN Dialog. -->
+    <!-- Responsive entry point; sync state and dialogs live in the app layout. -->
     <div
         v-if="isDesktop"
         class="flex items-center gap-3"

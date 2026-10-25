@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useBankSyncFlow } from "~/composables/bankSync/useBankSyncFlow";
 import type { IScraperConnectionResponse } from "@badger/types";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
@@ -10,6 +11,7 @@ definePageMeta({
 });
 
 const toast = useToast();
+const { busy: syncBusy, requestSync } = useBankSyncFlow();
 const confirm = useConfirm();
 
 const {
@@ -101,6 +103,12 @@ const menuItems = computed(() => {
     const connection = selectedConnection.value;
     if (!connection) return [];
     return [
+        {
+            label: "Sync",
+            icon: "pi pi-sync",
+            disabled: !connection.isActive || syncBusy.value,
+            command: () => requestSync({ connectionId: connection.id }),
+        },
         {
             label: connection.isActive ? "Pause" : "Resume",
             icon: connection.isActive ? "pi pi-pause" : "pi pi-play",
