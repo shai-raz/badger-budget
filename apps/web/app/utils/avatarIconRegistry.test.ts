@@ -106,6 +106,19 @@ describe("suggestAvatarIcon", () => {
         ["וביטוח", "shield"],
         ["סופרמרקט", "shopping-cart"],
         ["מזון", "shopping-cart"],
+        // Multi-word Hebrew compounds beat the single house keyword בית.
+        ["בית ספר", "school"],
+        ["בית מרקחת", "pill"],
+        ["בית קפה", "coffee"],
+        // Whole-word keyword beats the 4-char prefix of "work".
+        ["Workout", "dumbbell"],
+        // Common budget category names.
+        ["Utilities", "zap"],
+        ["Eating out", "utensils"],
+        ["Taxi", "car"],
+        ["Uber", "car"],
+        ["Rental car", "car"],
+        ["מונית", "car"],
     ];
 
     it.each(cases)("maps %j to %j", (input, expected) => {
