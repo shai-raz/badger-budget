@@ -3,7 +3,8 @@
 # (README "Coolify"). It also works pasted into + New -> Docker Compose Empty. No edits needed.
 # Coolify generates the domain and the database credentials (SERVICE_* magic variables).
 # Differs from the root docker-compose.yml: no host ports or Caddy (Coolify's proxy routes and terminates TLS),
-# and a backups volume instead of ./backups. Keep the app's environment list in sync with the root file.
+# and a backups volume instead of ./backups. Keep the app's environment list in sync with the root file
+# (apps/api/src/config/compose-env-parity.spec.ts enforces it).
 # Optional features: fill the empty variables on the Environment Variables tab (see README "Optional features").
 
 services:
@@ -40,6 +41,15 @@ services:
             - R2_PRESIGN_TTL=${R2_PRESIGN_TTL:-604800}
             - STORE_SCRAPER_DEBUG_LOCALLY=${STORE_SCRAPER_DEBUG_LOCALLY:-}
             - SEED_DEMO=${SEED_DEMO:-}
+            - JWT_SECRET=${JWT_SECRET:-}
+            - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-}
+            - CREDENTIAL_ENCRYPTION_PEPPER=${CREDENTIAL_ENCRYPTION_PEPPER:-}
+            - UPDATE_CHECK=${UPDATE_CHECK:-}
+            - UPDATE_CHECK_REPO=${UPDATE_CHECK_REPO:-}
+            - DEPLOY_WEBHOOK_URL=${DEPLOY_WEBHOOK_URL:-}
+            - DEPLOY_WEBHOOK_TOKEN=${DEPLOY_WEBHOOK_TOKEN:-}
+            - DEPLOY_WEBHOOK_TOKEN_HEADER=${DEPLOY_WEBHOOK_TOKEN_HEADER:-}
+            - DEPLOY_WEBHOOK_BODY=${DEPLOY_WEBHOOK_BODY:-}
 
     db:
         image: postgres:16
