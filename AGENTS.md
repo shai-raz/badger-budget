@@ -71,6 +71,11 @@ Google Sheets integration reads only the `GOOGLE_SHEETS_*` env vars; no key file
 
 ## Agent Workflow
 
+### Types and naming
+
+- **When code outgrows its name, rename everything in the same change.** If code starts serving more than its name says (cash-only → cash and savings), grep for the old term and update identifiers, files, routes, DTOs/types, DOM ids, test names, copy and docs. Keep the narrow name only where the code really is that narrow. "Harmless" leftovers count too.
+- **Shared unions, not `string`.** Discriminators (`AccountType`, `TransactionType`, `BalanceKind`, …) come from `@badger/shared-data` / `@badger/types`: don't type them as `string` or redeclare their literals. Prisma returns these columns as `string`, so narrow once where the row is read, with a checked parser, not `as`. Map per-variant values with an exhaustive `Record<Union, …>` rather than a `switch` with `default`, so a new variant fails to compile.
+
 ### Verifying changes
 
 - `pnpm check-types` — passes for every package. Isolate one with `pnpm check-types --filter=web` / `--filter=api` (goes through turbo, so `^build` rebuilds shared packages first); avoid `pnpm --filter <pkg> check-types`, which skips that and can report phantom errors from a stale shared-package `dist/`. The API builds and watches with SWC, and Jest runs through `@swc/jest`; neither type-checks, and CI does not type-check the API, so `--filter=api` is the only type check it gets.
