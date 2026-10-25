@@ -431,6 +431,21 @@ describe("design contract: avatars", () => {
         expect(source).toContain(':fallback="DEFAULT_CATEGORY_AVATAR_ICON"');
     });
 
+    it("leads the category chip with its icon by default", () => {
+        const source = readFileSync(`${appDir}/components/shared/CategoryChip.vue`, "utf8");
+        expect(source).toContain("showIcon: true");
+        expect(source).toContain("resolveAvatarIcon(props.icon, DEFAULT_CATEGORY_AVATAR_ICON)");
+    });
+
+    it.each([
+        ["components/transactions/TransactionRow.vue", 2],
+        ["pages/transactions/[id].vue", 1],
+    ])("opts %s out of the chip icon beside its category avatar (%i chips)", (rel, chips) => {
+        const source = readFileSync(`${appDir}/${rel}`, "utf8");
+        expect(source.split("<SharedCategoryChip").length - 1).toBe(chips);
+        expect(source.split(':show-icon="false"').length - 1).toBe(chips);
+    });
+
     it("customises a pending transaction category through the pencil and the deferred category dialog", () => {
         const source = readFileSync(`${appDir}/components/transactions/TransactionForm.vue`, "utf8");
         expect(source).toContain(':pending-icon="pendingCategory?.icon"');

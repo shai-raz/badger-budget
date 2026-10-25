@@ -195,6 +195,7 @@ const handleDelete = () => {
                             <SharedCategoryChip
                                 :name="transaction.category?.name || 'Uncategorized'"
                                 :color="transaction.category?.color"
+                                :show-icon="false"
                             />
                             <SharedStatusTag
                                 :value="transactionTypeLabel(transaction.type)"
