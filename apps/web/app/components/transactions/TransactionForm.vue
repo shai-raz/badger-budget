@@ -6,7 +6,7 @@ import { getLocaleCurrencyCode } from "../../utils/locale-currency";
 import { accountTypeCaption } from "../../utils/accountBalance";
 import LockHint from "./LockHint.vue";
 import { matchesCashWithdrawal, pickCashWallet } from "../../utils/cashWithdrawal";
-import { pickNewCategoryColor, type PendingCategory } from "../../utils/pendingCategory";
+import { nextPendingCategory, type PendingCategory } from "../../utils/pendingCategory";
 import {
     LOCKED_DIRECTION_TOOLTIP,
     LOCKED_FIELD_TOOLTIP,
@@ -99,12 +99,11 @@ const pendingName = computed<string | null>({
     get: () => pendingCategory.value?.name ?? null,
     set: (n) => {
         pendingCategory.value = n
-            ? {
-                  name: n,
-                  color:
-                      pendingCategory.value?.color ??
-                      pickNewCategoryColor(((categories.value ?? []) as Category[]).map((c) => c.color)),
-              }
+            ? nextPendingCategory(
+                  pendingCategory.value,
+                  n,
+                  ((categories.value ?? []) as Category[]).map((c) => c.color),
+              )
             : null;
     },
 });

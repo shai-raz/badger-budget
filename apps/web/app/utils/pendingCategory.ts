@@ -1,6 +1,9 @@
+import { defaultCategoryIcon, type AvatarIconName } from "@badger/shared-data";
+
 export interface PendingCategory {
     name: string;
     color: string;
+    icon: AvatarIconName;
 }
 
 /** Tailwind 500 shades: distinct, readable on light and dark surfaces. */
@@ -48,6 +51,24 @@ export function pickNewCategoryColor(
 }
 
 /**
+ * Pending category after the name changes. Keeps the colour once picked; keeps the icon only when the user
+ * customised it (differs from the previous name's suggestion), otherwise re-suggests from the new name.
+ */
+export function nextPendingCategory(
+    prev: PendingCategory | null,
+    name: string,
+    usedColors: readonly (string | null | undefined)[],
+    random: () => number = Math.random,
+): PendingCategory {
+    const customised = prev !== null && prev.icon !== defaultCategoryIcon(prev.name);
+    return {
+        name,
+        color: prev?.color ?? pickNewCategoryColor(usedColors, random),
+        icon: customised ? prev.icon : defaultCategoryIcon(name),
+    };
+}
+
+/**
  * Creates the pending category (if any), hands the real id to the form before saving so a failed
  * save can be retried without creating a duplicate, then runs `save`.
  */
@@ -59,7 +80,7 @@ export async function saveWithPendingCategory<T>(args: {
 }): Promise<T> {
     const { pending, createCategory, onCategoryCreated, save } = args;
     if (!pending) return save(null);
-    const { id } = await createCategory({ name: pending.name.trim(), color: pending.color });
+    const { id } = await createCategory({ name: pending.name.trim(), color: pending.color, icon: pending.icon });
     onCategoryCreated(id);
     return save(id);
 }

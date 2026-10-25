@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
     createOptionName,
     NEW_CATEGORY_PALETTE,
+    nextPendingCategory,
     pickNewCategoryColor,
     saveWithPendingCategory,
 } from "./pendingCategory";
@@ -37,13 +38,13 @@ describe("saveWithPendingCategory", () => {
         const onCategoryCreated = vi.fn(() => void calls.push("adopt"));
         const save = vi.fn(async () => (calls.push("save"), "done"));
         const r = await saveWithPendingCategory({
-            pending: { name: " Coffee ", color: "#112233" },
+            pending: { name: " Coffee ", color: "#112233", icon: "coffee" },
             createCategory,
             onCategoryCreated,
             save,
         });
         expect(r).toBe("done");
-        expect(createCategory).toHaveBeenCalledWith({ name: "Coffee", color: "#112233" });
+        expect(createCategory).toHaveBeenCalledWith({ name: "Coffee", color: "#112233", icon: "coffee" });
         expect(onCategoryCreated).toHaveBeenCalledWith("c1");
         expect(save).toHaveBeenCalledWith("c1");
         expect(calls).toEqual(["create", "adopt", "save"]);
@@ -53,7 +54,7 @@ describe("saveWithPendingCategory", () => {
         const save = vi.fn();
         await expect(
             saveWithPendingCategory({
-                pending: { name: "A", color: "#112233" },
+                pending: { name: "A", color: "#112233", icon: "tag" },
                 createCategory: vi.fn().mockRejectedValue(new Error("boom")),
                 onCategoryCreated,
                 save,
@@ -67,7 +68,7 @@ describe("saveWithPendingCategory", () => {
         const onCategoryCreated = vi.fn();
         await expect(
             saveWithPendingCategory({
-                pending: { name: "A", color: "#112233" },
+                pending: { name: "A", color: "#112233", icon: "tag" },
                 createCategory,
                 onCategoryCreated,
                 save: vi.fn().mockRejectedValue(new Error("save failed")),
@@ -78,6 +79,27 @@ describe("saveWithPendingCategory", () => {
         await saveWithPendingCategory({ pending: null, createCategory, onCategoryCreated, save });
         expect(createCategory).toHaveBeenCalledTimes(1);
         expect(save).toHaveBeenCalledWith(null);
+    });
+});
+
+describe("nextPendingCategory", () => {
+    const fixed = () => 0;
+
+    it("picks a palette colour and the name's suggested icon for a new pending category", () => {
+        const next = nextPendingCategory(null, "Movies", [], fixed);
+        expect(next).toEqual({ name: "Movies", color: NEW_CATEGORY_PALETTE[0], icon: "film" });
+    });
+    it("re-suggests the icon from the new name and keeps the colour while the icon is the default", () => {
+        const next = nextPendingCategory({ name: "Movies", color: "#112233", icon: "film" }, "Groceries", [], fixed);
+        expect(next).toEqual({ name: "Groceries", color: "#112233", icon: "shopping-cart" });
+    });
+    it("keeps a customised icon when the name changes", () => {
+        const next = nextPendingCategory({ name: "Movies", color: "#112233", icon: "gift" }, "Groceries", [], fixed);
+        expect(next).toEqual({ name: "Groceries", color: "#112233", icon: "gift" });
+    });
+    it("falls back to the generic tag icon for an unmatched name", () => {
+        const next = nextPendingCategory({ name: "Movies", color: "#112233", icon: "film" }, "Xyzzy", [], fixed);
+        expect(next.icon).toBe("tag");
     });
 });
 
