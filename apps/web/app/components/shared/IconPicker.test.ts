@@ -20,6 +20,10 @@ describe("IconPicker trigger", () => {
         expect(picker).toContain("pi pi-pencil");
     });
 
+    it("sizes the pencil on the icon itself, since PrimeIcons' .pi rule overrides the badge's font size", () => {
+        expect(picker).toMatch(/<i class="pi pi-pencil !text-xs"><\/i>/);
+    });
+
     it("gives the pencil badge room and a dialog-coloured cut-out ring", () => {
         expect(picker).toContain("h-6 w-6");
         expect(picker).toContain("-bottom-1 -right-1");
