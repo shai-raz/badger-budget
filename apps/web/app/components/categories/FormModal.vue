@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import type { Category } from "@badger/types";
+import {
+    DEFAULT_CATEGORY_AVATAR_ICON,
+    defaultCategoryIcon,
+    isAvatarIconName,
+    type AvatarIconName,
+} from "@badger/shared-data";
 import { useToast } from "primevue/usetoast";
+import { iconPatch } from "~/utils/iconPicker";
 
 const props = defineProps<{
     visible: boolean;
@@ -18,6 +25,11 @@ const updateMutation = useUpdateCategoryMutation();
 
 const categoryName = ref("");
 const categoryColor = ref("#3B82F6");
+const categoryIcon = ref<AvatarIconName | null>(DEFAULT_CATEGORY_AVATAR_ICON);
+// Once the user picks an icon, renaming no longer changes it.
+const iconTouched = ref(false);
+// Remounts the colour picker on each open so a Custom row left open does not carry over.
+const colorPickerKey = ref(0);
 const colorPickerRef = ref<{ isValidHexColor: () => boolean } | null>(null);
 const saving = ref(false);
 const apiError = ref<string | null>(null);
@@ -32,12 +44,17 @@ const canSave = computed(() => {
 const resetForm = () => {
     categoryName.value = "";
     categoryColor.value = "#3B82F6";
+    categoryIcon.value = DEFAULT_CATEGORY_AVATAR_ICON;
+    iconTouched.value = false;
 };
 
 const loadCategory = () => {
+    iconTouched.value = false;
+    colorPickerKey.value++;
     if (props.category) {
         categoryName.value = props.category.name;
         categoryColor.value = props.category.color;
+        categoryIcon.value = isAvatarIconName(props.category.icon) ? props.category.icon : DEFAULT_CATEGORY_AVATAR_ICON;
     } else {
         resetForm();
     }
@@ -51,6 +68,13 @@ watch(
         }
     },
 );
+
+// Add mode: the icon follows the name until the user picks one.
+watch(categoryName, (name) => {
+    if (!isEditMode.value && !iconTouched.value) {
+        categoryIcon.value = defaultCategoryIcon(name);
+    }
+});
 
 const handleClose = () => {
     emit("update:visible", false);
@@ -81,6 +105,7 @@ const handleSave = async () => {
                 data: {
                     name: categoryName.value.trim(),
                     color: categoryColor.value.trim(),
+                    ...iconPatch(props.category.icon, categoryIcon.value, iconTouched.value),
                 },
             });
             toast.add({
@@ -93,6 +118,7 @@ const handleSave = async () => {
             await createMutation.mutateAsync({
                 name: categoryName.value.trim(),
                 color: categoryColor.value.trim(),
+                icon: categoryIcon.value,
             });
             toast.add({
                 severity: "success",
@@ -126,26 +152,38 @@ const handleSave = async () => {
                 <label
                     for="category-name"
                     class="block text-sm font-medium mb-2"
-                    >Category Name *</label
+                    >Category name *</label
                 >
-                <InputText
-                    id="category-name"
-                    v-model="categoryName"
-                    placeholder="Enter category name"
-                    class="w-full"
-                    :autofocus="!isEditMode"
-                />
+                <div class="flex items-center gap-3">
+                    <SharedIconPicker
+                        v-model="categoryIcon"
+                        :color="categoryColor"
+                        fallback="tag"
+                        aria-label="Category icon"
+                        @update:model-value="iconTouched = true"
+                    />
+                    <InputText
+                        id="category-name"
+                        v-model="categoryName"
+                        placeholder="Enter category name"
+                        class="min-w-0 flex-1"
+                        :autofocus="!isEditMode"
+                    />
+                </div>
             </div>
 
             <div>
-                <label
-                    for="category-color"
+                <span
+                    id="category-color-label"
                     class="block text-sm font-medium mb-2"
-                    >Category Color *</label
+                    >Category color *</span
                 >
                 <CategoriesColorPicker
+                    :key="colorPickerKey"
                     ref="colorPickerRef"
                     v-model="categoryColor"
+                    role="group"
+                    aria-labelledby="category-color-label"
                 />
             </div>
         </div>
