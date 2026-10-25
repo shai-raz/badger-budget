@@ -40,6 +40,30 @@ describe("CategoriesColorPicker swatches", () => {
         expect(picker).toMatch(/<InputText[\s\S]*?@update:model-value="customRequested = true"/);
     });
 
+    it("tracks the colour panel's show and hide", () => {
+        expect(picker).toMatch(/<ColorPicker[\s\S]*?@show="panelOpen = true"[\s\S]*?@hide="panelOpen = false"/);
+        expect(picker).toMatch(/const panelOpen = ref\(false\);/);
+    });
+
+    it("keeps an Escape that closes the open colour panel from reaching the hosting dialog", () => {
+        // The Escape is noted on the way down, because the panel's hide runs before it bubbles back up.
+        expect(picker).toMatch(
+            /<div[\s\S]*?@keydown\.esc\.capture="noteEscape"[\s\S]*?@keydown\.esc="stopEscapeWhileOpen"/,
+        );
+        expect(picker).toMatch(/function noteEscape\(\) \{\s*escapeWhileOpen = panelOpen\.value;\s*\}/);
+        expect(picker).toMatch(
+            /function stopEscapeWhileOpen\(event: KeyboardEvent\) \{\s*if \(escapeWhileOpen\) event\.stopPropagation\(\);/,
+        );
+    });
+
+    it("keeps focus on the preview when a click lands on the colour panel's padding", () => {
+        // The panel is teleported and can't take focus; cancelling its mousedown keeps Escape on the preview input.
+        expect(picker).toMatch(
+            /const panelPt = \{ panel: \{ onMousedown: \(event: MouseEvent\) => event\.preventDefault\(\) \} \};/,
+        );
+        expect(picker).toMatch(/<ColorPicker[\s\S]*?:pt="panelPt"/);
+    });
+
     it("labels the custom button and marks it pressed", () => {
         expect(picker).toContain('aria-label="Custom color"');
         expect(picker).toContain(':aria-pressed="showCustom"');

@@ -25,6 +25,13 @@ interface Props {
     /** Defaults to `busy`. */
     saveLoading?: boolean;
     width?: string;
+    /** Claims Escape for this dialog alone, for a dialog stacked on another. Off by default. */
+    isolateEscape?: boolean;
+    /**
+     * Holds Escape off for this dialog while a dialog stacked on it is open, so the Escape goes to the stacked one
+     * (or nowhere) whatever has focus. Needed when the stacked dialog's overlays are teleported outside its mask.
+     */
+    suspendEscape?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -36,6 +43,8 @@ const props = withDefaults(defineProps<Props>(), {
     saveDisabled: false,
     saveLoading: undefined,
     width: "36rem",
+    isolateEscape: false,
+    suspendEscape: false,
 });
 
 const emit = defineEmits<{
@@ -46,6 +55,26 @@ const emit = defineEmits<{
 
 const bodyFocus = computed(() => (props.initialFocus === "dialog" ? { tabindex: -1, autofocus: true } : {}));
 const isSaving = computed(() => props.saveLoading ?? props.busy);
+
+/**
+ * PrimeVue's Dialog closes on Escape from a document-level keydown listener with no check for the topmost dialog,
+ * so the Escape for a dialog stacked on top would also close the one underneath. With `isolateEscape` the Dialog's
+ * own Escape handling is off, and this mask handler claims the key: it stops the event before it reaches the
+ * document, then closes this dialog the same way the header ✕ does (unless a request is in flight).
+ */
+const onMaskKeydown = (event: KeyboardEvent) => {
+    if (event.key !== "Escape") return;
+    event.stopPropagation();
+    event.preventDefault();
+    if (!props.busy) emit("update:visible", false);
+};
+// The mask wraps the root and covers the whole viewport, so every click lands on it or inside it. It is focusable
+// so a click on the dimmed area or on the dialog's non-focusable parts (labels, gaps, the title) keeps focus within
+// the mask. Without that, focus drops to <body>, the keydown never reaches the mask, and Escape reaches the dialog
+// underneath. Keydown from inside the root bubbles through the mask, so one handler there covers both.
+const dialogPt = computed(() =>
+    props.isolateEscape ? { mask: { tabindex: -1, onKeydown: onMaskKeydown } } : undefined,
+);
 </script>
 
 <template>
@@ -56,7 +85,8 @@ const isSaving = computed(() => props.saveLoading ?? props.busy);
         :draggable="false"
         :style="{ width }"
         :closable="!busy"
-        :close-on-escape="!busy"
+        :close-on-escape="isolateEscape || suspendEscape ? false : !busy"
+        :pt="dialogPt"
         @update:visible="emit('update:visible', $event)"
         @hide="emit('hide')"
     >

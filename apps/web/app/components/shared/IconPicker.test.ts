@@ -46,6 +46,13 @@ describe("IconPicker popover", () => {
         expect(picker).toMatch(/function onHide\(\) \{\s*open\.value = false;\s*query\.value = "";/);
     });
 
+    it("hands focus back to the trigger when it closes with focus on body or inside the popover", () => {
+        expect(picker).toMatch(/<div\s+ref="panelEl"/);
+        expect(picker).toMatch(
+            /function onHide\(\) \{[\s\S]*?if \(!active \|\| active === document\.body \|\| panelEl\.value\?\.contains\(active\)\) triggerEl\.value\?\.focus\(\);/,
+        );
+    });
+
     it("stops Escape from reaching a hosting dialog", () => {
         expect(picker).toContain('@keydown.esc="onEscape"');
         expect(picker).toMatch(/function onEscape[\s\S]*?event\.stopPropagation\(\);[\s\S]*?hide\(\);/);

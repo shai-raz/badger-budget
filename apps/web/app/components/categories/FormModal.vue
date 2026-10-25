@@ -8,20 +8,29 @@ import {
 } from "@badger/shared-data";
 import { useToast } from "primevue/usetoast";
 import { iconPatch } from "~/utils/iconPicker";
+import { createOptionName, type PendingCategory } from "~/utils/pendingCategory";
 
 const props = defineProps<{
     visible: boolean;
     category?: Category | null;
+    /**
+     * Deferred mode edits a pending category the caller holds: Done emits `done` with the values and saves nothing.
+     * Cancel, ✕ and Escape close without emitting.
+     */
+    deferred?: boolean;
+    pending?: PendingCategory | null;
 }>();
 
 const emit = defineEmits<{
     "update:visible": [value: boolean];
     close: [];
+    done: [value: PendingCategory];
 }>();
 
 const toast = useToast();
 const createMutation = useCreateCategoryMutation();
 const updateMutation = useUpdateCategoryMutation();
+const { data: categories } = useGetCategoriesQuery();
 
 const categoryName = ref("");
 const categoryColor = ref("#3B82F6");
@@ -34,11 +43,23 @@ const colorPickerRef = ref<{ isValidHexColor: () => boolean } | null>(null);
 const saving = ref(false);
 const apiError = ref<string | null>(null);
 
-const isEditMode = computed(() => !!props.category);
-const dialogTitle = computed(() => (isEditMode.value ? "Edit category" : "Add category"));
+const errorClass = "mt-1 block text-sm text-red-500";
+
+const isEditMode = computed(() => !props.deferred && !!props.category);
+const dialogTitle = computed(() => {
+    if (props.deferred) return "New category";
+    return isEditMode.value ? "Edit category" : "Add category";
+});
+
+// Deferred only: a pending category is not created yet, so the name must be unique here.
+const duplicateName = computed(() => {
+    if (!props.deferred || categoryName.value.trim().length === 0) return false;
+    const existing = ((categories.value ?? []) as Category[]).map((c) => c.name);
+    return createOptionName(categoryName.value, existing) === null;
+});
 
 const canSave = computed(() => {
-    return categoryName.value.trim().length > 0 && categoryColor.value.trim().length > 0;
+    return categoryName.value.trim().length > 0 && categoryColor.value.trim().length > 0 && !duplicateName.value;
 });
 
 const resetForm = () => {
@@ -51,7 +72,17 @@ const resetForm = () => {
 const loadCategory = () => {
     iconTouched.value = false;
     colorPickerKey.value++;
-    if (props.category) {
+    if (props.deferred) {
+        if (props.pending) {
+            categoryName.value = props.pending.name;
+            categoryColor.value = props.pending.color;
+            categoryIcon.value = props.pending.icon;
+            // The icon keeps following the name until the user has customised it.
+            iconTouched.value = props.pending.icon !== defaultCategoryIcon(props.pending.name);
+        } else {
+            resetForm();
+        }
+    } else if (props.category) {
         categoryName.value = props.category.name;
         categoryColor.value = props.category.color;
         categoryIcon.value = isAvatarIconName(props.category.icon) ? props.category.icon : DEFAULT_CATEGORY_AVATAR_ICON;
@@ -83,6 +114,17 @@ const handleClose = () => {
     resetForm();
 };
 
+// Deferred: hands the values to the caller, which creates the category when its own form saves.
+const handleDone = () => {
+    if (!canSave.value) return;
+    emit("done", {
+        name: categoryName.value.trim(),
+        color: categoryColor.value.trim(),
+        icon: categoryIcon.value ?? defaultCategoryIcon(categoryName.value.trim()),
+    });
+    handleClose();
+};
+
 const handleSave = async () => {
     // Validate hex color format
     if (colorPickerRef.value && !colorPickerRef.value.isValidHexColor()) {
@@ -92,6 +134,11 @@ const handleSave = async () => {
             detail: "Please enter a valid hex color (e.g., #3B82F6)",
             life: 3000,
         });
+        return;
+    }
+
+    if (props.deferred) {
+        handleDone();
         return;
     }
 
@@ -143,7 +190,9 @@ const handleSave = async () => {
         :busy="saving"
         :api-error="apiError"
         :initial-focus="isEditMode ? 'dialog' : 'field'"
+        :save-label="deferred ? 'Done' : 'Save'"
         :save-disabled="!canSave"
+        :isolate-escape="deferred"
         @update:visible="handleClose"
         @save="handleSave"
     >
@@ -168,8 +217,15 @@ const handleSave = async () => {
                         placeholder="Enter category name"
                         class="min-w-0 flex-1"
                         :autofocus="!isEditMode"
+                        :invalid="duplicateName"
                     />
                 </div>
+                <small
+                    v-if="duplicateName"
+                    :class="errorClass"
+                    role="alert"
+                    >A category with this name already exists</small
+                >
             </div>
 
             <div>

@@ -39,6 +39,7 @@ const query = ref("");
 const open = ref(false);
 const popover = ref<{ toggle: (event: Event) => void; hide: () => void } | null>(null);
 const triggerEl = ref<HTMLButtonElement | null>(null);
+const panelEl = ref<HTMLElement | null>(null);
 const defaultTileEl = ref<HTMLButtonElement | null>(null);
 const scrollEl = ref<HTMLElement | null>(null);
 
@@ -94,6 +95,10 @@ function toggle(event: Event) {
 function onHide() {
     open.value = false;
     query.value = "";
+    // A close from outside the popover (a click on its non-focusable parts, or PrimeVue's own Escape) can leave focus on
+    // <body>, where the next Escape reaches no handler. Hand focus back to the trigger, which sits inside the hosting mask.
+    const active = document.activeElement;
+    if (!active || active === document.body || panelEl.value?.contains(active)) triggerEl.value?.focus();
 }
 
 function pick(name: AvatarIconName | null) {
@@ -146,6 +151,7 @@ const SELECTED_CLASS = "ring-2 ring-primary";
             @hide="onHide"
         >
             <div
+                ref="panelEl"
                 class="flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2"
                 @keydown.esc="onEscape"
             >

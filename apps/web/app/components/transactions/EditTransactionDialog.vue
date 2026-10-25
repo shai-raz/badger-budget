@@ -30,6 +30,7 @@ const busy = computed(() => isPending.value || creatingCategory.value);
 const formRef = ref<InstanceType<typeof TransactionForm> | null>(null);
 const apiError = ref<string | null>(null);
 const dirty = ref(false);
+const customiseOpen = ref(false);
 const savingForRule = ref(false);
 
 const loading = computed(() => accountsLoading.value || currenciesLoading.value);
@@ -102,6 +103,7 @@ const handleCreateRule = () => {
         :show-save="ready"
         :save-disabled="!dirty"
         :save-loading="busy && !savingForRule"
+        :suspend-escape="customiseOpen"
         @update:visible="emit('update:visible', $event)"
         @hide="handleHide"
         @save="handleSave()"
@@ -138,6 +140,7 @@ const handleCreateRule = () => {
             :create-rule-loading="savingForRule"
             @dirty-change="dirty = $event"
             @create-rule="handleCreateRule"
+            @customise-open-change="customiseOpen = $event"
         />
 
         <Message

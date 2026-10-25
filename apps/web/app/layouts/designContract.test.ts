@@ -424,6 +424,53 @@ describe("design contract: avatars", () => {
         expect(readFileSync(`${appDir}/${rel}`, "utf8")).toContain("<SharedEntityAvatar");
     });
 
+    it("renders the category select's pending, selected and option rows through SharedEntityAvatar", () => {
+        const source = readFileSync(`${appDir}/components/categories/CategorySelect.vue`, "utf8");
+        expect(source.split("<SharedEntityAvatar").length - 1).toBe(3);
+        expect(source).not.toContain("w-4 h-4 rounded-full");
+        expect(source).toContain(':fallback="DEFAULT_CATEGORY_AVATAR_ICON"');
+    });
+
+    it("leads the category chip with its icon by default", () => {
+        const source = readFileSync(`${appDir}/components/shared/CategoryChip.vue`, "utf8");
+        expect(source).toContain("showIcon: true");
+        expect(source).toContain("resolveAvatarIcon(props.icon, DEFAULT_CATEGORY_AVATAR_ICON)");
+    });
+
+    it.each([
+        ["components/transactions/TransactionRow.vue", 2],
+        ["pages/transactions/[id].vue", 1],
+    ])("opts %s out of the chip icon beside its category avatar (%i chips)", (rel, chips) => {
+        const source = readFileSync(`${appDir}/${rel}`, "utf8");
+        expect(source.split("<SharedCategoryChip").length - 1).toBe(chips);
+        expect(source.split(':show-icon="false"').length - 1).toBe(chips);
+    });
+
+    it("customises a pending transaction category through the pencil and the deferred category dialog", () => {
+        const source = readFileSync(`${appDir}/components/transactions/TransactionForm.vue`, "utf8");
+        expect(source).toContain(':pending-icon="pendingCategory?.icon"');
+        expect(source).toContain('aria-label="Customise new category"');
+        expect(source).toContain("<CategoriesFormModal");
+        expect(source).toMatch(/<CategoriesFormModal\s+v-model:visible="customiseOpen"\s+deferred/);
+        expect(source).toContain(':pending="pendingCategory"');
+        expect(source).toContain('@done="(v) => (pendingCategory = v)"');
+    });
+
+    it("holds the hosting transaction dialog's Escape while the deferred category dialog is open", () => {
+        const form = readFileSync(`${appDir}/components/transactions/TransactionForm.vue`, "utf8");
+        expect(form).toContain('watch(customiseOpen, (open) => emit("customiseOpenChange", open));');
+        expect(form).toContain("customiseOpenChange: [open: boolean];");
+        for (const rel of [
+            "components/transactions/CreateTransactionDialog.vue",
+            "components/transactions/EditTransactionDialog.vue",
+        ]) {
+            const dialog = readFileSync(`${appDir}/${rel}`, "utf8");
+            expect(dialog).toContain("const customiseOpen = ref(false);");
+            expect(dialog).toContain('@customise-open-change="customiseOpen = $event"');
+            expect(dialog).toContain(':suspend-escape="customiseOpen"');
+        }
+    });
+
     it("builds no pi-<stored icon> class, which blanks the avatar", () => {
         const offenders = vueFiles(appDir).filter((rel) =>
             /pi-\$\{[^}]*\.icon/.test(readFileSync(`${appDir}/${rel}`, "utf8")),
