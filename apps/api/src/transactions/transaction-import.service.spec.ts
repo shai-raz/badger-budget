@@ -243,4 +243,26 @@ describe("TransactionImportService", () => {
             expect(mockPrismaService.transaction.updateMany).toHaveBeenCalledTimes(3);
         });
     });
+
+    describe("category creation default icon", () => {
+        const createdCategoryIcon = () => mockPrismaService.category.create.mock.calls[0][0].data.icon;
+
+        it("gives a newly created category the icon matching its name", async () => {
+            mockCardPayoffPatternsService.checkDescription.mockResolvedValue(false);
+
+            await service.importTransactions("user-1", [makeCandidate({ originalCategory: "Groceries" })], "ILS");
+
+            expect(mockPrismaService.category.create).toHaveBeenCalledTimes(1);
+            expect(createdCategoryIcon()).toBe("shopping-cart");
+        });
+
+        it("falls back to the generic tag icon when the category name matches nothing", async () => {
+            mockCardPayoffPatternsService.checkDescription.mockResolvedValue(false);
+
+            await service.importTransactions("user-1", [makeCandidate({ originalCategory: "Xyzzy" })], "ILS");
+
+            expect(mockPrismaService.category.create).toHaveBeenCalledTimes(1);
+            expect(createdCategoryIcon()).toBe("tag");
+        });
+    });
 });

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { defaultCategoryIcon } from "@badger/shared-data";
 import { CreateCategoryDto, UpdateCategoryDto, DeleteCategoryDto } from "./dto/category.dto";
 
 @Injectable()
@@ -23,6 +24,11 @@ export class CategoriesService {
         return this.prisma.category.create({
             data: {
                 ...createCategoryDto,
+                // An explicit null is stored as null (no icon); only an omitted icon gets a name-based default.
+                icon:
+                    createCategoryDto.icon !== undefined
+                        ? createCategoryDto.icon
+                        : defaultCategoryIcon(createCategoryDto.name),
                 userId,
                 isSystem: false,
             },

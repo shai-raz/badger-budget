@@ -1,7 +1,7 @@
 import { IsString, IsNotEmpty, IsOptional, IsIn, IsUUID } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { ACCOUNT_TYPES } from "@badger/shared-data";
-import type { AccountType } from "@badger/shared-data";
+import { ACCOUNT_TYPES, AVATAR_ICON_NAMES } from "@badger/shared-data";
+import type { AccountType, AvatarIconName } from "@badger/shared-data";
 
 export class CreateAccountDto {
     @ApiProperty({ example: "My Visa Card" })
@@ -25,10 +25,15 @@ export class CreateAccountDto {
     @IsIn([...ACCOUNT_TYPES])
     type: AccountType;
 
-    @ApiPropertyOptional({ example: "credit-card" })
-    @IsString()
+    @ApiPropertyOptional({
+        enum: [...AVATAR_ICON_NAMES],
+        nullable: true,
+        example: "credit-card",
+        description: "Avatar icon from the shared registry.",
+    })
+    @IsIn([...AVATAR_ICON_NAMES])
     @IsOptional()
-    icon?: string;
+    icon?: AvatarIconName | null;
 
     @ApiPropertyOptional({ example: "#FF5722" })
     @IsString()
@@ -55,10 +60,14 @@ export class UpdateAccountDto {
     @IsOptional()
     type?: AccountType;
 
-    @ApiPropertyOptional()
-    @IsString()
+    @ApiPropertyOptional({
+        enum: [...AVATAR_ICON_NAMES],
+        nullable: true,
+        description: "Avatar icon from the shared registry. Pass null to clear.",
+    })
+    @IsIn([...AVATAR_ICON_NAMES])
     @IsOptional()
-    icon?: string;
+    icon?: AvatarIconName | null;
 
     @ApiPropertyOptional()
     @IsString()
