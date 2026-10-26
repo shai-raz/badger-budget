@@ -65,7 +65,7 @@ When running locally, the docker will usually be up and running.
 
 - `apps/api/.env.example` — `DATABASE_URL`, `DATA_DIR` and `DEBUG_ARTIFACTS_DIR` (generated secrets go in `DATA_DIR/secrets`), JWT secrets, `ALLOW_REGISTRATION`, `SEED_DEMO`, `FREE_CURRENCY_API_KEY`, Google OAuth, the credential-encryption pepper, Google Sheets service account vars, bank-sync/Puppeteer/R2 settings, `PUBLIC_URL` (or `API_PUBLIC_URL` / `WEB_APP_URL`) for the OAuth/MCP endpoints, `WEB_DIST_DIR` for serving a bundled web app, and `TRUST_PROXY_HOPS` (mostly optional, commented out by default).
 - `apps/web` — no `.env.example`; only relevant var is `NUXT_PUBLIC_API_BASE_URL` (a build-time override; the default is the same-origin `/api/v1`).
-- Self-hosting: `docker-compose.yml` (production stack, see README), `deploy/coolify/docker-compose.yml` (the same stack for Coolify, using its generated domain and credentials) and `docker-compose.dev.yml` (dev Postgres).
+- Self-hosting: `docker-compose.yml` (production stack, see README), `deploy/coolify/docker-compose.yml` and `deploy/dokploy/docker-compose.yml` (the same stack for Coolify and Dokploy, each with a README in its folder) and `docker-compose.dev.yml` (dev Postgres).
 
 Google Sheets integration reads only the `GOOGLE_SHEETS_*` env vars; no key file is read.
 
