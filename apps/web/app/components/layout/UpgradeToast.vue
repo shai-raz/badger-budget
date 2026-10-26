@@ -5,7 +5,12 @@ import { UPGRADE_TOAST_GROUP, useUpgrade } from "~/composables/useUpgrade";
 import { useSystemInfo } from "~/composables/useSystemInfo";
 import { useAuthStore } from "~/stores/auth";
 import { BELOW_MD } from "~/utils/breakpoints";
-import { closingStalledToastDismisses, stalledToastIsStale, upgradePollInterval } from "~/utils/upgradeTracking";
+import {
+    closingStalledToastDismisses,
+    stalledToastIsStale,
+    upgradePollInterval,
+    type UpgradePhase,
+} from "~/utils/upgradeTracking";
 
 type UpgradeToastKind = "ready" | "stalled";
 interface UpgradeToastData {
@@ -68,49 +73,51 @@ const onClose = (event: { message: ToastMessageOptions }) => {
     if (closingStalledToastDismisses(data, pending.value)) clear();
 };
 
-watch(
-    phase,
-    (next, prev) => {
-        const target = pending.value?.targetVersion ?? null;
-        // A re-trigger in another tab moves a stalled upgrade back to upgrading; this tab's stalled toast is stale.
-        if (stalledToastIsStale(prev, next)) toast.removeGroup(UPGRADE_TOAST_GROUP);
-        if (next === "ready") {
-            if (readyToastShown) return;
-            readyToastShown = true;
-            toast.removeGroup(UPGRADE_TOAST_GROUP);
-            toast.add({
-                group: UPGRADE_TOAST_GROUP,
-                severity: "success",
-                summary: target ? `v${target} is ready` : "The new version is ready",
-                detail: "Reload to start using it.",
-                data: { kind: "ready" },
-            } as ToastMessageOptions & { data: UpgradeToastData });
-        } else if (next === "stalled") {
-            const from = pending.value?.fromVersion ?? null;
-            toast.removeGroup(UPGRADE_TOAST_GROUP);
-            toast.add({
-                group: UPGRADE_TOAST_GROUP,
-                severity: "warn",
-                summary: "Upgrade stalled",
-                detail: from
-                    ? `Still on v${from}. Check your host's deployment logs.`
-                    : "The new version has not started. Check your host's deployment logs.",
-                data: { kind: "stalled", startedAt: pending.value?.startedAt },
-            } as ToastMessageOptions & { data: UpgradeToastData });
-        } else if (next === "done") {
-            const finished = claimDoneToast();
-            if (!finished) return;
-            toast.removeGroup(UPGRADE_TOAST_GROUP);
-            toast.add({
-                group: UPGRADE_TOAST_GROUP,
-                severity: "success",
-                summary: finished.version ? `Upgraded to v${finished.version}` : "Upgrade complete",
-                life: 5000,
-            });
-        }
-    },
-    { immediate: true },
-);
+const announce = (next: UpgradePhase | null, prev: UpgradePhase | null | undefined) => {
+    const target = pending.value?.targetVersion ?? null;
+    // A re-trigger in another tab moves a stalled upgrade back to upgrading; this tab's stalled toast is stale.
+    if (stalledToastIsStale(prev, next)) toast.removeGroup(UPGRADE_TOAST_GROUP);
+    if (next === "ready") {
+        if (readyToastShown) return;
+        readyToastShown = true;
+        toast.removeGroup(UPGRADE_TOAST_GROUP);
+        toast.add({
+            group: UPGRADE_TOAST_GROUP,
+            severity: "success",
+            summary: target ? `v${target} is ready` : "The new version is ready",
+            detail: "Reload to start using it.",
+            data: { kind: "ready" },
+        } as ToastMessageOptions & { data: UpgradeToastData });
+    } else if (next === "stalled") {
+        const from = pending.value?.fromVersion ?? null;
+        toast.removeGroup(UPGRADE_TOAST_GROUP);
+        toast.add({
+            group: UPGRADE_TOAST_GROUP,
+            severity: "warn",
+            summary: "Upgrade stalled",
+            detail: from
+                ? `Still on v${from}. Check your host's deployment logs.`
+                : "The new version has not started. Check your host's deployment logs.",
+            data: { kind: "stalled", startedAt: pending.value?.startedAt },
+        } as ToastMessageOptions & { data: UpgradeToastData });
+    } else if (next === "done") {
+        const finished = claimDoneToast();
+        if (!finished) return;
+        toast.removeGroup(UPGRADE_TOAST_GROUP);
+        toast.add({
+            group: UPGRADE_TOAST_GROUP,
+            severity: "success",
+            summary: finished.version ? `Upgraded to v${finished.version}` : "Upgrade complete",
+            life: 5000,
+        });
+    }
+};
+
+watch(phase, announce);
+// Runs once the <Toast> in this template has mounted and subscribed to the toast bus. An immediate watcher would run
+// during setup, where toast.add goes nowhere, and claimDoneToast would already have cleared the entry, so a fresh load
+// that is ready or done would lose its announcement.
+onMounted(() => announce(phase.value, null));
 </script>
 
 <template>
