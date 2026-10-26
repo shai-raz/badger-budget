@@ -12,7 +12,8 @@ export default defineNuxtConfig({
         "@nuxtjs/tailwindcss",
         "@peterbud/nuxt-query",
         "@vueuse/nuxt",
-        "@vite-pwa/nuxt",
+        // Skipped under vitest: its client plugin imports a virtual module that the nuxt test env cannot resolve.
+        ...(process.env.VITEST ? [] : ["@vite-pwa/nuxt"]),
     ],
 
     ssr: false,
