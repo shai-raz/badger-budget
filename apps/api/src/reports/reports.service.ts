@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
-import type { SpendingReport, SpendingReportCategoryItem } from "@badger/types";
+import type { MonthlySpending, SpendingReport, SpendingReportCategoryItem } from "@badger/types";
 import { DEFAULT_CURRENCY_CODE, UNCATEGORIZED_CATEGORY } from "@badger/shared-data";
 import { toIsoDateString } from "@badger/utils";
 import { PrismaService } from "../prisma/prisma.service";
@@ -7,10 +7,14 @@ import { FxConversionService } from "../transactions/fx-conversion.service";
 import { ACTIVE_SIDE, netOf, sumAllocations } from "../transactions/reimbursement-netting";
 import { mapWithConcurrency } from "../bank-sync/concurrency.util";
 import { SpendingReportQueryDto } from "./dto/spending-report-query.dto";
+import { MonthlySpendingQueryDto } from "./dto/monthly-spending-query.dto";
 import { getPreviousPeriod, getYearOverYearPeriod } from "./utils/report-period.util";
 
 /** Max simultaneous provider fetches when FxRateDaily misses need filling. */
 const FX_FETCH_CONCURRENCY = 5;
+
+/** Max months in one monthly-spending request. */
+const MAX_MONTHLY_SPAN = 60;
 
 interface SpendingWindow {
     total: number;
@@ -64,14 +68,7 @@ export class ReportsService {
             throw new BadRequestException("endDate must not be before startDate");
         }
 
-        const currencyCode = query.currency ?? DEFAULT_CURRENCY_CODE;
-        const currency = await this.prisma.currency.findUnique({
-            where: { code: currencyCode },
-        });
-
-        if (!currency) {
-            throw new BadRequestException(`Unknown currency code: ${currencyCode}`);
-        }
+        const currency = await this.resolveCurrency(query.currency);
 
         const previousPeriod =
             query.compare === "yearOverYear" ? getYearOverYearPeriod(start, end) : getPreviousPeriod(start, end);
@@ -112,13 +109,93 @@ export class ReportsService {
         };
     }
 
+    /**
+     * Expense totals for each calendar month in [startMonth, endMonth], in the
+     * display currency, with the same filters and FX rules as getSpendingReport.
+     * `firstMonth` is the earliest month with any counted expense, so the client
+     * knows how far back the month strip can scroll.
+     */
+    async getMonthlySpending(userId: string, query: MonthlySpendingQueryDto): Promise<MonthlySpending> {
+        const { startMonth, endMonth } = query;
+
+        if (endMonth < startMonth) {
+            throw new BadRequestException("endMonth must not be before startMonth");
+        }
+
+        if (monthSpan(startMonth, endMonth) > MAX_MONTHLY_SPAN) {
+            throw new BadRequestException(`A monthly spending range must not exceed ${MAX_MONTHLY_SPAN} months`);
+        }
+
+        const currency = await this.resolveCurrency(query.currency);
+
+        const start = new Date(`${startMonth}-01`);
+        const [endYear, endNum] = endMonth.split("-").map(Number);
+        // Day 0 of the following month = last day of endMonth.
+        const end = new Date(Date.UTC(endYear, endNum, 0));
+
+        const [rows, firstExpense] = await Promise.all([
+            this.findExpenses(userId, start, end),
+            this.prisma.transaction.findFirst({
+                where: this.expenseWhere(userId),
+                orderBy: { transactionDate: "asc" },
+                select: { transactionDate: true },
+            }),
+        ]);
+
+        const rates = await this.resolveRates(rows, currency.id);
+
+        const buckets = new Map<string, { amount: number; transactionCount: number }>();
+        for (const txn of rows) {
+            const month = toIsoDateString(txn.transactionDate).slice(0, 7);
+            let bucket = buckets.get(month);
+            if (!bucket) {
+                bucket = { amount: 0, transactionCount: 0 };
+                buckets.set(month, bucket);
+            }
+            bucket.amount += this.convert(txn, currency.id, rates);
+            bucket.transactionCount += 1;
+        }
+
+        const months = listMonths(startMonth, endMonth).map((month) => {
+            const bucket = buckets.get(month);
+            return {
+                month,
+                total: roundTo2(bucket?.amount ?? 0),
+                transactionCount: bucket?.transactionCount ?? 0,
+            };
+        });
+
+        return {
+            startMonth,
+            endMonth,
+            currency: { code: currency.code, symbol: currency.symbol },
+            months,
+            firstMonth: firstExpense ? toIsoDateString(firstExpense.transactionDate).slice(0, 7) : null,
+        };
+    }
+
+    private async resolveCurrency(code?: string) {
+        const currencyCode = code ?? DEFAULT_CURRENCY_CODE;
+        const currency = await this.prisma.currency.findUnique({
+            where: { code: currencyCode },
+        });
+
+        if (!currency) {
+            throw new BadRequestException(`Unknown currency code: ${currencyCode}`);
+        }
+
+        return currency;
+    }
+
+    /** The filters every spending figure shares: the user's visible, live expenses. */
+    private expenseWhere(userId: string) {
+        return { userId, deletedAt: null, hidden: false, type: "expense" as const };
+    }
+
     private findExpenses(userId: string, start: Date, end: Date): Promise<ExpenseRow[]> {
         return this.prisma.transaction.findMany({
             where: {
-                userId,
-                deletedAt: null,
-                hidden: false,
-                type: "expense",
+                ...this.expenseWhere(userId),
                 transactionDate: {
                     gte: start,
                     lte: end,
@@ -197,17 +274,7 @@ export class ReportsService {
         const buckets = new Map<string, CategoryBucket>();
 
         for (const txn of transactions) {
-            const rate =
-                txn.currencyId === targetCurrencyId
-                    ? 1
-                    : rates.get(rateKey(txn.currencyId, toRateDate(txn.transactionDate)));
-            if (rate === undefined) {
-                // resolveRates covered every pair; this is a programming error.
-                throw new Error(`Missing FX rate for ${txn.currencyId} on ${toIsoDateString(txn.transactionDate)}`);
-            }
-            // Net of active income reimbursements.
-            const allocated = sumAllocations(txn.reimbursedBy);
-            const converted = netOf(txn.amount, allocated) * rate;
+            const converted = this.convert(txn, targetCurrencyId, rates);
 
             const bucketKey = txn.categoryId ?? "__uncategorized__";
             let bucket = buckets.get(bucketKey);
@@ -247,6 +314,38 @@ export class ReportsService {
             categories,
         };
     }
+
+    /** One expense in the target currency, net of active income reimbursements. */
+    private convert(txn: ExpenseRow, targetCurrencyId: string, rates: Map<string, number>): number {
+        const rate =
+            txn.currencyId === targetCurrencyId
+                ? 1
+                : rates.get(rateKey(txn.currencyId, toRateDate(txn.transactionDate)));
+        if (rate === undefined) {
+            // resolveRates covered every pair; this is a programming error.
+            throw new Error(`Missing FX rate for ${txn.currencyId} on ${toIsoDateString(txn.transactionDate)}`);
+        }
+        return netOf(txn.amount, sumAllocations(txn.reimbursedBy)) * rate;
+    }
+}
+
+/** Calendar months from startMonth through endMonth (YYYY-MM), inclusive. */
+function monthSpan(startMonth: string, endMonth: string): number {
+    const [startYear, startNum] = startMonth.split("-").map(Number);
+    const [endYear, endNum] = endMonth.split("-").map(Number);
+    return (endYear - startYear) * 12 + (endNum - startNum) + 1;
+}
+
+/** Every YYYY-MM from startMonth through endMonth, ascending. */
+function listMonths(startMonth: string, endMonth: string): string[] {
+    const months: string[] = [];
+    const cursor = new Date(`${startMonth}-01`);
+    const last = new Date(`${endMonth}-01`);
+    while (cursor <= last) {
+        months.push(toIsoDateString(cursor).slice(0, 7));
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+    }
+    return months;
 }
 
 function rateKey(currencyId: string, rateDate: Date): string {

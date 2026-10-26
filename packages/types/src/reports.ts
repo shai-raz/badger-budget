@@ -44,3 +44,24 @@ export interface SpendingReport {
     /** All categories with spending in the period, sorted by amount descending. */
     categories: SpendingReportCategoryItem[];
 }
+
+// Monthly spending
+
+export interface MonthlySpendingPoint {
+    /** Calendar month, YYYY-MM. */
+    month: string;
+    /** Total spent in this month, in the report's display currency. */
+    total: number;
+    transactionCount: number;
+}
+
+export interface MonthlySpending {
+    /** Inclusive YYYY-MM bounds of the requested range. */
+    startMonth: string;
+    endMonth: string;
+    currency: SpendingReportCurrency;
+    /** One entry per month in the range, ascending; months without spending are zero-filled. */
+    months: MonthlySpendingPoint[];
+    /** Earliest month with a counted expense (any date), or null when there is none. */
+    firstMonth: string | null;
+}
