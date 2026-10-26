@@ -111,6 +111,12 @@ describe("app shell viewport contract", () => {
         expect(layout).toContain('import CashFollowupToast from "~/components/transactions/CashFollowupToast.vue"');
     });
 
+    // Same reason: Nuxt would auto-register it as LayoutUpgradeToast, so the bare tag would not resolve.
+    it("imports UpgradeToast explicitly and mounts it once in the layout", () => {
+        expect(layout).toContain('import UpgradeToast from "~/components/layout/UpgradeToast.vue"');
+        expect(layout.match(/<UpgradeToast/g)).toHaveLength(1);
+    });
+
     // Dialog content has no top padding in Aura, which clipped a first-child Message's outline.
     it("gives dialog content a top padding so first-child Message outlines are not clipped", () => {
         expect(themePreset).toContain('padding: "0.25rem 1.25rem 1.25rem 1.25rem"');
@@ -166,19 +172,20 @@ describe("app shell viewport contract", () => {
 
     it("gives PageHeader the back and menu buttons, the single title and resolves leading via the pure util", () => {
         expect(pageHeader).toContain('aria-label="Back"');
-        expect(pageHeader).toContain("hamburgerLabel(updateVisible)");
+        expect(pageHeader).toContain("hamburgerLabel(updateVisible, phase)");
         expect(pageHeader).toContain("resolveHeaderLeading");
         expect(pageHeader).toContain("<h1");
     });
 
-    // The update item lives in the sidebar bottom group and the drawer footer, and opens the layout-mounted dialog.
-    it("renders the update nav item from NAV_ACTIONS in the sidebar and drawer, opening UpdateDialog", () => {
-        expect(sidebar).toContain("NAV_ACTIONS.update");
-        expect(sidebar).toContain("openDialog()");
+    // The update item lives in the sidebar bottom group and the drawer footer. Both read one composable, which
+    // opens the layout-mounted dialog, or reloads straight away once the upgrade is ready.
+    it("renders the update nav item from useUpdateNavItem in the sidebar and drawer, opening UpdateDialog", () => {
+        expect(sidebar).toContain("useUpdateNavItem()");
+        expect(sidebar).toContain("activateUpdate");
         expect(sidebar).toContain("mt-auto");
-        expect(navDrawer).toContain("NAV_ACTIONS.update");
+        expect(navDrawer).toContain("useUpdateNavItem()");
         expect(navDrawer).toContain("closeDrawer();");
-        expect(navDrawer).toContain("openDialog();");
+        expect(navDrawer).toContain("activateUpdate();");
         expect(layout).toContain("<UpdateDialog />");
     });
 
@@ -188,8 +195,8 @@ describe("app shell viewport contract", () => {
         const nav = navDrawer.slice(navDrawer.indexOf("<nav"), navDrawer.indexOf("</nav>"));
         const footer = navDrawer.slice(navDrawer.indexOf("#footer"));
         expect(nav).not.toContain("NAV_ACTIONS");
-        expect(footer.indexOf("NAV_ACTIONS.update")).toBeGreaterThan(-1);
-        expect(footer.indexOf("NAV_ACTIONS.whatsNew")).toBeGreaterThan(footer.indexOf("NAV_ACTIONS.update"));
+        expect(footer.indexOf("updateItem.label")).toBeGreaterThan(-1);
+        expect(footer.indexOf("NAV_ACTIONS.whatsNew")).toBeGreaterThan(footer.indexOf("updateItem.label"));
         expect(footer.indexOf("Dark mode")).toBeGreaterThan(footer.indexOf("NAV_ACTIONS.whatsNew"));
     });
 
@@ -201,13 +208,27 @@ describe("app shell viewport contract", () => {
 
     // After a manual check finds nothing newer, the header and footer stop offering an update.
     it("retitles UpdateDialog and drops Dismiss once the check is up to date", () => {
-        expect(updateDialog).toContain("upToDate ? 'No update available' : 'Update available'");
-        expect(updateDialog).toMatch(/v-if="!upToDate"\s+label="Dismiss for this version"/);
+        expect(updateDialog).toContain('return "No update available"');
+        expect(updateDialog).toMatch(/v-if="mode === 'normal' && !upToDate"\s+label="Dismiss for this version"/);
     });
 
-    it("badges the hamburger with a decorative dot only while the update notice is visible", () => {
+    // Upgrade exists only where the action is not hidden: the confirm footer and the normal footer each gate it.
+    it("gates every Upgrade button in UpdateDialog on the action state", () => {
+        expect(updateDialog.match(/v-if="actionState !== 'hidden'"/g)).toHaveLength(2);
+    });
+
+    it("badges the hamburger with a decorative mark while a release is pending or an upgrade runs", () => {
         expect(pageHeader).toContain("useUpdateNotice");
-        expect(pageHeader).toContain('v-if="updateVisible"');
+        expect(pageHeader).toContain("upgradeBadgeVisible(updateVisible.value, phase.value)");
+        expect(pageHeader).toContain('v-if="badgeShown"');
         expect(pageHeader).toContain('aria-hidden="true"');
+    });
+
+    // The spinner replaces the dot only while upgrading; the dot keeps its box so the header does not shift.
+    it("shows a spinner in the dot's box while upgrading, and an amber dot when stalled", () => {
+        expect(pageHeader).toContain("pi-spin pi-spinner");
+        expect(pageHeader).toContain("v-if=\"phase === 'upgrading'\"");
+        expect(pageHeader).toContain("bg-amber-500");
+        expect(pageHeader).toContain("flex h-2.5 w-2.5 items-center justify-center");
     });
 });

@@ -18,13 +18,12 @@ const themeSwitchId = useId();
 // highlight still spans the drawer's width.
 const DRAWER_ROW_CLASS =
     "-mx-5 flex w-[calc(100%+2.5rem)] items-center gap-2 border-0 bg-transparent px-5 py-2 text-left text-surface-700 transition-colors duration-150 hover:bg-surface-100 dark:text-surface-200 dark:hover:bg-surface-800 cursor-pointer";
-const { visible: updateVisible } = useUpdateNotice();
-const { openDialog } = useUpdateDialog();
+const { item: updateItem, activate: activateUpdate } = useUpdateNavItem();
 const { openRecent } = useWhatsNewDialog();
 
-const openUpdateDialog = () => {
+const openUpdate = () => {
     closeDrawer();
-    openDialog();
+    activateUpdate();
 };
 
 const openWhatsNew = () => {
@@ -79,17 +78,20 @@ watch(isDesktop, (desktop) => {
                 <!-- Directly above the divider, aligned with the footer rows rather than the nav links. -->
                 <div class="pb-1">
                     <button
-                        v-if="updateVisible"
+                        v-if="updateItem.show"
                         v-ripple
                         type="button"
                         :class="DRAWER_ROW_CLASS"
-                        @click="openUpdateDialog"
+                        @click="openUpdate"
                     >
                         <span
-                            :class="[NAV_ACTIONS.update.icon, 'text-primary']"
+                            :class="[
+                                updateItem.icon,
+                                updateItem.tone === 'warn' ? 'text-amber-600 dark:text-amber-500' : 'text-primary',
+                            ]"
                             aria-hidden="true"
                         />
-                        <span>{{ NAV_ACTIONS.update.label }}</span>
+                        <span>{{ updateItem.label }}</span>
                     </button>
                     <button
                         v-ripple

@@ -46,4 +46,16 @@ describe("hamburgerLabel", () => {
         expect(hamburgerLabel(true)).toBe("Open menu, update available");
         expect(hamburgerLabel(false)).toBe("Open menu");
     });
+
+    it("names the upgrade phase when one is in flight", () => {
+        expect(hamburgerLabel(false, "upgrading")).toBe("Open menu, upgrading");
+        expect(hamburgerLabel(true, "ready")).toBe("Open menu, new version ready");
+        expect(hamburgerLabel(false, "stalled")).toBe("Open menu, upgrade stalled");
+    });
+
+    it("keeps the existing labels for the done and idle phases", () => {
+        expect(hamburgerLabel(true, "done")).toBe("Open menu, update available");
+        expect(hamburgerLabel(false, "done")).toBe("Open menu");
+        expect(hamburgerLabel(false, null)).toBe("Open menu");
+    });
 });
