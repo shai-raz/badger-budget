@@ -40,6 +40,7 @@ import type {
     IReimbursementCandidatesResponse,
     ICardPayoffLinkPreview,
     ISystemInfo,
+    ISystemUpgradeResponse,
     IChangelogResponse,
     IChangelogSeenResponse,
     IAuthResponse,
@@ -180,6 +181,12 @@ export class ApiClient {
 
     async checkForUpdates(): Promise<ISystemInfo> {
         const response = await this.client.post<ISystemInfo>("/system/check-updates");
+        return response.data;
+    }
+
+    // Triggers the host's deploy webhook (admin only; 404 when not configured)
+    async triggerUpgrade(): Promise<ISystemUpgradeResponse> {
+        const response = await this.client.post<ISystemUpgradeResponse>("/system/upgrade");
         return response.data;
     }
 

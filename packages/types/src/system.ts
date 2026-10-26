@@ -12,6 +12,8 @@ export interface ISystemInfo {
     /** ISO time of the last successful check. */
     checkedAt: string | null;
     updateCheckEnabled: boolean;
+    /** True only when DEPLOY_WEBHOOK_URL is configured and the caller is the admin. */
+    upgradeAvailable: boolean;
     /** html_url of the latest release. */
     releaseUrl: string | null;
 }
@@ -52,4 +54,10 @@ export interface IChangelogResponse {
 /** POST /api/v1/system/changelog/seen. */
 export interface IChangelogSeenResponse {
     lastSeenVersion: string | null;
+}
+
+/** POST /api/v1/system/upgrade: the host's deploy webhook accepted the request. */
+export interface ISystemUpgradeResponse {
+    /** Latest release version without the leading v when known; null otherwise. */
+    targetVersion: string | null;
 }

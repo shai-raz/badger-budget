@@ -10,6 +10,7 @@ const availableInfo: ISystemInfo = {
     updateComparable: true,
     checkedAt: "2026-10-20T10:00:00Z",
     updateCheckEnabled: true,
+    upgradeAvailable: false,
     releaseUrl: "https://github.com/shai-raz/badger-budget/releases/tag/v0.5.0",
 };
 
