@@ -33,6 +33,8 @@ export function useMonthlySpending(pageIndexes: Ref<number[]>, now: Date) {
 
     const totals = computed<Record<MonthKey, number>>(() => merged.value.totals);
     const firstMonth = computed<MonthKey | null>(() => merged.value.firstMonth);
+    // Every page carries the same currency, so the first loaded page is enough.
+    const currency = computed(() => results.value.find((result) => result.data)?.data?.currency ?? null);
     const error = computed<unknown>(() => results.value.find((result) => result.error)?.error ?? null);
 
     /** Refetches only the pages that failed. */
@@ -42,5 +44,5 @@ export function useMonthlySpending(pageIndexes: Ref<number[]>, now: Date) {
         }
     }
 
-    return { totals, firstMonth, error, refetch };
+    return { totals, firstMonth, currency, error, refetch };
 }

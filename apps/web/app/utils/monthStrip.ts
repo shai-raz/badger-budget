@@ -59,7 +59,7 @@ export function slideWindow(start: MonthKey, delta: number, bounds: StripBounds)
  */
 export function windowToShow(start: MonthKey, range: MonthRange, visibleCount: number, bounds: StripBounds): MonthKey {
     const windowEnd = addMonths(start, visibleCount - 1);
-    if (range.from >= start && range.to <= windowEnd) return start;
+    if (range.from >= start && range.to <= windowEnd) return clampWindowStart(start, bounds);
 
     const endAligned = addMonths(range.to, -(visibleCount - 1));
     const fits = monthCount(range) <= visibleCount;

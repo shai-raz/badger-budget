@@ -115,10 +115,11 @@ function applyTap(month: MonthKey, from: StripInteraction) {
     if (result.commit) range.value = result.commit;
 }
 
-// Follow the range: when it is set from outside (or by a tap), slide the window just enough to show it.
+// Follow the range: when it is set from outside (or by a tap), slide the window just enough to show it. Bounds
+// are a source too: the first month arrives after the first page, so a range older than the window is shown then.
 watch(
-    range,
-    (next) => {
+    [range, bounds],
+    ([next]) => {
         windowStart.value = windowToShow(windowStart.value, next, props.visibleCount, bounds.value);
     },
     { immediate: true },

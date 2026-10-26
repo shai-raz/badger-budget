@@ -71,6 +71,15 @@ describe("useMonthlySpending", () => {
         expect(error.value).toBeNull();
     });
 
+    it("takes the currency from the first loaded page", async () => {
+        const { useMonthlySpending } = await import("./useMonthlySpending");
+        const { currency } = useMonthlySpending(ref([0]), NOW);
+
+        expect(currency.value).toBeNull();
+        queryResults.value = [{ data: page([["2026-10", 120]], "2024-11"), isError: false, refetch: refetchFns[0]! }];
+        expect(currency.value).toEqual({ code: "USD", symbol: "$" });
+    });
+
     it("exposes the first error and refetches only the failed pages", async () => {
         const { useMonthlySpending } = await import("./useMonthlySpending");
         const { error, refetch } = useMonthlySpending(ref([0, 1]), NOW);
