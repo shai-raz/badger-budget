@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MenuItem } from "primevue/menuitem";
-import { resolveHeaderLeading } from "../../utils/pageHeader";
+import { canGoBackTo, resolveHeaderLeading } from "../../utils/pageHeader";
 import { hamburgerLabel } from "../../utils/updateNotice";
 import { upgradeBadgeVisible } from "../../utils/upgradeTracking";
 
@@ -14,6 +14,8 @@ import { upgradeBadgeVisible } from "../../utils/upgradeTracking";
  * - Build labelled actions with LayoutHeaderButton so they adapt to mobile.
  * - No size props. The actions wrapper sets the button height and width.
  * - The `toolbar` slot renders once: inline on desktop, or on its own row under the title on mobile.
+ * - Back returns through history when the user came from `backTo`, which keeps the parent's query (the
+ *   range) and scroll. Otherwise it pushes `backTo`, the deep-link case.
  */
 
 interface Props {
@@ -40,7 +42,9 @@ const badgeShown = computed(() => upgradeBadgeVisible(updateVisible.value, phase
 const leading = computed(() => resolveHeaderLeading({ hasParent: !!props.backTo, isDesktop: isDesktop.value }));
 
 const goBack = () => {
-    if (props.backTo) router.push(props.backTo);
+    if (!props.backTo) return;
+    if (canGoBackTo(window.history.state?.back, props.backTo)) router.back();
+    else router.push(props.backTo);
 };
 
 const menu = ref<{ toggle: (event: Event) => void } | null>(null);
