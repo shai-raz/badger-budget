@@ -1,6 +1,40 @@
 {
     "releases": [
         {
+            "version": "0.6.0",
+            "date": "2026-10-26",
+            "items": [
+                {
+                    "type": "feat",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "admin role for self-hosted instances (1/4)",
+                    "pr": 59
+                },
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "in-app upgrade through a host deploy webhook (2/4)",
+                    "pr": 60
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "in-app upgrade with live tracking and SW-aware reload (3/4)",
+                    "pr": 61
+                },
+                {
+                    "type": "docs",
+                    "scope": "deploy",
+                    "breaking": false,
+                    "subject": "Dokploy compose and per-host deploy READMEs (4/4)",
+                    "pr": 62
+                }
+            ]
+        },
+        {
             "version": "0.5.0",
             "date": "2026-10-25",
             "items": [
