@@ -14,6 +14,8 @@ import { upgradeBadgeVisible } from "../../utils/upgradeTracking";
  * - Build labelled actions with LayoutHeaderButton so they adapt to mobile.
  * - No size props. The actions wrapper sets the button height and width.
  * - The `toolbar` slot renders once: inline on desktop, or on its own row under the title on mobile.
+ * - `controls` is a compact control kept on the title row at every breakpoint (the Reports period picker), unlike
+ *   `toolbar`, which drops to its own row below md.
  * - Back returns through history when the user came from `backTo`, which keeps the parent's query (the
  *   range) and scroll. Otherwise it pushes `backTo`, the deep-link case.
  */
@@ -106,6 +108,13 @@ const menu = ref<{ toggle: (event: Event) => void } | null>(null);
                     class="flex min-w-0 items-center"
                 >
                     <slot name="toolbar" />
+                </div>
+
+                <div
+                    v-if="$slots.controls"
+                    class="flex shrink-0 items-center"
+                >
+                    <slot name="controls" />
                 </div>
 
                 <div
