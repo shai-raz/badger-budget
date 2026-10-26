@@ -477,6 +477,23 @@ describe("ReportsService", () => {
             expect(result.months).toHaveLength(60);
         });
 
+        it("queries the requested years exactly, including years below 100", async () => {
+            mockPrismaService.transaction.findMany.mockResolvedValue([]);
+
+            await service.getMonthlySpending("user-id", { startMonth: "0050-01", endMonth: "0050-03" });
+
+            expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        transactionDate: {
+                            gte: new Date("0050-01-01"),
+                            lte: new Date("0050-03-31"),
+                        },
+                    }),
+                }),
+            );
+        });
+
         it("rejects an unknown currency code", async () => {
             mockPrismaService.currency.findUnique.mockResolvedValue(null);
 

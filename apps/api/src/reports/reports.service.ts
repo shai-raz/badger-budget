@@ -130,8 +130,10 @@ export class ReportsService {
 
         const start = new Date(`${startMonth}-01`);
         const [endYear, endNum] = endMonth.split("-").map(Number);
-        // Day 0 of the following month = last day of endMonth.
-        const end = new Date(Date.UTC(endYear, endNum, 0));
+        // Day 0 of the following month = last day of endMonth. setUTCFullYear, not
+        // Date.UTC: Date.UTC maps years 0-99 to 1900-1999.
+        const end = new Date(0);
+        end.setUTCFullYear(endYear, endNum, 0);
 
         const [rows, firstExpense] = await Promise.all([
             this.findExpenses(userId, start, end),
