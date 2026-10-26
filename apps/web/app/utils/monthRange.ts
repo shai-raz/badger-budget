@@ -3,6 +3,8 @@
  * local parts (never `toISOString()`), and anything that depends on "now" takes
  * `now: Date` as a parameter so it stays testable.
  */
+import type { ReportCompareMode } from "@badger/types";
+import { toLocalIsoDate } from "./localDate";
 
 /** A calendar month as zero-padded `YYYY-MM`, e.g. `2026-10`. Lexicographic order is chronological order. */
 export type MonthKey = string;
@@ -251,6 +253,39 @@ export function selectionToDateBounds(selection: PeriodSelection): { startDate?:
         startDate: `${selection.from}-01`,
         endDate: `${selection.to}-${pad2(lastDayOfMonth(year, month))}`,
     };
+}
+
+/** The reports comparison for a range: year-over-year for year-aligned ranges, otherwise the preceding period. */
+export function compareModeFor(range: MonthRange): ReportCompareMode {
+    return isYearAligned(range) ? "yearOverYear" : "previous";
+}
+
+/**
+ * Query params for the spending report. A range ending this month stops at today, not at
+ * month end, so the report never counts future days.
+ */
+export function toReportParams(
+    range: MonthRange,
+    now: Date,
+): { startDate: string; endDate: string; compare: ReportCompareMode } {
+    const { year, month } = partsOf(range.to);
+    return {
+        startDate: `${range.from}-01`,
+        endDate:
+            range.to === monthKeyOf(now) ? toLocalIsoDate(now) : `${range.to}-${pad2(lastDayOfMonth(year, month))}`,
+        compare: compareModeFor(range),
+    };
+}
+
+/** The comparison caption for a range, e.g. "vs same days last month" for a partial current month. */
+export function comparisonLabel(range: MonthRange, now: Date): string {
+    if (compareModeFor(range) === "yearOverYear") return "vs same period last year";
+
+    const n = monthCount(range);
+    if (range.to === monthKeyOf(now)) {
+        return n === 1 ? "vs same days last month" : `vs same days of the previous ${n} months`;
+    }
+    return n === 1 ? "vs previous month" : `vs previous ${n} months`;
 }
 
 export interface GridEmitResult {
