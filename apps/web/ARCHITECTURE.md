@@ -48,6 +48,13 @@ Visual rules are in [DESIGN.md](DESIGN.md#dialogs-and-forms).
 - `utils/navigation.ts` is the single source of nav labels, icons and order for the sidebar, bottom bar and `NavDrawer`.
 - `definePageMeta({ fullBleed: true })` drops the scroller's padding below `md` for edge-to-edge bands; sticky elements in such a page use `md:top-4`. Custom page-meta keys are typed in `app/types/page-meta.d.ts`.
 
+## In-app upgrade
+
+- `useUpgrade` keeps the upgrade this browser started in localStorage (`pendingUpgrade`, keyed by user id, shared across tabs); the server stays the source of truth. Phase, view and poll rules are pure functions in `utils/upgradeTracking.ts`; change them there, with tests.
+- `UpgradeToast` (mounted once in the layout) owns the `upgrade` toast group and the `/system/info` poll, which runs only while an upgrade is in flight. Toasts are announced in its `onMounted`: an announcement during setup is lost.
+- `reloadToNewBuild` is the only reload onto a new build, and runs only from the user's Reload action, never while polling: the PWA plugin reloads every tab when a new service worker activates.
+- `useSystemInfo` is keyed per user, since `upgradeAvailable` depends on the viewer's role.
+
 ## Cross-cutting rules
 
 - Transaction edit locks (synced rows, transfer mirrors) live in `utils/transactionForm.ts` and mirror the API's rules (`apps/api/src/transactions/AGENTS.md`); change both together.

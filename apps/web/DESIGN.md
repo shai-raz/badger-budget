@@ -53,6 +53,7 @@ Reuse these before drawing your own (`components/shared/` unless noted): `Sectio
 - `CategoryChip` with `showIcon` false shows a colour dot instead of the icon; use it beside an `EntityAvatar` of the same category so the icon isn't shown twice.
 - `IconPicker` only picks registry names, never free text.
 - Avatars use Lucide icons through `utils/avatarIcons.ts`. Other UI uses PrimeIcons.
+- The update badge (hamburger mark, below md) keeps one 0.625rem box in every state, so the header never shifts: a `bg-primary` dot, a spinner while upgrading, an amber dot when stalled. The nav item's label and icon come from `updateNavItem` (`utils/upgradeTracking.ts`).
 - Period labels come from `budgetWindowLabel` (`utils/budget.ts`), never from `Date` formatting in a component.
 - Settings links to its sub-pages with chevron rows in a divided band, not primary buttons.
 

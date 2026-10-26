@@ -1,21 +1,18 @@
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { computed, ref } from "vue";
+import type { IAuthUser } from "@badger/types";
 import { useApiClient } from "../composables/useApiClient";
 import { getApiErrorMessage } from "../utils/apiError";
 
-interface User {
-    id: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-}
-
 export const useAuthStore = defineStore("auth", () => {
     // State
-    const user = ref<User | null>(null);
+    const user = ref<IAuthUser | null>(null);
     const isAuthenticated = ref(false);
     const isLoading = ref(false);
     const error = ref<string | null>(null);
+
+    // Getters
+    const isAdmin = computed(() => user.value?.role === "ADMIN");
 
     // Actions
     async function login(email: string, password: string) {
@@ -175,6 +172,7 @@ export const useAuthStore = defineStore("auth", () => {
     return {
         user,
         isAuthenticated,
+        isAdmin,
         isLoading,
         error,
         login,

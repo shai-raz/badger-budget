@@ -15,9 +15,8 @@ const themeStore = useThemeStore();
 const authStore = useAuthStore();
 const user = computed(() => authStore.user);
 
-// The update item sits at the bottom of the nav, above the divider, and only while a release is pending.
-const { visible: updateVisible } = useUpdateNotice();
-const { openDialog } = useUpdateDialog();
+// The update item sits at the bottom of the nav, above the divider, while a release is pending or an upgrade runs.
+const { item: updateItem, activate: activateUpdate } = useUpdateNavItem();
 const { openRecent } = useWhatsNewDialog();
 </script>
 
@@ -56,17 +55,20 @@ const { openRecent } = useWhatsNewDialog();
             </NuxtLink>
             <div class="mt-auto">
                 <button
-                    v-if="updateVisible"
+                    v-if="updateItem.show"
                     v-ripple
                     type="button"
                     :class="[NAV_LINK_CLASS, 'w-[calc(100%-0.5rem)] border-0 bg-transparent text-left']"
-                    @click="openDialog()"
+                    @click="activateUpdate"
                 >
                     <span
-                        :class="[NAV_ACTIONS.update.icon, 'text-primary']"
+                        :class="[
+                            updateItem.icon,
+                            updateItem.tone === 'warn' ? 'text-amber-600 dark:text-amber-500' : 'text-primary',
+                        ]"
                         aria-hidden="true"
                     />
-                    <span>{{ NAV_ACTIONS.update.label }}</span>
+                    <span>{{ updateItem.label }}</span>
                 </button>
                 <button
                     v-ripple

@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import type { Prisma } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { DEMO_EMAIL } from "../demo/demo-data.constants";
 
@@ -8,9 +8,9 @@ import { DEMO_EMAIL } from "../demo/demo-data.constants";
 export const REGISTRATION_LOCK_KEY = 20_001;
 
 /**
- * Decides whether new accounts may be created on this instance. Registration is open until the first
- * non-demo user exists (soft-deleted users count, so deleting the admin account doesn't reopen signup);
- * after that it is closed unless ALLOW_REGISTRATION=true.
+ * Decides whether new accounts may be created on this instance, and which role they get (see roleForNewUser).
+ * Registration is open until the first non-demo user exists (soft-deleted users count, so deleting the admin
+ * account doesn't reopen signup); after that it is closed unless ALLOW_REGISTRATION=true.
  */
 @Injectable()
 export class RegistrationPolicyService {
@@ -44,5 +44,16 @@ export class RegistrationPolicyService {
         // $executeRaw, not $queryRaw: Prisma can't deserialize the void result of pg_advisory_xact_lock.
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(${REGISTRATION_LOCK_KEY})`;
         await this.assertRegistrationOpen(tx);
+    }
+
+    /** Call inside the creation transaction after lockAndAssert: the advisory lock serializes this check with the insert. */
+    async roleForNewUser(tx: Prisma.TransactionClient, email: string): Promise<UserRole> {
+        if (email === DEMO_EMAIL) {
+            return UserRole.USER;
+        }
+        const admins = await tx.user.count({
+            where: { role: UserRole.ADMIN, deletedAt: null, email: { not: DEMO_EMAIL } },
+        });
+        return admins === 0 ? UserRole.ADMIN : UserRole.USER;
     }
 }

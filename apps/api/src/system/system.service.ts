@@ -1,11 +1,13 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { UserRole } from "@prisma/client";
 import type { IChangelogResponse, IChangelogSeenResponse, ISystemInfo } from "@badger/types";
 import { PrismaService } from "../prisma/prisma.service";
 import { buildChangelogResponse, nextSeenVersion } from "./changelog";
 import { ChangelogService } from "./changelog.service";
 import { RunningVersion, readApiPackageVersion, resolveRunningVersion } from "./running-version";
 import { UpdateCheckResult, UpdateCheckService } from "./update-check.service";
+import { UpgradeService } from "./upgrade.service";
 import { baseVersion, isComparable, isUpdateAvailable } from "./version";
 
 @Injectable()
@@ -17,6 +19,7 @@ export class SystemService {
         private readonly updateCheck: UpdateCheckService,
         private readonly changelog: ChangelogService,
         private readonly prisma: PrismaService,
+        private readonly upgrade: UpgradeService,
     ) {
         this.running = resolveRunningVersion(
             { APP_VERSION: config.get<string>("APP_VERSION"), GIT_SHA: config.get<string>("GIT_SHA") },
@@ -34,13 +37,13 @@ export class SystemService {
     }
 
     /** Reads the cached release, refreshing it first when stale. */
-    async getInfo(): Promise<ISystemInfo> {
-        return this.toInfo(await this.updateCheck.getLatest());
+    async getInfo(viewer: { role: UserRole }): Promise<ISystemInfo> {
+        return this.toInfo(await this.updateCheck.getLatest(), viewer);
     }
 
     /** Checks GitHub now, subject to the server-wide cooldown. */
-    async checkForUpdates(): Promise<ISystemInfo> {
-        return this.toInfo(await this.updateCheck.forceCheck());
+    async checkForUpdates(viewer: { role: UserRole }): Promise<ISystemInfo> {
+        return this.toInfo(await this.updateCheck.forceCheck(), viewer);
     }
 
     /** Release notes up to the running build, with the user's What's New stamp. */
@@ -65,7 +68,7 @@ export class SystemService {
         return { lastSeenVersion: next };
     }
 
-    private toInfo({ latest, checkedAt }: UpdateCheckResult): ISystemInfo {
+    private toInfo({ latest, checkedAt }: UpdateCheckResult, viewer: { role: UserRole }): ISystemInfo {
         const latestVersion = latest?.version ?? null;
         return {
             version: this.running.version,
@@ -75,6 +78,7 @@ export class SystemService {
             updateComparable: isComparable(this.running.version),
             checkedAt: checkedAt?.toISOString() ?? null,
             updateCheckEnabled: this.updateCheck.isEnabled(),
+            upgradeAvailable: this.upgrade.isConfigured() && viewer.role === UserRole.ADMIN,
             releaseUrl: latest?.url ?? null,
         };
     }

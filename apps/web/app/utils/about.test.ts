@@ -10,6 +10,7 @@ const baseInfo: ISystemInfo = {
     updateComparable: true,
     checkedAt: null,
     updateCheckEnabled: true,
+    upgradeAvailable: false,
     releaseUrl: null,
 };
 

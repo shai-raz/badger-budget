@@ -8,6 +8,7 @@ import WhatsNewDialog from "~/components/layout/WhatsNewDialog.vue";
 import BudgetFormDialog from "~/components/budgets/BudgetFormDialog.vue";
 import BankSyncSyncFlowHost from "~/components/bankSync/SyncFlowHost.vue";
 import CashFollowupToast from "~/components/transactions/CashFollowupToast.vue";
+import UpgradeToast from "~/components/layout/UpgradeToast.vue";
 import ReimbursementPickerDialog from "~/components/transactions/ReimbursementPickerDialog.vue";
 
 // `definePageMeta({ fullBleed: true })` opts a page out of the scroller's
@@ -64,6 +65,7 @@ useHead({ bodyAttrs: { class: "app-layout-body" } });
                     <slot />
                     <Toast :breakpoints="toastBreakpoints" />
                     <CashFollowupToast />
+                    <UpgradeToast />
                     <ConfirmDialog :pt="{ message: { class: 'whitespace-pre-line' } }" />
                 </div>
             </div>

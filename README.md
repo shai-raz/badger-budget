@@ -53,6 +53,7 @@ Use only URL-safe characters in these three values (letters, digits, `-`, `_`, `
 | `SEED_DEMO`                                                                                           | Creates the public demo account `demo@demo.demo` on startup. Its password is published in the repository, so leave this off on any instance that other people can reach.                                                                                                                    |
 | `UPDATE_CHECK`                                                                                        | Once a day the server asks api.github.com for the latest release, to show the running version and a new-release banner. `false` disables it and makes no outbound request.                                                                                                                  |
 | `UPDATE_CHECK_REPO`                                                                                   | The GitHub repository to check for releases (`owner/name`). Default `shai-raz/badger-budget`; set it for a fork.                                                                                                                                                                            |
+| `DEPLOY_WEBHOOK_URL`, `_TOKEN`, `_TOKEN_HEADER`, `_BODY`                                              | In-app upgrade from the update dialog (admin only). The app POSTs to your host's deploy webhook. Set the URL to enable it. See [Upgrade from the app](#upgrade-from-the-app).                                                                                                               |
 
 Set variables in `.env` and run `docker compose up -d` again to apply them.
 
@@ -93,11 +94,11 @@ Point your proxy at the app's port 8080 and set:
 
 ### Coolify
 
-1. Choose **+ New → Public Repository**, enter `https://github.com/shai-raz/badger-budget` and branch `main`.
-2. Set **Build Pack** to **Docker Compose** and **Docker Compose Location** to `/deploy/coolify/docker-compose.yml`.
-3. Click **Deploy**, open the generated domain, and register the first account.
+Setup, backups and the in-app upgrade for Coolify are in [deploy/coolify/README.md](./deploy/coolify/README.md).
 
-This runs the published image with PostgreSQL and nightly backups, with nothing built on your server. Coolify generates the domain and the database password. To use your own domain, set it on the `app` service. To update, redeploy.
+### Dokploy
+
+Setup, backups and the in-app upgrade for Dokploy are in [deploy/dokploy/README.md](./deploy/dokploy/README.md).
 
 ### Other platforms
 
@@ -105,7 +106,7 @@ Deploy from the root `Dockerfile` or the published image, with port `8080`, a pe
 
 ## Registration
 
-Registration is open until the first non-demo account exists. After that, `POST /auth/register` returns 403 unless `ALLOW_REGISTRATION=true`. The demo account does not count toward this.
+Registration is open until the first non-demo account exists. After that, `POST /auth/register` returns 403 unless `ALLOW_REGISTRATION=true`. The demo account does not count toward this. The first registered user is the instance admin. To hand the role to someone else, update the database: set `role = 'ADMIN'` on the new admin's row in `users` and `role = 'USER'` on the old one.
 
 To let more people sign up, set `ALLOW_REGISTRATION=true` in `.env` and run `docker compose up -d`. Set it back to empty to close registration again.
 
@@ -176,6 +177,35 @@ For controlled upgrades, pin the image to a release tag instead of `latest`. Set
 The published images report their version in the About card on the Settings page. An image you build yourself with `docker build` has no version stamp, so it reports `<version>-dev` and never shows the new-release banner.
 
 **PostgreSQL major versions:** do not change `postgres:16` to a newer major version in the compose file. The data directory is not compatible across major versions, and the database will not start. Take a dump, move the old `pgdata` volume aside or create a new one, start the new major version, and restore the dump into it.
+
+### Upgrade from the app
+
+If your host can redeploy Badger from a webhook, the admin can upgrade from the app. When a new release is out, the update dialog shows **Upgrade now**. The admin clicks it and confirms, Badger POSTs to your host's deploy webhook, and the app tracks the upgrade until the new version is live. Then it offers **Reload**. The app stays usable while the host redeploys.
+
+The button appears only when `DEPLOY_WEBHOOK_URL` is set, and only for the admin (the first registered user). Other users see the update dialog as before.
+
+Set these in `.env` or your host's environment:
+
+| Variable                      | What it does                                                                                                                                                                                                                                                                                  |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DEPLOY_WEBHOOK_URL`          | The host's deploy webhook URL. Required. Without it the button stays hidden.                                                                                                                                                                                                                  |
+| `DEPLOY_WEBHOOK_TOKEN`        | The secret the host expects. Optional.                                                                                                                                                                                                                                                        |
+| `DEPLOY_WEBHOOK_TOKEN_HEADER` | The header that carries the token. Unset sends `Authorization: Bearer <token>`. `Authorization` sends `Bearer <token>`, or the token as is when it already contains a space (for example `Token abc`). Any other name, such as `x-api-key`, gets the raw token. Ignored when no token is set. |
+| `DEPLOY_WEBHOOK_BODY`         | An optional JSON body, sent as is with `Content-Type: application/json`. Without it the request has no body.                                                                                                                                                                                  |
+
+An invalid header name or invalid JSON in `DEPLOY_WEBHOOK_BODY` disables the feature and logs a startup warning that names the variable, not its value.
+
+Host guides:
+
+- **Coolify** and **Dokploy**: see [deploy/coolify/README.md](./deploy/coolify/README.md#in-app-upgrade) and [deploy/dokploy/README.md](./deploy/dokploy/README.md#in-app-upgrade).
+- **Portainer (BE stack webhook):** set `DEPLOY_WEBHOOK_URL` to the stack's webhook URL. No token.
+- **Watchtower (HTTP API, plain Docker Compose):** set `DEPLOY_WEBHOOK_URL=http://watchtower:8080/v1/update` and `DEPLOY_WEBHOOK_TOKEN` to the Watchtower HTTP API token. Watchtower may stop the Badger container before it answers, so the app can show "Could not reach the deploy webhook" while the upgrade still goes ahead.
+- **Render:** set `DEPLOY_WEBHOOK_URL` to the service's deploy hook URL. No token.
+
+Notes:
+
+- It works only with a moving tag such as `:latest`. A pinned `BADGER_IMAGE` redeploys the same version.
+- Give a new release's image time to publish before you upgrade. A redeploy that starts too early pulls the previous image, and the upgrade shows as stalled after 10 minutes.
 
 ## Split deployment
 

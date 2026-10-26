@@ -4,7 +4,7 @@
 
 ## Commands
 
-All commands use **pnpm** (v9). Node is pinned to the version in `.node-version`. Run from the repo root unless noted.
+All commands use **pnpm** (v9). Node is pinned to the version in `.node-version`. Run from the repo root.
 
 ```bash
 # Dev servers
@@ -25,7 +25,7 @@ pnpm build          # All packages
 docker build -t badger-budget .   # Production image: API + bundled SPA on one port (8080)
 ```
 
-**Formatting:** a `lefthook` pre-commit hook (installed by `pnpm install`, needs git >= 2.31) runs `prettier --write` on staged files, so don't hand-format; style is in `.prettierrc`. CI runs `format:check` on every PR. For local blame, run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once (it skips the repo-wide reformat commit).
+**Formatting:** a `lefthook` pre-commit hook (installed by `pnpm install`, needs git >= 2.31) runs `prettier --write` on staged files, so don't hand-format; style is in `.prettierrc`. CI runs `format:check` on every PR. For local blame, run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once to skip the reformat commit.
 
 **Database:** `docker compose -f docker-compose.dev.yml up -d` starts `badger-postgres` on host port 5433.
 
@@ -34,22 +34,14 @@ docker build -t badger-budget .   # Production image: API + bundled SPA on one p
 - **API** (`apps/api`, NestJS 11): [apps/api/ARCHITECTURE.md](apps/api/ARCHITECTURE.md).
 - **Web** (`apps/web`, Nuxt 4 SPA): [apps/web/ARCHITECTURE.md](apps/web/ARCHITECTURE.md).
 - **UI design system** (`apps/web/DESIGN.md`): read before any UI change.
-- **Docker image:** `.github/workflows/docker-publish.yml` builds amd64+arm64 to `ghcr.io/<owner>/badger-budget` on main pushes that touch its `paths` list (release commits get their semver tags from that same build; tag pushes build nothing). It stamps `APP_VERSION` and `GIT_SHA`; local builds leave them empty, so the API reports `<version>-dev`.
-
-### Shared Packages
-
-| Package               | Purpose                                                                                                    |
-| --------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `@badger/types`       | Shared TypeScript types (consumed by API, web, api-client)                                                 |
-| `@badger/api-client`  | Axios-based typed HTTP client                                                                              |
-| `@badger/shared-data` | Shared constants and enums (categories, currencies, bank providers, category-mapping, sync-passkey limits) |
-| `@badger/utils`       | Utility functions (compiled to CJS)                                                                        |
+- **Docker image:** `.github/workflows/docker-publish.yml` builds amd64+arm64 to `ghcr.io/<owner>/badger-budget` on main pushes that touch its `paths` list (release commits get their semver tags from that same build; tag pushes build nothing). It stamps `APP_VERSION` and `GIT_SHA` (see `apps/api/ARCHITECTURE.md`).
+- **Shared packages** (`packages/`): `types` (TS source only), `api-client` (typed Axios client), `shared-data` (constants and enums) and `utils` (runtime helpers, compiled to CJS).
 
 ## Environment Setup
 
 - API: `apps/api/.env.example` lists every variable; nearly all are optional. Generated secrets go in `DATA_DIR/secrets`.
 - Web: no `.env.example`. `NUXT_PUBLIC_API_BASE_URL` is the only variable, a build-time override of the same-origin `/api/v1`.
-- Self-hosting: `docker-compose.yml` (production, see README), `deploy/coolify/docker-compose.yml` (the same stack for Coolify) and `docker-compose.dev.yml` (dev Postgres).
+- Self-hosting: `docker-compose.yml` (production, see README), `deploy/coolify/` and `deploy/dokploy/` (the same stack per host, each with a README) and `docker-compose.dev.yml` (dev Postgres).
 
 ## Agent Workflow
 
@@ -60,11 +52,12 @@ docker build -t badger-budget .   # Production image: API + bundled SPA on one p
 - `pnpm test`: Jest (api) and Vitest (web), both in CI's `Tests` job. No database needed: specs mock `PrismaService`.
 - For UI changes, also run the app and exercise the feature in a browser; passing checks don't prove it works. Sign in as the demo user (`demo@demo.demo` / `demo123QWEasd`; seeded only with `SEED_DEMO=true` in `apps/api/.env`), whose data is topped up to today on each login.
 
-### Releases
+### Pull requests and releases
 
-- PRs are squash-merged, so the PR title becomes the commit subject and must be a Conventional Commit (`type(scope)!: subject`, checked by `pr-title.yml`; types in `packages/release/src/conventional.mjs`).
+- **Open every PR with a Conventional Commit title** (`type(scope)!: subject`; types in `packages/release/src/conventional.mjs`), not a plain title fixed later. PRs are squash-merged, so the title becomes the commit subject, picks the release bump and appears verbatim in the release notes; `pr-title.yml` fails otherwise.
+- No stack position in the title (`(2/4)`, `[1 of 3]`, `part 2`). Link related PRs in the body.
 - `release.yml` releases everything user-facing on each push to main: `feat` → minor, `fix`/`perf` → patch, breaking → major (minor while the major is 0). Never hand-edit versions.
-- `apps/api/changelog.json` is the source for the generated `CHANGELOG.md` (not Prettier-formatted) and for the in-app What's New dialog. Dry run, re-render and owner setup: [packages/release/README.md](packages/release/README.md).
+- `apps/api/changelog.json` is the source for the generated `CHANGELOG.md` and for the in-app What's New dialog. Dry run, re-render and owner setup: [packages/release/README.md](packages/release/README.md).
 
 ### Writing docs (AGENTS.md, ARCHITECTURE.md, DESIGN.md)
 

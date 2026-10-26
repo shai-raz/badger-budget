@@ -10,6 +10,7 @@ const availableInfo: ISystemInfo = {
     updateComparable: true,
     checkedAt: "2026-10-20T10:00:00Z",
     updateCheckEnabled: true,
+    upgradeAvailable: false,
     releaseUrl: "https://github.com/shai-raz/badger-budget/releases/tag/v0.5.0",
 };
 
@@ -44,5 +45,17 @@ describe("hamburgerLabel", () => {
     it("mentions the update only while the notice is visible", () => {
         expect(hamburgerLabel(true)).toBe("Open menu, update available");
         expect(hamburgerLabel(false)).toBe("Open menu");
+    });
+
+    it("names the upgrade phase when one is in flight", () => {
+        expect(hamburgerLabel(false, "upgrading")).toBe("Open menu, upgrading");
+        expect(hamburgerLabel(true, "ready")).toBe("Open menu, new version ready");
+        expect(hamburgerLabel(false, "stalled")).toBe("Open menu, upgrade stalled");
+    });
+
+    it("keeps the existing labels for the done and idle phases", () => {
+        expect(hamburgerLabel(true, "done")).toBe("Open menu, update available");
+        expect(hamburgerLabel(false, "done")).toBe("Open menu");
+        expect(hamburgerLabel(false, null)).toBe("Open menu");
     });
 });
