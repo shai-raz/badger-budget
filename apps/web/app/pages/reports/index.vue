@@ -18,10 +18,14 @@ definePageMeta({
 // The range lives in the URL (?from/?to). Reports has no all-time, so from=all is rejected and reads as this month.
 const { selection } = useMonthRangeQuery({ allowAll: false });
 
-const range = computed(() => (selection.value.kind === "range" ? selection.value : currentMonthSelection(new Date())));
-const reportParams = computed(() => toReportParams(range.value, new Date()));
+// Ticks each minute so a tab left open past midnight moves the "today" end of the range. The query key changes with it,
+// so the report refetches, and refetch-on-focus then sends the new day too.
+const now = useNow({ interval: 60_000 });
+
+const range = computed(() => (selection.value.kind === "range" ? selection.value : currentMonthSelection(now.value)));
+const reportParams = computed(() => toReportParams(range.value, now.value));
 const monthCount = computed(() => countMonths(range.value));
-const comparisonLabel = computed(() => describeComparison(range.value, new Date()));
+const comparisonLabel = computed(() => describeComparison(range.value, now.value));
 
 const { data: report, isLoading, isFetching, error } = useSpendingReport(reportParams);
 
