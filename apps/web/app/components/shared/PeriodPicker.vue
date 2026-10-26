@@ -17,8 +17,13 @@ const sel = defineModel<PeriodSelection>({ required: true });
 
 const isDesktop = useIsDesktop();
 
+// Each container owns its open state. Sharing one ref would open the bottom sheet (and its modal mask) whenever
+// the popover opens on md+.
+const popoverOpen = ref(false);
+const sheetOpen = ref(false);
+const open = computed(() => (isDesktop.value ? popoverOpen.value : sheetOpen.value));
+
 // Re-read on every open, so a long-lived SPA that crosses midnight still labels and bounds against the right month.
-const open = ref(false);
 const now = computed(() => {
     void open.value;
     return new Date();
@@ -38,7 +43,7 @@ const onLabelClick = (event: Event) => {
     if (isDesktop.value) {
         popover.value?.toggle(event);
     } else {
-        open.value = true;
+        sheetOpen.value = true;
     }
 };
 
@@ -48,7 +53,7 @@ const handleEl = ref<HTMLElement | null>(null);
 
 useDragToDismiss(handleEl, () => (handleEl.value?.closest("[data-period-sheet]") as HTMLElement | null) ?? null, {
     onDismiss: () => {
-        open.value = false;
+        sheetOpen.value = false;
     },
 });
 
@@ -117,8 +122,8 @@ const sheetPt = {
 
         <Popover
             ref="popover"
-            @show="open = true"
-            @hide="open = false"
+            @show="popoverOpen = true"
+            @hide="popoverOpen = false"
         >
             <SharedPeriodPanel
                 v-model="sel"
@@ -129,7 +134,7 @@ const sheetPt = {
         </Popover>
 
         <Drawer
-            v-model:visible="open"
+            v-model:visible="sheetOpen"
             position="bottom"
             :show-close-icon="false"
             :block-scroll="true"
@@ -149,7 +154,7 @@ const sheetPt = {
                     v-model="sel"
                     :presets="presets"
                     layout="stacked"
-                    @done="open = false"
+                    @done="sheetOpen = false"
                 />
             </div>
         </Drawer>

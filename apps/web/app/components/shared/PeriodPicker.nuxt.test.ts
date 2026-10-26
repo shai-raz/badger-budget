@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockNuxtImport, mountSuspended } from "@nuxt/test-utils/runtime";
-import { ref } from "vue";
+import { nextTick, ref } from "vue";
 import PeriodPicker from "./PeriodPicker.vue";
 import { TRANSACTIONS_PRESETS, type PeriodSelection } from "~/utils/monthRange";
 
@@ -12,10 +12,18 @@ const layout = vi.hoisted(() => ({ desktop: true }));
 
 mockNuxtImport("useIsDesktop", () => () => ref(layout.desktop));
 
-const mountPicker = (modelValue: PeriodSelection) =>
-    mountSuspended(PeriodPicker, {
+// Both containers teleport to <body>, so every mounted picker is unmounted after its test to keep those queries isolated.
+const mounted: { unmount: () => void }[] = [];
+
+// The real Transition runs here: the Popover emits show and hide from its enter and leave hooks.
+const mountPicker = async (modelValue: PeriodSelection) => {
+    const wrapper = await mountSuspended(PeriodPicker, {
         props: { modelValue, presets: TRANSACTIONS_PRESETS },
+        global: { stubs: { transition: false } },
     });
+    mounted.push(wrapper);
+    return wrapper;
+};
 
 type Wrapper = Awaited<ReturnType<typeof mountPicker>>;
 
@@ -30,6 +38,18 @@ const lastEmit = (wrapper: Wrapper) => {
     return emits[emits.length - 1]?.[0];
 };
 
+const bodyElement = (selector: string) => document.body.querySelector(selector);
+
+const findBodyButton = (label: string) =>
+    Array.from(document.body.querySelectorAll<HTMLButtonElement>("button")).find(
+        (button) => button.textContent?.trim() === label,
+    );
+
+const findBodyOption = (label: string) =>
+    Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]')).find((option) =>
+        option.textContent?.includes(label),
+    );
+
 describe("PeriodPicker", () => {
     beforeEach(() => {
         layout.desktop = true;
@@ -38,6 +58,7 @@ describe("PeriodPicker", () => {
     });
 
     afterEach(() => {
+        mounted.splice(0).forEach((wrapper) => wrapper.unmount());
         vi.useRealTimers();
     });
 
@@ -100,5 +121,40 @@ describe("PeriodPicker", () => {
         expect(labelButton(wrapper).text()).toContain("Oct ’26");
         expect(wrapper.find(".pi-calendar").exists()).toBe(false);
         expect(thisMonthButton(wrapper)).toBeUndefined();
+    });
+
+    it("opens only the popover at md+, and choosing a preset closes it", async () => {
+        const wrapper = await mountPicker({ kind: "range", from: "2026-10", to: "2026-10" });
+
+        await labelButton(wrapper).trigger("click");
+        await nextTick();
+
+        expect(bodyElement(".p-popover")).not.toBeNull();
+        expect(bodyElement("[data-period-sheet]")).toBeNull();
+        expect(labelButton(wrapper).attributes("aria-expanded")).toBe("true");
+
+        findBodyOption("Last 3 months")?.click();
+        await nextTick();
+
+        expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-08", to: "2026-10" });
+        expect(labelButton(wrapper).attributes("aria-expanded")).toBe("false");
+    });
+
+    it("opens only the bottom sheet below md, and choosing a preset closes it", async () => {
+        layout.desktop = false;
+        const wrapper = await mountPicker({ kind: "range", from: "2026-10", to: "2026-10" });
+
+        await labelButton(wrapper).trigger("click");
+        await nextTick();
+
+        expect(bodyElement("[data-period-sheet]")).not.toBeNull();
+        expect(bodyElement(".p-popover")).toBeNull();
+        expect(labelButton(wrapper).attributes("aria-expanded")).toBe("true");
+
+        findBodyButton("Last 3 months")?.click();
+        await nextTick();
+
+        expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-08", to: "2026-10" });
+        expect(labelButton(wrapper).attributes("aria-expanded")).toBe("false");
     });
 });
