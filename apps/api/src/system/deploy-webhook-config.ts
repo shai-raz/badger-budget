@@ -1,4 +1,3 @@
-/** Outbound timeout for the host deploy webhook call. */
 export const DEPLOY_WEBHOOK_TIMEOUT_MS = 15_000;
 
 export interface DeployWebhookConfig {

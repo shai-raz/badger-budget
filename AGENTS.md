@@ -1,24 +1,15 @@
 # AGENTS.md
 
-This file provides guidance to any agent when working with code in this repository.
-
-## Project Overview
-
-**Badger Budget** is a personal finance and budgeting web application. The active apps are:
-
-- `apps/api` — NestJS REST API (port 3000)
-- `apps/web` — Nuxt 4 SPA frontend (port 3001)
-
-Shared packages live in `packages/`: `types`, `api-client`, `shared-data`, `utils`, `eslint-config`, `typescript-config`.
+**Badger Budget** is a personal budgeting web app: `apps/api` (NestJS REST API, port 3000) and `apps/web` (Nuxt SPA, port 3001), with shared code in `packages/`.
 
 ## Commands
 
-All commands use **pnpm** (v9). Node is pinned to the version in `.node-version`. Run from the repo root unless noted.
+All commands use **pnpm** (v9). Node is pinned to the version in `.node-version`. Run from the repo root.
 
 ```bash
 # Dev servers
 pnpm dev            # All apps via Turborepo
-pnpm dev:api        # API only
+pnpm dev:api        # API only (runs prisma:migrate + prisma:generate first)
 pnpm dev:web        # Web only
 
 # Quality
@@ -34,62 +25,65 @@ pnpm build          # All packages
 docker build -t badger-budget .   # Production image: API + bundled SPA on one port (8080)
 ```
 
-**Formatting:** `lefthook` installs a pre-commit hook (on `pnpm install`) that runs `prettier --write` over staged files and re-stages them, so formatting is automatic — don't hand-format. Style lives in `.prettierrc` (4-space, 120 cols, double quotes, LF). Requires **git >= 2.31**. CI runs `format:check` on every PR, which catches anything the hook missed or that was committed with `--no-verify`.
+**Formatting:** a `lefthook` pre-commit hook (installed by `pnpm install`, needs git >= 2.31) runs `prettier --write` on staged files, so don't hand-format; style is in `.prettierrc`. CI runs `format:check` on every PR. For local blame, run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once to skip the reformat commit.
 
-The repo-wide reformat lives in a single commit listed in `.git-blame-ignore-revs`. GitHub's blame view skips it automatically; locally, opt in once per clone with `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
-
-**apps/api specific:**
-
-The `pnpm dev` command will automatically call `pnpm prisma:migrate` and `pnpm prisma:generate` before starting the API dev server.
-
-**Database:** PostgreSQL runs via Docker — `docker compose -f docker-compose.dev.yml up -d` starts `badger-postgres` on host port 5433 (mapped to container port 5432).
-When running locally, the docker will usually be up and running.
+**Database:** `docker compose -f docker-compose.dev.yml up -d` starts `badger-postgres` on host port 5433.
 
 ## Architecture
 
-- **API** (`apps/api`, NestJS 11): see [apps/api/ARCHITECTURE.md](apps/api/ARCHITECTURE.md) for auth, validation, feature modules, bank-sync, and API-specific conventions.
-- **Web** (`apps/web`, Nuxt 4 SPA): see [apps/web/ARCHITECTURE.md](apps/web/ARCHITECTURE.md) for UI stack, state/data-fetching, page structure, and web-specific conventions.
+- **App architecture**: [apps/api/ARCHITECTURE.md](apps/api/ARCHITECTURE.md) and [apps/web/ARCHITECTURE.md](apps/web/ARCHITECTURE.md): stack and cross-cutting rules. Each app's `AGENTS.md` imports its own; read the other too when a change crosses the API/web boundary (DTOs, `api-client`, auth).
 - **UI design system** (`apps/web/DESIGN.md`): read before any UI change.
-- **Docker image:** `.github/workflows/docker-publish.yml` builds linux/amd64+arm64 and pushes `ghcr.io/<owner>/badger-budget` (`:latest` and sha tags on main pushes that change files the image is built from, per its `paths` list; a release commit, which `release.yml` tags atomically, also gets its semver tags from that same build, so tag pushes do not trigger a build). It passes `APP_VERSION` (from `git describe --tags`) and `GIT_SHA` build args, which the Dockerfile sets as env vars; local builds leave them empty and the API reports `<version>-dev`. The `repository.private` guards there only matter if the repo is made private again.
-
-### Shared Packages
-
-| Package               | Purpose                                                                                                    |
-| --------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `@badger/types`       | Shared TypeScript types (consumed by API, web, api-client)                                                 |
-| `@badger/api-client`  | Axios-based typed HTTP client                                                                              |
-| `@badger/shared-data` | Shared constants and enums (categories, currencies, bank providers, category-mapping, sync-passkey limits) |
-| `@badger/utils`       | Utility functions (compiled to CJS)                                                                        |
+- **Docker image:** `.github/workflows/docker-publish.yml` builds on main pushes touching its `paths` list, release commits included (tag pushes build nothing), and stamps `APP_VERSION` and `GIT_SHA`.
+- **Shared packages** (`packages/`): `types` (TS source), `api-client` (typed Axios client), `shared-data` (constants and enums) and `utils` (runtime helpers, compiled to CJS).
 
 ## Environment Setup
 
-- `apps/api/.env.example` — `DATABASE_URL`, `DATA_DIR` and `DEBUG_ARTIFACTS_DIR` (generated secrets go in `DATA_DIR/secrets`), JWT secrets, `ALLOW_REGISTRATION`, `SEED_DEMO`, `FREE_CURRENCY_API_KEY`, Google OAuth, the credential-encryption pepper, Google Sheets service account vars, bank-sync/Puppeteer/R2 settings, `PUBLIC_URL` (or `API_PUBLIC_URL` / `WEB_APP_URL`) for the OAuth/MCP endpoints, `WEB_DIST_DIR` for serving a bundled web app, and `TRUST_PROXY_HOPS` (mostly optional, commented out by default).
-- `apps/web` — no `.env.example`; only relevant var is `NUXT_PUBLIC_API_BASE_URL` (a build-time override; the default is the same-origin `/api/v1`).
-- Self-hosting: `docker-compose.yml` (production stack, see README), `deploy/coolify/docker-compose.yml` and `deploy/dokploy/docker-compose.yml` (the same stack for Coolify and Dokploy, each with a README in its folder) and `docker-compose.dev.yml` (dev Postgres).
-
-Google Sheets integration reads only the `GOOGLE_SHEETS_*` env vars; no key file is read.
+- API: `apps/api/.env.example` lists every variable; nearly all are optional. Generated secrets go in `DATA_DIR/secrets`.
+- Web: no `.env.example`. `NUXT_PUBLIC_API_BASE_URL` is the only variable, a build-time override of the same-origin `/api/v1`.
+- Self-hosting: `docker-compose.yml` (production, see README), `deploy/` (the same stack per hosting platform, each folder with a README) and `docker-compose.dev.yml` (dev Postgres).
 
 ## Agent Workflow
 
 ### Verifying changes
 
-- `pnpm check-types` — passes for every package. Isolate one with `pnpm check-types --filter=web` / `--filter=api` (goes through turbo, so `^build` rebuilds shared packages first); avoid `pnpm --filter <pkg> check-types`, which skips that and can report phantom errors from a stale shared-package `dist/`. The API builds and watches with SWC, and Jest runs through `@swc/jest`; neither type-checks, and CI does not type-check the API, so `--filter=api` is the only type check it gets.
-- `pnpm lint` — `apps/web` is clean (0 warnings), enforced by `--max-warnings 0` and the CI `Web lint & type-check` job. `apps/api` still has ~196 pre-existing warnings; don't chase them. Never introduce new type errors or lint warnings anywhere.
-- `pnpm test` — Jest in `apps/api`, Vitest (`vitest run`) in `apps/web`; CI runs both in the `Tests` job. Neither needs a database: specs mock `PrismaService`.
-- For UI changes, also run the app (`pnpm dev:web` / `pnpm dev:api`) and exercise the feature in a browser — passing types/lint/tests doesn’t confirm the feature works. Sign in with the seeded demo account (`demo@demo.demo` / `demo123QWEasd`, from `apps/api/prisma/seed-demo.ts`; it exists only if `SEED_DEMO=true` is set in `apps/api/.env` when you seed) to get realistic data to test against — its transactions are kept current, topped up to today on each demo login (see `apps/api/src/demo/AGENTS.md`).
+- `pnpm check-types` must pass for every package. Isolate one with `pnpm check-types --filter=web` / `--filter=api` (through turbo, so shared packages rebuild first); `pnpm --filter <pkg> check-types` skips that and can report phantom errors from a stale `dist/`. Nothing else type-checks the API: its build, watch and Jest all run through SWC, and CI skips it.
+- `pnpm lint`: `apps/web` must stay at 0 warnings (`--max-warnings 0`, enforced in CI). `apps/api` has ~196 pre-existing warnings; don't chase them, and add none.
+- `pnpm test`: Jest (api) and Vitest (web), both in CI's `Tests` job. No database needed: specs mock `PrismaService`.
+- For UI changes, also run the app and exercise the feature in a browser; passing checks don't prove it works. Sign in as the demo user (`demo@demo.demo` / `demo123QWEasd`; seeded only with `SEED_DEMO=true` in `apps/api/.env`), whose data is topped up to today on each login.
 
-### Releases
+### Pull requests and releases
 
-- PRs are squash-merged, so the PR title becomes the commit subject. `pr-title.yml` requires a Conventional Commit title (`type(scope)!: subject`; allowed types in `packages/release/src/conventional.mjs`).
-- `release.yml` runs on every push to main and releases everything user-facing since the last `v*` tag: `feat` → minor, `fix`/`perf` → patch, breaking → major (minor while the major is 0). It commits and tags the release, then creates the GitHub release.
-- `apps/api/changelog.json` is the source; `CHANGELOG.md` is generated from it (`node packages/release/bin/release.mjs --repo shai-raz/badger-budget --render-only`) and is excluded from Prettier (`.prettierignore`). Never hand-edit versions; the release job sets them in the three `package.json` files.
-- Release notes reach users through that same bundled `changelog.json` (the in-app What's New dialog); the Dockerfile copies it into the image.
-- Dry run: `node packages/release/bin/release.mjs --repo shai-raz/badger-budget --dry-run`. Owner setup: [packages/release/README.md](packages/release/README.md).
+- **Open every PR with a Conventional Commit title** (`type(scope)!: subject`; types in `packages/release/src/conventional.mjs`), not a plain title fixed later. PRs are squash-merged, so the title becomes the commit subject, picks the release bump and appears verbatim in the release notes; `pr-title.yml` fails otherwise.
+- No stack position in the title (`(2/4)`, `[1 of 3]`, `part 2`). Link related PRs in the body.
+- `release.yml` releases everything user-facing on each push to main: `feat` → minor, `fix`/`perf` → patch, breaking → major (minor while the major is 0). Never hand-edit versions.
+- `apps/api/changelog.json` is the source for the generated `CHANGELOG.md` and for the in-app What's New dialog. Dry run, re-render and owner setup: [packages/release/README.md](packages/release/README.md).
 
-### Keeping AGENTS.md / ARCHITECTURE.md current
+### Writing docs (AGENTS.md, ARCHITECTURE.md, DESIGN.md)
 
-These files (root and per-module) are living docs, not a one-time snapshot — you’re expected to edit them, not just read them:
+Every agent working in a directory pays for its docs in context, so they hold only what the code can't tell you quickly and you would otherwise get wrong. Bloat is worse than a small gap.
 
-- If a change you make renders something in one incorrect, fix it in the same change.
-- If you notice something unclear or outdated while you’re in a file, improve it, even if unrelated to your task.
-- Keep them tight: replace or tighten existing text rather than appending, and cut anything that’s stopped earning its place. Bloat is worse than a small gap.
+**Where things go** (word budget in brackets; check with `wc -w`, and cut before adding when a file is over):
+
+- Root `AGENTS.md` [1,000]: repo-wide commands, workflow, and pointers. Nothing specific to one app or feature.
+- `apps/*/AGENTS.md` [300]: how to work in that app (conventions, testing).
+- `apps/*/ARCHITECTURE.md` [1,200], auto-loaded with the app: stack, cross-cutting mechanisms (auth, request pipeline, layout contract, CSS layers) and constraints spanning modules. A few lines per mechanism, linking the module doc for depth.
+- `apps/web/DESIGN.md` [1,200]: UI rules and tokens only.
+- Module `AGENTS.md` (`apps/api/src/<module>/`) [400]: that module's invariants and traps. Add one only when the module has some.
+- A code comment, not a doc, when the trap lives in one file or function: it sits where the next editor looks, and dies with the code.
+- `README.md` files are for humans (self-hosting, a package's purpose), not agent instructions.
+
+**A line earns its place only if** it is not evident from the code it describes, getting it wrong costs a bug, a security hole or a wasted hour, and it isn't already stated elsewhere (link instead).
+
+**Never write:**
+
+- History: what changed or was fixed, spikes, dates, "previously…", investigation notes. That belongs in the commit or PR.
+- Feature behaviour and UI copy (labels, which button opens which dialog, toast text). Code and tests own it.
+- Inventories that mirror the code (module, component, endpoint, tool or type lists, env var tables). They drift; point at the source file instead.
+- One-off recipes or runbooks (manual verification steps, a migration's rollout). Put them in the PR.
+
+**When to edit:**
+
+- Change a doc only when your change makes a line wrong, or adds an invariant or trap that passes the bar above. A new feature needs no doc line by default.
+- Fix a stale line by deleting or shortening it, not by appending a correction. When you add to a section, look for something in it to cut.
+- Outside your change's scope, only delete or correct what is wrong; don't expand.
+- Write tersely: one fact per bullet, no preamble.

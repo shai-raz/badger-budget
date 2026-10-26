@@ -154,12 +154,10 @@ export function upgradeActionState(info: ISystemInfo | null, phase: UpgradePhase
     return phase === "upgrading" ? "disabled" : "enabled";
 }
 
-/** How often to poll /system/info while an upgrade is in flight. */
 export function upgradePollInterval(phase: UpgradePhase | null): number | false {
     return phase === "upgrading" || phase === "stalled" ? UPGRADE_POLL_MS : false;
 }
 
-/** Navigation item label for the upgrade states. */
 export function upgradeNavLabel(phase: Exclude<UpgradePhase, "done">, targetVersion: string | null): string {
     switch (phase) {
         case "upgrading":

@@ -133,7 +133,7 @@ const customAuraPreset = {
         // Dialog content is a scroll container with no top padding, so a Message
         // (or focus ring) as its first child has its outline clipped. The 0.25rem
         // moves from the header's bottom padding to the content's top padding, so
-        // the visual spacing is unchanged. See apps/web/ARCHITECTURE.md > Dialogs.
+        // the visual spacing is unchanged.
         dialog: {
             ...(Aura.components?.dialog ?? {}),
             header: {

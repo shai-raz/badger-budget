@@ -21,7 +21,6 @@ Rules and tokens for the web UI. Read before any UI change. How the app is built
 ## Surfaces
 
 - **Page bands** (the default for every app page): a page sets `definePageMeta({ fullBleed: true })` and wraps its sections in `flex flex-col gap-3 pb-8 md:gap-6`, each section a `SharedSectionBand`. Mobile: full-width, top and bottom border, no side border. Desktop: a card (`md:rounded-xl md:border md:p-5`).
-- **Transaction detail** (`pages/transactions/[id].vue`): Overview full width, then a `md:grid-cols-[1.55fr_1fr]` grid. The left column stacks Details and the Reimbursements / Pays back band; the right holds Attachments, `md:sticky md:top-4` so it stays in view beside a long left column. Below md the DOM order is the stacking order. The band ends in a right-aligned receipt (plain lines, divider, emphasised total) whose amounts align with the item amounts via a shared `w-10` action column.
 - **Cards** (desktop only, via a band's `md:` chrome): one look everywhere, `bg-surface-0 dark:bg-surface-900`, 1px `border-surface-200 dark:border-surface-700`, no shadow, `rounded-xl` (12px).
 - **Always a card** (auth, OAuth consent): PrimeVue `Card`. Its look comes from the `shadow: "none"` token in `app/theme/preset.ts` plus a global `pt.card.root.class` border in `nuxt.config.ts`. Don't restyle `Card` per page; change the global preset or pt instead.
 - **Interactive and data widgets** (tables, forms, lists): PrimeVue components.
@@ -35,8 +34,7 @@ Rules and tokens for the web UI. Read before any UI change. How the app is built
 - Layout: single column, a large amount input first where the form has one (`TransactionForm`, budget form). Mobile: fullscreen below `md`, with Cancel/Save pinned in the footer under the scrolling body.
 - Errors: an API error is a `Message` banner above the form, and the dialog stays open. Inline field errors use the `TransactionForm` `labelClass` and `errorClass`.
 - Button labels are sentence case: "Save changes", "Delete budget", "Enter sync PIN".
-- Form dialogs reachable from several pages are mounted once in `layouts/app.vue` and opened through a composable (`useBudgetFormDialog`), so no page or row carries its own copy. Entry points open the dialog in place; they never navigate to a form route.
-- Every form dialog is built on `SharedFormDialog`, which requires an `initialFocus` (`field` or `dialog`) so each caller decides where focus starts.
+- Entry points open a form dialog in place; they never navigate to a form route.
 
 ## Colour
 
@@ -48,40 +46,16 @@ Rules and tokens for the web UI. Read before any UI change. How the app is built
 
 ## Building blocks
 
-- **Brand logo** (`components/shared/BrandLogo.vue`): `horizontal` in the sidebar and drawer header, `stacked` on the auth and consent pages; sized by a height class. The `-light` files in `public/brand/` only work on light surfaces and the `-dark` ones only on dark, so the component renders both and `.dark` picks one. Never place one set alone.
-- **Section band** (`components/shared/SectionBand.vue`): every page section. Its heading, meta and "see all" link, and its loading, error and empty states; a section passes those props instead of drawing its own.
-- **Empty state** (`components/shared/EmptyState.vue`): the one empty state for a list or section, directly or through a band's `empty` slot.
-- **Entity avatar** (`components/shared/EntityAvatar.vue`): a category or account icon in its colour, with a `fallback` icon for a missing one. Sizes `xs` (20px), `sm` (28px), `md` and `lg` (56px) come from `AVATAR_SIZES` in `utils/avatarIcons.ts`. The category select shows `xs` avatars on its pending, selected and option rows.
-- **Icon picker** (`components/shared/IconPicker.vue`): the entity avatar with a pencil badge, opening a searchable popover of registry icons, grouped. Only registry names can be picked, never free text. An optional `defaultTile` ("Default for type") stores `null`. Escape stops its event, so the hosting dialog stays open. Used by the category and account forms.
-- **Colour swatches** (`components/categories/ColorPicker.vue`): 16 palette swatches and a Custom button. The hex field shows only for an off-palette colour or after Custom.
-- **Category chip** (`components/shared/CategoryChip.vue`): a category name inline, led by its icon in its colour. `showIcon` false swaps the icon for a colour dot; use that beside an entity avatar of the same category (transaction rows and detail), so the category isn't shown twice.
-- **Status tag** (`components/shared/StatusTag.vue`): a short label, such as System or Custom, Active or Paused, or a transaction type.
-- **Update badge**: the hamburger's mark (`components/layout/PageHeader.vue`), below md only, shown while a release is pending or an upgrade is not done. It is a `bg-primary` 0.625rem dot with a surface ring. While upgrading, a `pi-spin pi-spinner` fills the same box, so the header does not shift; a stalled upgrade takes an amber (`bg-amber-500`) dot. The nav item (sidebar bottom group, drawer footer; `useUpdateNavItem`, labels and icons from `updateNavItem` in `utils/upgradeTracking.ts`) takes `text-primary` on its icon, amber when stalled. Its label follows the phase: "Update available" when idle, "Upgrading to vX.Y.Z…" while upgrading, "Reload to vX.Y.Z" when ready (it reloads at once, with no dialog), and "Upgrade stalled" (it opens the dialog). The `upgrade` toast group sits above the bottom bar below md. Upgrade now renders only while `upgradeAvailable` is true and an update is out.
-- **Form dialog shell** (`components/shared/FormDialog.vue`): the shell every form dialog is built on. See [Dialogs and forms](#dialogs-and-forms).
-- **Transaction row** (`components/transactions/TransactionRow.vue`): one transaction in every transaction list (Transactions, Overview Recent, Budget detail). It owns its `px-4` gutter at every breakpoint, the one exception to [Spacing](#spacing), so callers add no horizontal padding.
-- **Account row, mobile** (`components/accounts/AccountRow.vue`): one account below md, on Overview and the Accounts page.
-- **Account tile, desktop** (`components/dashboard/AccountTile.vue`): one account at md and up, on Overview and the Accounts page.
-- **Budget row** (`components/budgets/BudgetRow.vue`): one budget in a budget list, on Overview and the Budgets page.
-- **Budget list** (`components/budgets/BudgetList.vue`): the list of budget rows, shared by Overview and the Budgets page.
-- **Progress bar** (`components/budgets/BudgetProgressBar.vue`): a budget's spend, coloured by level. The only budget bar.
-- **Period stepper** (`components/budgets/PeriodStepper.vue`): moves a budget list between periods. See [Period stepper](#period-stepper).
-- **Reimbursement candidate row** (`components/transactions/ReimbursementCandidateRow.vue`): one selectable transaction in the reimbursement picker. A `role="radio"` inside a radiogroup, with the description and amount on one line and a muted meta line under it. Selected = primary border and ring on a `surface-100` (dark `surface-800`) ground.
+Reuse these before drawing your own (`components/shared/` unless noted): `SectionBand` (every page section, with its heading, meta, "see all", loading, error and empty states), `EmptyState`, `EntityAvatar` (sizes from `AVATAR_SIZES`), `IconPicker`, `CategoryChip`, `StatusTag`, `FormDialog`, `BrandLogo`, `transactions/TransactionRow`, `accounts/AccountRow` (mobile) / `dashboard/AccountTile` (desktop), `budgets/BudgetRow`, `BudgetList`, `BudgetProgressBar` and `PeriodStepper`.
 
-Avatars use Lucide icons through `utils/avatarIcons.ts`. Other UI uses PrimeIcons.
-
-## Notes
-
-### Period stepper
-
-- The band label carries the window (`MONTHLY · OCT 2026`); the controls sit on the right.
-- "This month" (or the period's equivalent) appears only when off the current window, as a link before the arrows. Next is disabled at the current window.
-- Targets are 36px (`h-9 w-9`). No per-row period tag: the band's title already names the period.
-- While the next window loads, the body fades (`refreshing`); the stepper does not show a spinner.
-- The label comes from `budgetWindowLabel` (`utils/budget.ts`), never from `Date` formatting in the component.
-
-### Settings rows
-
-- Settings navigates to sub-pages with chevron rows (icon, bold name, grey caption, `pi-chevron-right`) in a divided band, not with primary buttons.
+- **Transaction row** (`TransactionRow`) owns its `px-4` gutter at every breakpoint, the one exception to [Spacing](#spacing); callers add no horizontal padding.
+- `BrandLogo` renders both the `-light` and `-dark` logo sets and lets `.dark` pick one; never place one set alone.
+- `CategoryChip` with `showIcon` false shows a colour dot instead of the icon; use it beside an `EntityAvatar` of the same category so the icon isn't shown twice.
+- `IconPicker` only picks registry names, never free text.
+- Avatars use Lucide icons through `utils/avatarIcons.ts`. Other UI uses PrimeIcons.
+- The update badge (hamburger mark, below md) keeps one 0.625rem box in every state, so the header never shifts: a `bg-primary` dot, a spinner while upgrading, an amber dot when stalled. The nav item's label and icon come from `updateNavItem` (`utils/upgradeTracking.ts`).
+- Period labels come from `budgetWindowLabel` (`utils/budget.ts`), never from `Date` formatting in a component.
+- Settings links to its sub-pages with chevron rows in a divided band, not primary buttons.
 
 ## Rules
 
