@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useSpendingReport } from "~/composables/reports/useSpendingReport";
+import { REPORTS_PRESETS, type PeriodSelection } from "~/utils/monthRange";
 
 // fullBleed: below md the bands run edge to edge, as on Overview (see layouts/app.vue).
 definePageMeta({
@@ -57,6 +58,15 @@ watch(
     },
     { deep: true },
 );
+
+// Adapter: SharedPeriodPicker speaks PeriodSelection, while monthRange (and the presets above) still drive this page.
+// Reports moves onto the URL range in a later slice, which removes this adapter.
+const period = computed<PeriodSelection>({
+    get: (): PeriodSelection => ({ kind: "range", from: monthRange.value.from, to: monthRange.value.to }),
+    set: (next: PeriodSelection) => {
+        if (next.kind === "range") monthRange.value = { from: next.from, to: next.to };
+    },
+});
 
 // Build YYYY-MM-DD strings directly — never toISOString() on a local date.
 const lastDayOfMonth = (year: number, month: number) => new Date(year, month, 0).getDate();
@@ -129,7 +139,10 @@ const comparisonLabel = computed(() => {
                         class="flex w-full md:w-auto"
                         :pt="{ pcToggleButton: { root: { class: 'flex-1 md:flex-none' } } }"
                     />
-                    <SharedMonthRangePicker v-model="monthRange" />
+                    <SharedPeriodPicker
+                        v-model="period"
+                        :presets="REPORTS_PRESETS"
+                    />
                 </div>
             </template>
         </LayoutPageHeader>

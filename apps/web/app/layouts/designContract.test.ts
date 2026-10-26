@@ -67,6 +67,19 @@ describe("design contract: shared section band", () => {
     });
 });
 
+describe("design contract: shared period picker", () => {
+    it("removes MonthRangePicker in favour of SharedPeriodPicker", () => {
+        expect(existsSync(`${appDir}/components/shared/MonthRangePicker.vue`)).toBe(false);
+    });
+
+    it("uses no <SharedMonthRangePicker in any app .vue file", () => {
+        const offenders = vueFiles(appDir).filter((rel) =>
+            readFileSync(`${appDir}/${rel}`, "utf8").includes("SharedMonthRangePicker"),
+        );
+        expect(offenders).toEqual([]);
+    });
+});
+
 describe("design contract: PrimeFlex classes", () => {
     it("bans no PrimeFlex class in any app .vue file", () => {
         const offenders = vueFiles(appDir).flatMap((rel) => {

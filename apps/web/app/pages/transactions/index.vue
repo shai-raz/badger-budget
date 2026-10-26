@@ -43,13 +43,13 @@ const categoryOptions = computed(() => {
 // Real categories + the Uncategorized entry, used for the "N of M categories" chip.
 const totalCategoryCount = computed(() => categoryOptions.value.length);
 
-// Single source of filter state (bridges the store's month range + show hidden).
+// Single source of filter state (period from the URL, show hidden from the store).
 const {
     searchQuery,
     typeFilter,
     selectedCategoryIds,
     sortOption,
-    selectedMonthRange,
+    period,
     showHidden,
     listParams,
     summaryParams,
@@ -203,7 +203,7 @@ defineExpose({
             >
                 <TransactionsToolbar
                     v-model:search-query="searchQuery"
-                    v-model:selected-month-range="selectedMonthRange"
+                    v-model:period="period"
                     v-model:filters-open="filtersOpen"
                     v-model:sort-option="sortOption"
                     :active-filter-count="activeFilterCount"
@@ -268,7 +268,7 @@ defineExpose({
             <TransactionsToolbar
                 v-if="isDesktop"
                 v-model:search-query="searchQuery"
-                v-model:selected-month-range="selectedMonthRange"
+                v-model:period="period"
                 v-model:filters-open="filtersOpen"
                 v-model:sort-option="sortOption"
                 :active-filter-count="activeFilterCount"
