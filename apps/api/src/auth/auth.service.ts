@@ -78,6 +78,7 @@ export class AuthService {
         // Create user and default cash account in a transaction
         const user = await this.prisma.$transaction(async (tx) => {
             await this.registrationPolicy.lockAndAssert(tx);
+            const role = await this.registrationPolicy.roleForNewUser(tx, registerDto.email);
 
             const newUser = await tx.user.create({
                 data: {
@@ -85,6 +86,7 @@ export class AuthService {
                     password: hashedPassword,
                     firstName: registerDto.firstName,
                     lastName: registerDto.lastName,
+                    role,
                     // New users have no legacy data, so mark as already backfilled
                     currencyBackfilledAt: new Date(),
                 },
@@ -210,16 +212,27 @@ export class AuthService {
 
         if (!user) {
             await this.registrationPolicy.assertRegistrationOpen();
-            // Create new user from Google profile
-            user = await this.prisma.user.create({
-                data: {
-                    email: profile.emails[0].value,
-                    firstName: profile.name.givenName || "",
-                    lastName: profile.name.familyName || "",
-                    googleId: profile.id,
-                    // New users have no legacy data, so mark as already backfilled
-                    currencyBackfilledAt: new Date(),
-                },
+            // Create new user from Google profile, with its default cash account, in one transaction
+            const email = profile.emails[0].value;
+            user = await this.prisma.$transaction(async (tx) => {
+                await this.registrationPolicy.lockAndAssert(tx);
+                const role = await this.registrationPolicy.roleForNewUser(tx, email);
+
+                const newUser = await tx.user.create({
+                    data: {
+                        email,
+                        firstName: profile.name.givenName || "",
+                        lastName: profile.name.familyName || "",
+                        googleId: profile.id,
+                        role,
+                        // New users have no legacy data, so mark as already backfilled
+                        currencyBackfilledAt: new Date(),
+                    },
+                });
+
+                await this.createDefaultCashAccount(tx, newUser.id);
+
+                return newUser;
             });
         } else if (!user.googleId) {
             // Link Google account to existing user
@@ -278,6 +291,7 @@ export class AuthService {
                 console.log("[BACKEND] Creating new user from Google profile");
                 user = await this.prisma.$transaction(async (tx) => {
                     await this.registrationPolicy.lockAndAssert(tx);
+                    const role = await this.registrationPolicy.roleForNewUser(tx, payload.email);
 
                     const newUser = await tx.user.create({
                         data: {
@@ -286,6 +300,7 @@ export class AuthService {
                             lastName: payload.family_name || "",
                             googleId: payload.sub,
                             avatarUrl: payload.picture,
+                            role,
                             // New users have no legacy data, so mark as already backfilled
                             currencyBackfilledAt: new Date(),
                         },
@@ -357,6 +372,7 @@ export class AuthService {
                 email: true,
                 firstName: true,
                 lastName: true,
+                role: true,
             },
         });
 
@@ -368,6 +384,7 @@ export class AuthService {
                 email: user!.email,
                 firstName: user!.firstName,
                 lastName: user!.lastName,
+                role: user!.role,
             },
         };
     }

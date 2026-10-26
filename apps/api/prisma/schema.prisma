@@ -25,6 +25,9 @@ model User {
   demoDataThrough      DateTime? @map("demo_data_through") @db.Date
   // Last app version whose What's New the user has seen; null = never stamped. Only ever raised (see system/changelog.ts).
   lastSeenVersion      String?   @map("last_seen_version") @db.VarChar(64)
+  // Backfill (migration 20261026120000_user_role) and the create rule (first real user, see auth) keep exactly one
+  // live non-demo ADMIN; the demo user is never ADMIN.
+  role                 UserRole  @default(USER)
   createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
   deletedAt            DateTime? @map("deleted_at") @db.Timestamp(6)
@@ -653,4 +656,9 @@ model DataBackfill {
   appliedAt DateTime @default(now()) @map("applied_at") @db.Timestamp(6)
 
   @@map("data_backfills")
+}
+
+enum UserRole {
+  USER
+  ADMIN
 }

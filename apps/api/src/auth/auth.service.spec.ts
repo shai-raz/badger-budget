@@ -1,5 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { JwtService } from "@nestjs/jwt";
+import { UserRole } from "@prisma/client";
 import {
     Logger,
     NotFoundException,
@@ -54,6 +55,7 @@ describe("AuthService", () => {
     const mockRegistrationPolicy = {
         assertRegistrationOpen: jest.fn().mockResolvedValue(undefined),
         lockAndAssert: jest.fn().mockResolvedValue(undefined),
+        roleForNewUser: jest.fn().mockResolvedValue(UserRole.USER),
     };
 
     const mockUser = {
@@ -67,6 +69,7 @@ describe("AuthService", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
+        role: UserRole.USER,
     };
 
     beforeEach(async () => {
@@ -99,6 +102,9 @@ describe("AuthService", () => {
         service = module.get<AuthService>(AuthService);
         prisma = module.get<PrismaService>(PrismaService);
         jwtService = module.get<JwtService>(JwtService);
+        // clearAllMocks keeps implementations, so reset the ones a test may replace (e.g. the concurrent sign-up test).
+        mockRegistrationPolicy.roleForNewUser.mockReset().mockResolvedValue(UserRole.USER);
+        mockPrismaService.$transaction.mockReset();
     });
 
     afterEach(() => {
@@ -176,6 +182,88 @@ describe("AuthService", () => {
             expect(mockPrismaService.user.create).not.toHaveBeenCalled();
         });
 
+        it("decides the role inside the locked transaction, after the lock and before the insert", async () => {
+            const registerDto = {
+                email: "first@example.com",
+                password: "password123",
+                firstName: "First",
+                lastName: "User",
+            };
+            const createdUser = { ...mockUser, id: "first-id", email: "first@example.com" };
+            mockPrismaService.user.findUnique.mockResolvedValueOnce(null);
+            (bcrypt.hash as jest.Mock).mockResolvedValue("hashed-password");
+            mockRegistrationPolicy.roleForNewUser.mockResolvedValueOnce(UserRole.ADMIN);
+            const userCreate = jest.fn().mockResolvedValue(createdUser);
+            const tx = {
+                user: { create: userCreate },
+                account: { create: jest.fn().mockResolvedValue({}) },
+                currency: { findUnique: jest.fn().mockResolvedValue({ id: "ils-id" }) },
+            };
+            mockPrismaService.$transaction.mockImplementation(async (callback) => callback(tx));
+            mockJwtService.sign.mockReturnValue("token");
+            mockPrismaService.refreshToken.create.mockResolvedValue({});
+
+            await service.register(registerDto);
+
+            expect(mockRegistrationPolicy.roleForNewUser).toHaveBeenCalledWith(tx, "first@example.com");
+            expect(userCreate).toHaveBeenCalledWith({
+                data: expect.objectContaining({ email: "first@example.com", role: UserRole.ADMIN }),
+            });
+            const lockOrder = mockRegistrationPolicy.lockAndAssert.mock.invocationCallOrder[0];
+            const roleOrder = mockRegistrationPolicy.roleForNewUser.mock.invocationCallOrder[0];
+            const createOrder = userCreate.mock.invocationCallOrder[0];
+            expect(lockOrder).toBeLessThan(roleOrder);
+            expect(roleOrder).toBeLessThan(createOrder);
+        });
+
+        it("gives ADMIN only to the first of two concurrent sign-ups, because the role is decided under the lock", async () => {
+            // Model the advisory lock: transactions run one after another over one shared users table.
+            const users: { email: string; role: UserRole }[] = [];
+            let queue: Promise<unknown> = Promise.resolve();
+            mockPrismaService.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+            (bcrypt.hash as jest.Mock).mockResolvedValue("hashed-password");
+            mockJwtService.sign.mockReturnValue("token");
+            mockPrismaService.refreshToken.create.mockResolvedValue({});
+            mockRegistrationPolicy.roleForNewUser.mockImplementation(async () =>
+                users.some((user) => user.role === UserRole.ADMIN) ? UserRole.USER : UserRole.ADMIN,
+            );
+            const tx = {
+                user: {
+                    create: jest.fn(async ({ data }: { data: { email: string; role: UserRole } }) => {
+                        users.push({ email: data.email, role: data.role });
+                        return { ...mockUser, id: data.email, email: data.email };
+                    }),
+                },
+                account: { create: jest.fn().mockResolvedValue({}) },
+                currency: { findUnique: jest.fn().mockResolvedValue({ id: "ils-id" }) },
+            };
+            mockPrismaService.$transaction.mockImplementation((callback) => {
+                const run = queue.then(() => callback(tx));
+                queue = run.catch(() => undefined);
+                return run;
+            });
+
+            await Promise.all([
+                service.register({
+                    email: "first@example.com",
+                    password: "password123",
+                    firstName: "A",
+                    lastName: "B",
+                }),
+                service.register({
+                    email: "second@example.com",
+                    password: "password123",
+                    firstName: "C",
+                    lastName: "D",
+                }),
+            ]);
+
+            expect(users).toEqual([
+                { email: "first@example.com", role: UserRole.ADMIN },
+                { email: "second@example.com", role: UserRole.USER },
+            ]);
+        });
+
         it("should throw ForbiddenException before any lookup or hashing when registration is closed", async () => {
             const registerDto = {
                 email: "test@example.com",
@@ -234,6 +322,25 @@ describe("AuthService", () => {
             expect(result).toHaveProperty("accessToken");
             expect(result).toHaveProperty("refreshToken");
             expect(result).toHaveProperty("user");
+            expect(result.user).toEqual({
+                id: mockUser.id,
+                email: mockUser.email,
+                firstName: mockUser.firstName,
+                lastName: mockUser.lastName,
+                role: UserRole.USER,
+            });
+        });
+
+        it("returns the stored role of an admin on login", async () => {
+            const adminUser = { ...mockUser, role: UserRole.ADMIN };
+            mockPrismaService.user.findUnique.mockResolvedValueOnce(adminUser).mockResolvedValueOnce(adminUser);
+            (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+            mockJwtService.sign.mockReturnValueOnce("access-token").mockReturnValueOnce("refresh-token");
+            mockPrismaService.refreshToken.create.mockResolvedValue({});
+
+            const result = await service.login({ email: mockUser.email, password: "password123" });
+
+            expect(result.user.role).toBe(UserRole.ADMIN);
         });
 
         it("should throw UnauthorizedException if user not found", async () => {
@@ -454,24 +561,61 @@ describe("AuthService", () => {
             };
 
             mockPrismaService.user.findUnique.mockResolvedValue(null);
-            mockPrismaService.user.create.mockResolvedValue({
+            const userCreate = jest.fn().mockResolvedValue({
                 ...mockUser,
                 email: "google@example.com",
                 googleId: "google-id",
             });
+            const tx = {
+                user: { create: userCreate },
+                account: { create: jest.fn().mockResolvedValue({}) },
+                currency: { findUnique: jest.fn().mockResolvedValue({ id: "ils-id" }) },
+            };
+            mockPrismaService.$transaction.mockImplementation(async (callback) => callback(tx));
+            mockRegistrationPolicy.roleForNewUser.mockResolvedValueOnce(UserRole.ADMIN);
 
             const result = await service.validateGoogleUser(googleProfile);
 
-            expect(mockPrismaService.user.create).toHaveBeenCalledWith({
+            expect(mockPrismaService.user.create).not.toHaveBeenCalled();
+            expect(mockRegistrationPolicy.lockAndAssert).toHaveBeenCalledWith(tx);
+            expect(mockRegistrationPolicy.roleForNewUser).toHaveBeenCalledWith(tx, "google@example.com");
+            expect(userCreate).toHaveBeenCalledWith({
                 data: {
                     email: "google@example.com",
                     firstName: "Google",
                     lastName: "User",
                     googleId: "google-id",
+                    role: UserRole.ADMIN,
                     currencyBackfilledAt: expect.any(Date),
                 },
             });
+            expect(tx.account.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ userId: "user-id", type: "cash", currencyId: "ils-id" }),
+            });
+            expect(mockRegistrationPolicy.lockAndAssert.mock.invocationCallOrder[0]).toBeLessThan(
+                mockRegistrationPolicy.roleForNewUser.mock.invocationCallOrder[0],
+            );
+            expect(mockRegistrationPolicy.roleForNewUser.mock.invocationCallOrder[0]).toBeLessThan(
+                userCreate.mock.invocationCallOrder[0],
+            );
             expect(result.googleId).toBe("google-id");
+        });
+
+        it("should not create a Google user when the lock-time check closes registration", async () => {
+            const googleProfile = {
+                id: "google-id",
+                emails: [{ value: "google@example.com" }],
+                name: { givenName: "Google", familyName: "User" },
+            };
+            mockPrismaService.user.findUnique.mockResolvedValue(null);
+            const userCreate = jest.fn();
+            mockPrismaService.$transaction.mockImplementation(async (callback) =>
+                callback({ user: { create: userCreate } }),
+            );
+            mockRegistrationPolicy.lockAndAssert.mockRejectedValueOnce(new ForbiddenException("closed"));
+
+            await expect(service.validateGoogleUser(googleProfile)).rejects.toThrow(ForbiddenException);
+            expect(userCreate).not.toHaveBeenCalled();
         });
 
         it("should refuse to create a new Google user when registration is closed", async () => {
@@ -574,12 +718,25 @@ describe("AuthService", () => {
                 mockJwtService.sign.mockReturnValueOnce("access-token").mockReturnValueOnce("refresh-token");
                 mockPrismaService.refreshToken.create.mockResolvedValue({});
 
+                mockRegistrationPolicy.roleForNewUser.mockResolvedValueOnce(UserRole.ADMIN);
+
                 const result = await service.exchangeGoogleCode("code", "redirect", "verifier");
 
                 expect(mockRegistrationPolicy.lockAndAssert).toHaveBeenCalledWith(tx);
+                expect(mockRegistrationPolicy.roleForNewUser).toHaveBeenCalledWith(tx, "new@example.com");
                 expect(userCreate).toHaveBeenCalledWith({
-                    data: expect.objectContaining({ email: "new@example.com", googleId: "google-sub" }),
+                    data: expect.objectContaining({
+                        email: "new@example.com",
+                        googleId: "google-sub",
+                        role: UserRole.ADMIN,
+                    }),
                 });
+                expect(mockRegistrationPolicy.lockAndAssert.mock.invocationCallOrder[0]).toBeLessThan(
+                    mockRegistrationPolicy.roleForNewUser.mock.invocationCallOrder[0],
+                );
+                expect(mockRegistrationPolicy.roleForNewUser.mock.invocationCallOrder[0]).toBeLessThan(
+                    userCreate.mock.invocationCallOrder[0],
+                );
                 expect(accountCreate).toHaveBeenCalledWith({
                     data: expect.objectContaining({ type: "cash", currencyId: "ils-id" }),
                 });

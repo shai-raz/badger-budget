@@ -42,6 +42,8 @@ import type {
     ISystemInfo,
     IChangelogResponse,
     IChangelogSeenResponse,
+    IAuthResponse,
+    IAuthUser,
 } from "@badger/types";
 import type { AccountType, AvatarIconName } from "@badger/shared-data";
 
@@ -193,18 +195,23 @@ export class ApiClient {
     }
 
     // Auth endpoints
-    async register(data: { email: string; password: string; firstName: string; lastName: string }) {
-        const response = await this.client.post("/auth/register", data);
+    async register(data: {
+        email: string;
+        password: string;
+        firstName: string;
+        lastName: string;
+    }): Promise<IAuthResponse> {
+        const response = await this.client.post<IAuthResponse>("/auth/register", data);
         return response.data;
     }
 
-    async login(data: { email: string; password: string }) {
-        const response = await this.client.post("/auth/login", data);
+    async login(data: { email: string; password: string }): Promise<IAuthResponse> {
+        const response = await this.client.post<IAuthResponse>("/auth/login", data);
         return response.data;
     }
 
-    async googleAuth(data: { code: string; redirectUri: string; codeVerifier: string }) {
-        const response = await this.client.post("/auth/google/mobile", data);
+    async googleAuth(data: { code: string; redirectUri: string; codeVerifier: string }): Promise<IAuthResponse> {
+        const response = await this.client.post<IAuthResponse>("/auth/google/mobile", data);
         return response.data;
     }
 
@@ -212,8 +219,8 @@ export class ApiClient {
         await this.client.post("/auth/logout", { refreshToken });
     }
 
-    async getMe() {
-        const response = await this.client.get("/auth/me");
+    async getMe(): Promise<IAuthUser> {
+        const response = await this.client.get<IAuthUser>("/auth/me");
         return response.data;
     }
 
