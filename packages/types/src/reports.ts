@@ -1,5 +1,11 @@
 // Spending report
 
+/**
+ * Which period a spending report compares against. `previous` is the period
+ * preceding the window; `yearOverYear` is the same dates one year earlier.
+ */
+export type ReportCompareMode = "previous" | "yearOverYear";
+
 export interface SpendingReportCurrency {
     code: string;
     symbol: string;
@@ -19,7 +25,7 @@ export interface SpendingReportCategoryItem {
 }
 
 export interface SpendingReportComparison {
-    /** Previous equal-length period, inclusive YYYY-MM-DD bounds. */
+    /** Comparison period (per the request's compare mode), inclusive YYYY-MM-DD bounds. */
     startDate: string;
     endDate: string;
     total: number;

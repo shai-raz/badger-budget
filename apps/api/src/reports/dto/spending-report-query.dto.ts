@@ -1,6 +1,9 @@
-import { IsDateString, IsOptional, IsString, Length, Matches } from "class-validator";
+import { IsDateString, IsIn, IsOptional, IsString, Length, Matches } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Transform } from "class-transformer";
+import type { ReportCompareMode } from "@badger/types";
+
+const REPORT_COMPARE_MODES = ["previous", "yearOverYear"] as const satisfies readonly ReportCompareMode[];
 
 export class SpendingReportQueryDto {
     @ApiProperty({
@@ -31,4 +34,14 @@ export class SpendingReportQueryDto {
     @Length(3, 3)
     @IsOptional()
     currency?: string;
+
+    @ApiPropertyOptional({
+        enum: [...REPORT_COMPARE_MODES],
+        default: "previous",
+        description:
+            "previous: the preceding period (same days when the window starts on the 1st and ends mid-month); yearOverYear: the same dates one year earlier",
+    })
+    @IsIn([...REPORT_COMPARE_MODES])
+    @IsOptional()
+    compare?: ReportCompareMode;
 }

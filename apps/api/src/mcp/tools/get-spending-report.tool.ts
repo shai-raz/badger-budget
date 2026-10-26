@@ -30,7 +30,7 @@ export class GetSpendingReportTool implements McpToolDefinition<typeof inputSche
     readonly description =
         "Spending report for a date range: total, transaction count and a per-category breakdown (sorted by amount, descending). " +
         "Covers expenses only (not income, and not hidden expenses), converted to the display currency. Amounts are net of linked reimbursements " +
-        "(income the user linked to an expense reduces that expense). `comparison` is the previous period of equal length, " +
+        "(income the user linked to an expense reduces that expense). `comparison` is the preceding period: the same number of calendar months when the window starts on the 1st (ending on the same day of the month when it ends mid-month), otherwise the same number of days. " +
         "with `changePercentage` (null when the previous total is 0) and `direction` (up, down or flat). " +
         "`percentage` per category is its share of the total (0-100). A categoryId of null is the Uncategorized bucket. " +
         "The call fails if an FX rate needed for the conversion is unavailable.";

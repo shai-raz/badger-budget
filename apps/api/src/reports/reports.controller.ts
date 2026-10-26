@@ -15,7 +15,7 @@ export class ReportsController {
     @Get("spending")
     @ApiOperation({
         summary:
-            "Get a spending report (total, per-category breakdown, comparison vs the previous equal-length period) for a date range",
+            "Get a spending report (total, per-category breakdown, comparison vs the previous period or the year before, per `compare`) for a date range",
     })
     @ApiResponse({
         status: 200,

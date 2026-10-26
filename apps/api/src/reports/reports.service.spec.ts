@@ -263,6 +263,45 @@ describe("ReportsService", () => {
         });
     });
 
+    it("compares a partial month against the same days of the previous month by default", async () => {
+        mockPrismaService.transaction.findMany.mockResolvedValue([]);
+
+        const result = await service.getSpendingReport("user-id", {
+            startDate: "2026-10-01",
+            endDate: "2026-10-26",
+        });
+
+        expect(result.comparison).toEqual(expect.objectContaining({ startDate: "2026-09-01", endDate: "2026-09-26" }));
+        expect(mockPrismaService.transaction.findMany).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    transactionDate: { gte: new Date("2026-09-01"), lte: new Date("2026-09-26") },
+                }),
+            }),
+        );
+    });
+
+    it("compares against the same dates one year earlier with compare=yearOverYear", async () => {
+        mockPrismaService.transaction.findMany.mockResolvedValue([]);
+
+        const result = await service.getSpendingReport("user-id", {
+            startDate: "2026-10-01",
+            endDate: "2026-10-26",
+            compare: "yearOverYear",
+        });
+
+        expect(result.comparison).toEqual(expect.objectContaining({ startDate: "2025-10-01", endDate: "2025-10-26" }));
+        expect(mockPrismaService.transaction.findMany).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    transactionDate: { gte: new Date("2025-10-01"), lte: new Date("2025-10-26") },
+                }),
+            }),
+        );
+    });
+
     it("reports direction 'down' when spending decreased", async () => {
         mockPrismaService.transaction.findMany
             .mockResolvedValueOnce([txn(90, groceries)])

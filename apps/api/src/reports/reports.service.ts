@@ -7,7 +7,7 @@ import { FxConversionService } from "../transactions/fx-conversion.service";
 import { ACTIVE_SIDE, netOf, sumAllocations } from "../transactions/reimbursement-netting";
 import { mapWithConcurrency } from "../bank-sync/concurrency.util";
 import { SpendingReportQueryDto } from "./dto/spending-report-query.dto";
-import { getPreviousPeriod } from "./utils/report-period.util";
+import { getPreviousPeriod, getYearOverYearPeriod } from "./utils/report-period.util";
 
 /** Max simultaneous provider fetches when FxRateDaily misses need filling. */
 const FX_FETCH_CONCURRENCY = 5;
@@ -50,8 +50,8 @@ export class ReportsService {
 
     /**
      * Total spending, per-category breakdown, and a comparison against the
-     * previous equal-length period, all converted to the requested display
-     * currency. Unlike the budget path (which reads pre-materialized
+     * period chosen by `query.compare` (previous period by default), all
+     * converted to the requested display currency. Unlike the budget path (which reads pre-materialized
      * `TransactionConversion` snapshots and treats missing ones as 0), an
      * unresolvable FX rate here fails the request — the headline total must not
      * silently drop transactions.
@@ -73,7 +73,8 @@ export class ReportsService {
             throw new BadRequestException(`Unknown currency code: ${currencyCode}`);
         }
 
-        const previousPeriod = getPreviousPeriod(start, end);
+        const previousPeriod =
+            query.compare === "yearOverYear" ? getYearOverYearPeriod(start, end) : getPreviousPeriod(start, end);
 
         const [currentTransactions, previousTransactions] = await Promise.all([
             this.findExpenses(userId, start, end),
