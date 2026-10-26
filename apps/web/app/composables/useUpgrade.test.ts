@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { effectScope, nextTick, ref, type EffectScope } from "vue";
+import { effectScope, nextTick, reactive, ref, type EffectScope } from "vue";
 
 import { PENDING_UPGRADE_KEY, type PendingUpgrade } from "~/utils/upgradeTracking";
 
@@ -9,6 +9,7 @@ const BUILD_ID = "build-old";
 
 const stored = ref<string | null>(null);
 const info = ref(null);
+const auth = reactive<{ user: { id: string } | null }>({ user: { id: "u1" } });
 
 vi.mock("@tanstack/vue-query", () => ({
     useMutation: () => ({ mutateAsync: vi.fn(), isPending: ref(false) }),
@@ -16,7 +17,7 @@ vi.mock("@tanstack/vue-query", () => ({
 vi.mock("primevue/usetoast", () => ({ useToast: () => ({ add: vi.fn() }) }));
 vi.mock("./useApiClient", () => ({ useApiClient: () => ({ triggerUpgrade: vi.fn() }) }));
 vi.mock("./useUpdateNotice", () => ({ useUpdateNotice: () => ({ info }) }));
-vi.mock("~/stores/auth", () => ({ useAuthStore: () => ({ user: { id: "u1" } }) }));
+vi.mock("~/stores/auth", () => ({ useAuthStore: () => auth }));
 vi.mock("~/utils/reloadToNewBuild", () => ({ reloadToNewBuild: vi.fn() }));
 
 const stampedReady: PendingUpgrade = {
@@ -42,6 +43,7 @@ beforeEach(() => {
     vi.resetModules();
     stored.value = null;
     info.value = null;
+    auth.user = { id: "u1" };
     vi.stubGlobal("useLocalStorage", (key: string) => {
         expect(key).toBe(PENDING_UPGRADE_KEY);
         return stored;
@@ -86,5 +88,26 @@ describe("useUpgrade", () => {
 
         expect(later.pending.value?.targetVersion).toBe("1.2.0");
         expect(later.phase.value).toBe("ready");
+    });
+
+    // Regression: `held` is module scope and was passed to tabView unchecked, so after a sign-out the next user in the
+    // same tab read the previous user's "Reload to vX" state.
+    it("drops a copy held for the previous user after sign-out", async () => {
+        stored.value = JSON.stringify(stampedReady);
+        const upgrade = await mountUpgrade();
+        await nextTick();
+        expect(upgrade.phase.value).toBe("ready");
+
+        // Sign-out clears the shared entry, then another user signs in in the same tab.
+        stored.value = null;
+        auth.user = { id: "u2" };
+        await nextTick();
+
+        expect(upgrade.phase.value).toBeNull();
+        expect(upgrade.pending.value).toBeNull();
+
+        const nextUser = await mountUpgrade();
+        await nextTick();
+        expect(nextUser.phase.value).toBeNull();
     });
 });

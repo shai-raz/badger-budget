@@ -34,15 +34,12 @@ export const useUpgrade = () => {
     const stored = useLocalStorage<string | null>(PENDING_UPGRADE_KEY, null);
     const now = useNow({ interval: 15_000 });
 
-    const view = computed(() =>
-        tabView(
-            parsePendingUpgrade(stored.value, authStore.user?.id ?? null),
-            held.value,
-            info.value,
-            buildId,
-            now.value.getTime(),
-        ),
-    );
+    const view = computed(() => {
+        const userId = authStore.user?.id ?? null;
+        // The copy is module scope, so it outlives a sign-out. Another user in the same tab must not inherit it.
+        const ownHeld = held.value?.userId === userId ? held.value : null;
+        return tabView(parsePendingUpgrade(stored.value, userId), ownHeld, info.value, buildId, now.value.getTime());
+    });
     const pending = computed(() => view.value.entry);
     const phase = computed(() => view.value.phase);
     const actionState = computed(() => upgradeActionState(info.value, phase.value));
