@@ -1,6 +1,6 @@
 # Web Architecture (`apps/web`)
 
-Nuxt 4.5 SPA (`ssr: false`; Vite 8 / Rolldown, Lightning CSS minification). `nuxt` is pinned `~4.5.2` because 4.6.x needs Node ^22.22.3, above `.node-version`; the Docker image pins its own Node (`NODE_VERSION` in the `Dockerfile`).
+Nuxt 4 SPA (`ssr: false`; Vite 8 / Rolldown, Lightning CSS minification). `nuxt` is pinned `~4.5.2` because 4.6.x needs Node ^22.22.3, above `.node-version`; the Docker image pins its own Node (`NODE_VERSION` in the `Dockerfile`).
 
 - **UI**: PrimeVue 4 (Aura with a custom near-black primary ramp, `app/theme/preset.ts`) + Tailwind CSS 3 + PrimeIcons. Visual rules: [DESIGN.md](DESIGN.md).
 - **State**: Pinia (`app/stores/`) for client state, TanStack Query (`@peterbud/nuxt-query`) for server state. Components call composables, never the API client directly.

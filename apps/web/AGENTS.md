@@ -1,6 +1,8 @@
 # Web App
 
-Architecture: [ARCHITECTURE.md](ARCHITECTURE.md). UI rules: [DESIGN.md](DESIGN.md), read before any UI change.
+Architecture (imported): @ARCHITECTURE.md
+
+UI rules: [DESIGN.md](DESIGN.md), read before any UI change.
 
 ## Conventions
 

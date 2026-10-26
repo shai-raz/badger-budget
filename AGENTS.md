@@ -1,6 +1,6 @@
 # AGENTS.md
 
-**Badger Budget** is a personal finance and budgeting web app: `apps/api` (NestJS REST API, port 3000) and `apps/web` (Nuxt 4 SPA, port 3001), with shared code in `packages/`.
+**Badger Budget** is a personal budgeting web app: `apps/api` (NestJS REST API, port 3000) and `apps/web` (Nuxt SPA, port 3001), with shared code in `packages/`.
 
 ## Commands
 
@@ -31,17 +31,16 @@ docker build -t badger-budget .   # Production image: API + bundled SPA on one p
 
 ## Architecture
 
-- **API** (`apps/api`, NestJS 11): [apps/api/ARCHITECTURE.md](apps/api/ARCHITECTURE.md).
-- **Web** (`apps/web`, Nuxt 4 SPA): [apps/web/ARCHITECTURE.md](apps/web/ARCHITECTURE.md).
+- **App architecture**: [apps/api/ARCHITECTURE.md](apps/api/ARCHITECTURE.md) and [apps/web/ARCHITECTURE.md](apps/web/ARCHITECTURE.md): stack and cross-cutting rules. Each app's `AGENTS.md` imports its own; read the other too when a change crosses the API/web boundary (DTOs, `api-client`, auth).
 - **UI design system** (`apps/web/DESIGN.md`): read before any UI change.
-- **Docker image:** `.github/workflows/docker-publish.yml` builds amd64+arm64 to `ghcr.io/<owner>/badger-budget` on main pushes that touch its `paths` list (release commits get their semver tags from that same build; tag pushes build nothing). It stamps `APP_VERSION` and `GIT_SHA` (see `apps/api/ARCHITECTURE.md`).
-- **Shared packages** (`packages/`): `types` (TS source only), `api-client` (typed Axios client), `shared-data` (constants and enums) and `utils` (runtime helpers, compiled to CJS).
+- **Docker image:** `.github/workflows/docker-publish.yml` builds on main pushes touching its `paths` list, release commits included (tag pushes build nothing), and stamps `APP_VERSION` and `GIT_SHA`.
+- **Shared packages** (`packages/`): `types` (TS source), `api-client` (typed Axios client), `shared-data` (constants and enums) and `utils` (runtime helpers, compiled to CJS).
 
 ## Environment Setup
 
 - API: `apps/api/.env.example` lists every variable; nearly all are optional. Generated secrets go in `DATA_DIR/secrets`.
 - Web: no `.env.example`. `NUXT_PUBLIC_API_BASE_URL` is the only variable, a build-time override of the same-origin `/api/v1`.
-- Self-hosting: `docker-compose.yml` (production, see README), `deploy/coolify/` and `deploy/dokploy/` (the same stack per host, each with a README) and `docker-compose.dev.yml` (dev Postgres).
+- Self-hosting: `docker-compose.yml` (production, see README), `deploy/` (the same stack per hosting platform, each folder with a README) and `docker-compose.dev.yml` (dev Postgres).
 
 ## Agent Workflow
 
@@ -67,7 +66,7 @@ Every agent working in a directory pays for its docs in context, so they hold on
 
 - Root `AGENTS.md` [1,000]: repo-wide commands, workflow, and pointers. Nothing specific to one app or feature.
 - `apps/*/AGENTS.md` [300]: how to work in that app (conventions, testing).
-- `apps/*/ARCHITECTURE.md` [1,200]: the app's shape: stack, cross-cutting mechanisms (auth, request pipeline, layout contract, CSS layers) and constraints that span modules. A few lines per mechanism, linking the module doc for depth.
+- `apps/*/ARCHITECTURE.md` [1,200], auto-loaded with the app: stack, cross-cutting mechanisms (auth, request pipeline, layout contract, CSS layers) and constraints spanning modules. A few lines per mechanism, linking the module doc for depth.
 - `apps/web/DESIGN.md` [1,200]: UI rules and tokens only.
 - Module `AGENTS.md` (`apps/api/src/<module>/`) [400]: that module's invariants and traps. Add one only when the module has some.
 - A code comment, not a doc, when the trap lives in one file or function: it sits where the next editor looks, and dies with the code.

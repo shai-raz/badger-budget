@@ -1,6 +1,6 @@
 # apps/api
 
-Architecture: [ARCHITECTURE.md](ARCHITECTURE.md).
+Architecture (imported): @ARCHITECTURE.md
 
 - In a git worktree, copy `apps/api/.env` from the main worktree.
 - Go through Prisma; raw SQL only when unavoidable.
