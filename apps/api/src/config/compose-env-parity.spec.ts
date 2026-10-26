@@ -16,6 +16,7 @@ const FILES: ComposeFile[] = [
         path: join(__dirname, "../../../../deploy/coolify/docker-compose.yml"),
         hostOnly: ["SERVICE_URL_APP_8080"],
     },
+    { path: join(__dirname, "../../../../deploy/dokploy/docker-compose.yml"), hostOnly: [] },
 ];
 
 const DEPLOY_WEBHOOK_KEYS = [
@@ -151,4 +152,19 @@ describe("compose files", () => {
             }
         },
     );
+});
+
+describe("deploy/dokploy/docker-compose.yml", () => {
+    const dokploy = readCompose(join(__dirname, "../../../../deploy/dokploy/docker-compose.yml"));
+
+    it("fails fast when PUBLIC_URL or POSTGRES_PASSWORD is unset", () => {
+        expect(dokploy).toContain("${PUBLIC_URL:?");
+        expect(dokploy).toContain("${POSTGRES_PASSWORD:?");
+    });
+
+    it("leaves routing to Dokploy's Traefik: no host ports, labels or dokploy-network", () => {
+        expect(dokploy).not.toMatch(/^\s*ports:/m);
+        expect(dokploy).not.toMatch(/^\s*labels:/m);
+        expect(dokploy).not.toContain("dokploy-network");
+    });
 });

@@ -1,0 +1,96 @@
+# Badger Budget for Dokploy: app + Postgres 16 + nightly backups.
+# Dokploy: Create Service -> Compose -> Git, compose path ./deploy/dokploy/docker-compose.yml (README "Dokploy").
+# On the Environment tab set PUBLIC_URL (e.g. https://budget.example.com) and POSTGRES_PASSWORD
+# (letters and digits, e.g. openssl rand -hex 24). Compose refuses to start until both are set.
+# On the Domains tab add a domain for service `app`, port 8080, with HTTPS on.
+# Differs from the root docker-compose.yml: no host ports or Caddy (Dokploy's Traefik routes and terminates TLS),
+# and it uses the same named volumes as the Coolify file, so an existing service keeps its data.
+# Keep the app's environment list in sync with the root and Coolify files (apps/api/src/config/compose-env-parity.spec.ts
+# enforces it). See deploy/dokploy/README.md for setup and the in-app upgrade.
+
+services:
+    app:
+        image: ghcr.io/shai-raz/badger-budget:latest
+        # Re-pull :latest on every deploy. Dokploy runs `docker compose up` without pulling, so it would keep the
+        # cached image and a redeploy would restart the old version.
+        pull_policy: always
+        restart: unless-stopped
+        depends_on:
+            db:
+                condition: service_healthy
+        # No ports, labels or networks here: Dokploy's Traefik reaches the app on 8080 over its own network.
+        expose:
+            - "8080"
+        volumes:
+            - app_data:/data
+        environment:
+            - PUBLIC_URL=${PUBLIC_URL:?Set PUBLIC_URL on the Environment tab, e.g. https://budget.example.com}
+            - TRUST_PROXY_HOPS=${TRUST_PROXY_HOPS:-1}
+            - DATABASE_URL=postgresql://${POSTGRES_USER:-badger}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD on the Environment tab (letters and digits, e.g. openssl rand -hex 24)}@db:5432/badger
+            - ALLOW_REGISTRATION=${ALLOW_REGISTRATION:-}
+            - FREE_CURRENCY_API_KEY=${FREE_CURRENCY_API_KEY:-}
+            - GOOGLE_SHEETS_TYPE=${GOOGLE_SHEETS_TYPE:-}
+            - GOOGLE_SHEETS_PROJECT_ID=${GOOGLE_SHEETS_PROJECT_ID:-}
+            - GOOGLE_SHEETS_PRIVATE_KEY_ID=${GOOGLE_SHEETS_PRIVATE_KEY_ID:-}
+            - GOOGLE_SHEETS_PRIVATE_KEY=${GOOGLE_SHEETS_PRIVATE_KEY:-}
+            - GOOGLE_SHEETS_CLIENT_EMAIL=${GOOGLE_SHEETS_CLIENT_EMAIL:-}
+            - GOOGLE_SHEETS_CLIENT_ID=${GOOGLE_SHEETS_CLIENT_ID:-}
+            - BROWSERLESS_URL=${BROWSERLESS_URL:-}
+            - CAL_PROXY_URL=${CAL_PROXY_URL:-}
+            - R2_ACCOUNT_ID=${R2_ACCOUNT_ID:-}
+            - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID:-}
+            - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY:-}
+            - R2_BUCKET=${R2_BUCKET:-}
+            - R2_PRESIGN_TTL=${R2_PRESIGN_TTL:-604800}
+            - STORE_SCRAPER_DEBUG_LOCALLY=${STORE_SCRAPER_DEBUG_LOCALLY:-}
+            - SEED_DEMO=${SEED_DEMO:-}
+            - JWT_SECRET=${JWT_SECRET:-}
+            - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-}
+            - CREDENTIAL_ENCRYPTION_PEPPER=${CREDENTIAL_ENCRYPTION_PEPPER:-}
+            - UPDATE_CHECK=${UPDATE_CHECK:-}
+            - UPDATE_CHECK_REPO=${UPDATE_CHECK_REPO:-}
+            - DEPLOY_WEBHOOK_URL=${DEPLOY_WEBHOOK_URL:-}
+            - DEPLOY_WEBHOOK_TOKEN=${DEPLOY_WEBHOOK_TOKEN:-}
+            - DEPLOY_WEBHOOK_TOKEN_HEADER=${DEPLOY_WEBHOOK_TOKEN_HEADER:-}
+            - DEPLOY_WEBHOOK_BODY=${DEPLOY_WEBHOOK_BODY:-}
+
+    db:
+        image: postgres:16
+        restart: unless-stopped
+        volumes:
+            - pgdata:/var/lib/postgresql/data
+        environment:
+            - POSTGRES_USER=${POSTGRES_USER:-badger}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD on the Environment tab (letters and digits, e.g. openssl rand -hex 24)}
+            - POSTGRES_DB=badger
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    # Daily dumps (7 daily, 4 weekly, 6 monthly) into the `backups` volume. Delete this service to turn them off.
+    backup:
+        image: prodrigestivill/postgres-backup-local:16
+        restart: unless-stopped
+        # Root, so the backups volume is writable whatever its ownership.
+        user: "0:0"
+        depends_on:
+            db:
+                condition: service_healthy
+        volumes:
+            - backups:/backups
+        environment:
+            - POSTGRES_HOST=db
+            - POSTGRES_DB=badger
+            - POSTGRES_USER=${POSTGRES_USER:-badger}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD on the Environment tab (letters and digits, e.g. openssl rand -hex 24)}
+            - SCHEDULE=@daily
+            - BACKUP_KEEP_DAYS=7
+            - BACKUP_KEEP_WEEKS=4
+            - BACKUP_KEEP_MONTHS=6
+
+volumes:
+    app_data: {}
+    pgdata: {}
+    backups: {}
