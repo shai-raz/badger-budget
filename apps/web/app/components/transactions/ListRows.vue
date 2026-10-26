@@ -72,7 +72,12 @@ const scrollToTop = () => {
     scrollEl.value?.scrollTo({ top: 0 });
 };
 
-defineExpose({ scrollToTop });
+// Read and restore the scroll position, so the page can bring the list back to
+// the same row after a detail page round-trip.
+const getScrollTop = () => scrollEl.value?.scrollTop ?? 0;
+const scrollToOffset = (top: number) => scrollEl.value?.scrollTo({ top });
+
+defineExpose({ scrollToTop, getScrollTop, scrollToOffset });
 </script>
 
 <template>

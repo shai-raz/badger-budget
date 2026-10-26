@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import type { ICategoryResponse, ITransactionResponse } from "@badger/types";
-import { useInfiniteTransactions, useTransactionsSummary } from "../../composables/transactions/useTransactions";
+import { useQueryClient } from "@tanstack/vue-query";
+import {
+    transactionKeys,
+    useInfiniteTransactions,
+    useTransactionsSummary,
+} from "../../composables/transactions/useTransactions";
 import { useTransactionFilters } from "../../composables/transactions/useTransactionFilters";
+import { listScrollKey, saveListScroll, takeListScroll } from "../../utils/listScroll";
 // Imported explicitly (Nuxt would otherwise auto-import it) so its instance
 // type is in scope for the template ref below.
 import TransactionsListRows from "../../components/transactions/ListRows.vue";
@@ -138,6 +144,35 @@ watch(listParams, () => {
     paramsChanging.value = true;
     listRows.value?.scrollToTop();
 });
+
+// Going to a transaction's detail page: remember where the list was scrolled so
+// returning restores the same row. Only the detail page saves; any other
+// navigation leaves the slot alone.
+onBeforeRouteLeave((to) => {
+    if (/^\/transactions\/[^/]+$/.test(to.path)) {
+        saveListScroll(listScrollKey(listParams.value), listRows.value?.getScrollTop() ?? 0);
+    }
+});
+
+// Coming back from the detail page: restore only when the same list is still
+// cached, because the infinite-query pages are then rendered at the same height
+// straight away. If the cache was collected or the params differ, the list
+// starts at the top as before.
+const queryClient = useQueryClient();
+const restoreTop = takeListScroll(listScrollKey(listParams.value));
+const canRestore = restoreTop !== null && !!queryClient.getQueryData(transactionKeys.infinite(listParams.value));
+if (canRestore) {
+    const stop = watch(
+        listRows,
+        async (rows) => {
+            if (!rows) return;
+            await nextTick();
+            rows.scrollToOffset(restoreTop);
+            stop();
+        },
+        { immediate: true },
+    );
+}
 
 const isApplyingRules = ref<boolean>(false);
 
