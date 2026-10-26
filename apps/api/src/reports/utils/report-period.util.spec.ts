@@ -112,6 +112,13 @@ describe("getYearOverYearPeriod", () => {
         expect(toIsoDateString(result.end)).toBe("2027-02-28");
     });
 
+    it("maps a month-end window to the target month's last day, keeping the leap day", () => {
+        const result = getYearOverYearPeriod(utc("2025-01-01"), utc("2025-02-28"));
+
+        expect(toIsoDateString(result.start)).toBe("2024-01-01");
+        expect(toIsoDateString(result.end)).toBe("2024-02-29");
+    });
+
     it("clamps a start of Feb 29 to Feb 28 when the prior year is not a leap year", () => {
         const result = getYearOverYearPeriod(utc("2028-02-29"), utc("2028-03-10"));
 

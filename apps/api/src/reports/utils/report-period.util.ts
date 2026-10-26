@@ -49,11 +49,15 @@ export function getPreviousPeriod(start: Date, end: Date): PeriodRange {
 /**
  * The same dates one year earlier, with the day clamped to the target month's
  * length — so Jan 1–Oct 26 2026 → Jan 1–Oct 26 2025, and Feb 29 2028 → Feb 28 2027.
+ * A window ending on a month's last day maps to the target month's last day, so
+ * Jan 1–Feb 28 2025 → Jan 1–Feb 29 2024 keeps the leap day.
  */
 export function getYearOverYearPeriod(start: Date, end: Date): PeriodRange {
     return {
         start: shiftMonths(start, -12),
-        end: shiftMonths(end, -12),
+        end: isLastDayOfMonth(end)
+            ? new Date(Date.UTC(end.getUTCFullYear() - 1, end.getUTCMonth() + 1, 0))
+            : shiftMonths(end, -12),
     };
 }
 
