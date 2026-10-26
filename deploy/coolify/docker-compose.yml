@@ -1,6 +1,6 @@
 # Badger Budget for Coolify: app + Postgres 16 + nightly backups.
 # Coolify: + New -> Public Repository, build pack Docker Compose, location /deploy/coolify/docker-compose.yml
-# (README "Coolify"). It also works pasted into + New -> Docker Compose Empty. No edits needed.
+# (see deploy/coolify/README.md). It also works pasted into + New -> Docker Compose Empty. No edits needed.
 # Coolify generates the domain and the database credentials (SERVICE_* magic variables).
 # Differs from the root docker-compose.yml: no host ports or Caddy (Coolify's proxy routes and terminates TLS),
 # and a backups volume instead of ./backups. Keep the app's environment list in sync with the root file
