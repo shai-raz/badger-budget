@@ -30,7 +30,14 @@ docker run --rm -v <project>_backups:/backups -v "$PWD":/out busybox \
   cp /backups/last/badger-latest.sql.gz /out/
 ```
 
-Restore the database from that file with the steps in [Restore the database](../../README.md#restore-the-database). Those steps use `docker compose`, so on Coolify run them against the service's containers. Also back up the `app_data` volume (`/data`), which holds the generated secrets, as described in [Back up `/data`](../../README.md#back-up-data).
+Restore the database from that file with the steps in [Restore the database](../../README.md#restore-the-database), using the copied file in place of `backups/last/*-latest.sql.gz`. Those steps use `docker compose`, so on Coolify run them against the service's containers.
+
+Also back up the `app_data` volume (`/data`), which holds the generated secrets. Coolify prefixes the volume name with the project, so use `<project>_app_data` here, not the name in the root README's [Back up `/data`](../../README.md#back-up-data) command:
+
+```bash
+docker run --rm -v <project>_app_data:/data -v "$PWD":/backup busybox \
+  tar czf /backup/badger-data.tgz -C /data .
+```
 
 ## In-app upgrade
 

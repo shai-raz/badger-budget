@@ -1,5 +1,5 @@
 # Badger Budget for Dokploy: app + Postgres 16 + nightly backups.
-# Dokploy: Create Service -> Compose -> Git, compose path ./deploy/dokploy/docker-compose.yml (README "Dokploy").
+# Dokploy: Create Service -> Compose -> Git, compose path ./deploy/dokploy/docker-compose.yml.
 # On the Environment tab set PUBLIC_URL (e.g. https://budget.example.com) and POSTGRES_PASSWORD
 # (letters and digits, e.g. openssl rand -hex 24). Compose refuses to start until both are set.
 # On the Domains tab add a domain for service `app`, port 8080, with HTTPS on.

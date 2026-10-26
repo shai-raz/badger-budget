@@ -58,7 +58,7 @@ If your Dokploy service already runs the Coolify compose file ([`deploy/coolify/
 4. Remove the `SERVICE_URL_APP*` leftovers from the Environment tab.
 5. Keep the Domains entry.
 
-Moving from a Coolify server to a new Dokploy server is different, because the volumes stay on the old server. Take a database dump and a `/data` backup from Coolify (see the [Coolify backups](../coolify/README.md#backups)), then restore both into the new Dokploy service with the steps in [Restore `/data`](../../README.md#restore-data) and [Restore the database](../../README.md#restore-the-database). Use the Dokploy volume names and `docker compose -p <appName>` from the Backups section below.
+Moving from a Coolify server to a new Dokploy server is different, because the volumes stay on the old server. Take a database dump and a `/data` backup from Coolify (see the [Coolify backups](../coolify/README.md#backups)), then restore both into the new Dokploy service with the steps in [Restore `/data`](../../README.md#restore-data) and [Restore the database](../../README.md#restore-the-database). Use the Dokploy volume names and `docker compose -p <appName>` from the [Backups](#backups) section above.
 
 ## In-app upgrade
 
