@@ -15,6 +15,14 @@ import {
 
 export const UPGRADE_TOAST_GROUP = "upgrade";
 
+// This tab's own copy of the upgrade it last saw ready. Module scope, so every consumer in the tab (toast, dialog,
+// nav items, each page header) reads the same copy. In memory only: it keeps Reload working after another tab
+// reached done and cleared the shared entry.
+const held = ref<PendingUpgrade | null>(null);
+
+const sameUpgrade = (a: PendingUpgrade | null, b: PendingUpgrade | null): boolean =>
+    a === b || (a !== null && b !== null && JSON.stringify(a) === JSON.stringify(b));
+
 /** Shared upgrade state for this browser: the pending upgrade, its phase, and the trigger/reload actions. */
 export const useUpgrade = () => {
     const apiClient = useApiClient();
@@ -25,9 +33,6 @@ export const useUpgrade = () => {
     // The shared entry: the upgrade this browser started, keyed by user. The server stays the source of truth.
     const stored = useLocalStorage<string | null>(PENDING_UPGRADE_KEY, null);
     const now = useNow({ interval: 15_000 });
-    // This tab's own copy of the upgrade it last saw ready. In memory only: it keeps Reload working after another tab
-    // reached done and cleared the shared entry.
-    const held = ref<PendingUpgrade | null>(null);
 
     const view = computed(() =>
         tabView(
@@ -43,11 +48,12 @@ export const useUpgrade = () => {
     const actionState = computed(() => upgradeActionState(info.value, phase.value));
 
     // Records what this tab learned: its own copy, and the live stamp on the shared entry. Immediate, so a fresh load
-    // runs it at setup.
+    // runs it at setup. `held` is written only on a real change: the shared entry is re-parsed on every read, so a
+    // plain assignment would re-trigger this watcher forever.
     watch(
         view,
         (next) => {
-            held.value = next.held;
+            if (!sameUpgrade(held.value, next.held)) held.value = next.held;
             if (next.stamp) stored.value = JSON.stringify(next.stamp);
         },
         { immediate: true },
