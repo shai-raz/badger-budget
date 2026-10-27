@@ -50,6 +50,20 @@ const findBodyOption = (label: string) =>
         option.textContent?.includes(label),
     );
 
+const findBodyMonthCell = (label: string) =>
+    Array.from(document.body.querySelectorAll<HTMLElement>(".p-datepicker-month")).find(
+        (cell) => cell.textContent?.trim().split(/\s+/)[0] === label,
+    );
+
+// A real press starts with mousedown, which the popover uses to mark the click as its own (selfClick); a bare
+// click would look like an outside click and close it.
+const pressBodyMonthCell = (label: string) => {
+    const cell = findBodyMonthCell(label);
+    if (!cell) throw new Error(`Month cell not found: ${label}`);
+    cell.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    cell.click();
+};
+
 describe("PeriodPicker", () => {
     beforeEach(() => {
         layout.desktop = true;
@@ -138,6 +152,27 @@ describe("PeriodPicker", () => {
         await nextTick();
 
         expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-08", to: "2026-10" });
+        expect(labelButton(wrapper).attributes("aria-expanded")).toBe("false");
+        await vi.waitFor(() => expect(bodyElement(".p-popover")).toBeNull());
+    });
+
+    it("closes the popover once a month range is finished in the grid", async () => {
+        const wrapper = await mountPicker({ kind: "range", from: "2026-10", to: "2026-10" });
+
+        await labelButton(wrapper).trigger("click");
+        await nextTick();
+
+        pressBodyMonthCell("Aug");
+        await nextTick();
+
+        expect(wrapper.emitted("update:modelValue")).toBeUndefined();
+        expect(bodyElement(".p-popover")).not.toBeNull();
+        expect(labelButton(wrapper).attributes("aria-expanded")).toBe("true");
+
+        pressBodyMonthCell("Sep");
+        await nextTick();
+
+        expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-08", to: "2026-09" });
         expect(labelButton(wrapper).attributes("aria-expanded")).toBe("false");
         await vi.waitFor(() => expect(bodyElement(".p-popover")).toBeNull());
     });
