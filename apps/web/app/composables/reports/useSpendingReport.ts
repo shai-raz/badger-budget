@@ -13,6 +13,7 @@ export interface SpendingReportParams {
 export const reportKeys = {
     all: ["reports"] as const,
     spending: (params: SpendingReportParams) => [...reportKeys.all, "spending", params] as const,
+    monthly: (params: { startMonth: string; endMonth: string }) => [...reportKeys.all, "monthly", params] as const,
 };
 
 export function useSpendingReport(params: Ref<SpendingReportParams>) {

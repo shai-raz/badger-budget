@@ -48,3 +48,23 @@ describe("transaction mutations invalidate account balances", () => {
         expect(invalidatedKeys()).toContainEqual(["accounts"]);
     });
 });
+
+describe("transaction mutations invalidate spending reports", () => {
+    it("create", () => {
+        useCreateTransaction();
+        mutationOptions.onSuccess();
+        expect(invalidatedKeys()).toContainEqual(["reports"]);
+    });
+
+    it("delete", () => {
+        useDeleteTransaction();
+        mutationOptions.onSuccess(undefined, "t1");
+        expect(invalidatedKeys()).toContainEqual(["reports"]);
+    });
+
+    it("update", () => {
+        useUpdateTransactionMutation();
+        mutationOptions.onSuccess();
+        expect(invalidatedKeys()).toContainEqual(["reports"]);
+    });
+});

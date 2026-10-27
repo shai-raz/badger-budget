@@ -7,6 +7,7 @@ import {
     monthCount as countMonths,
     REPORTS_PRESETS,
     toReportParams,
+    type MonthRange,
 } from "~/utils/monthRange";
 
 // fullBleed: below md the bands run edge to edge, as on Overview (see layouts/app.vue).
@@ -23,6 +24,13 @@ const { selection } = useMonthRangeQuery({ allowAll: false });
 const now = useNow({ interval: 60_000 });
 
 const range = computed(() => (selection.value.kind === "range" ? selection.value : currentMonthSelection(now.value)));
+// The strip and the header picker share the one URL range.
+const rangeModel = computed<MonthRange>({
+    get: () => range.value,
+    set: (value) => {
+        selection.value = value;
+    },
+});
 const reportParams = computed(() => toReportParams(range.value, now.value));
 const monthCount = computed(() => countMonths(range.value));
 const comparisonLabel = computed(() => describeComparison(range.value, now.value));
@@ -50,6 +58,11 @@ watch(monthCount, (count) => {
                 />
             </template>
         </LayoutPageHeader>
+
+        <ReportsMonthlySpendingCard
+            v-model="rangeModel"
+            :now="now"
+        />
 
         <ProgressSpinner v-if="isLoading" />
 
