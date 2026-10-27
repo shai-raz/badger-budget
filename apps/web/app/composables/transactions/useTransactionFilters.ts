@@ -1,6 +1,8 @@
 import type { ComputedRef, MaybeRefOrGetter, Ref } from "vue";
 import type { ITransactionListParams, ITransactionSummaryParams } from "@badger/types";
 import { useTransactionsStore } from "../../stores/transactions";
+import { useMonthRangeQuery } from "../useMonthRangeQuery";
+import { selectionToDateBounds } from "../../utils/monthRange";
 
 export type TransactionTypeFilter = "all" | "income" | "expense" | "transfer";
 export type TransactionSortOption = "newest" | "oldest" | "amount-desc" | "amount-asc" | "name";
@@ -39,35 +41,11 @@ const SORT_MAP: Record<
     name: { sortBy: "description", sortOrder: "asc" },
 };
 
-/** Last day of a 1-based month, e.g. lastDayOfMonth(2026, 2) === 28. */
-function lastDayOfMonth(year: number, month: number): number {
-    return new Date(year, month, 0).getDate();
-}
-
 /**
- * Convert a YYYY-MM range to inclusive YYYY-MM-DD bounds by building the
- * strings directly — never `Date.toISOString()`, which would shift the day
- * across timezones.
- */
-function rangeToDateBounds(from: string, to: string): { startDate?: string; endDate?: string } {
-    if (!from || !to) return {};
-
-    const [fromYear, fromMonth] = from.split("-").map(Number);
-    const [toYear, toMonth] = to.split("-").map(Number);
-    if (!fromYear || !fromMonth || !toYear || !toMonth) return {};
-
-    const endDay = lastDayOfMonth(toYear, toMonth);
-    return {
-        startDate: `${from}-01`,
-        endDate: `${to}-${String(endDay).padStart(2, "0")}`,
-    };
-}
-
-/**
- * Page-scoped filter state for the redesigned transactions page. Owns the local
- * filter refs (search/type/categories/sort) and bridges the Pinia transactions
- * store for the shared `selectedMonthRange` and `showHidden` state (read/write,
- * never duplicated). Exposes `listParams`/`summaryParams` ready for
+ * Page-scoped filter state for the transactions page. Owns the local filter refs
+ * (search/type/categories/sort). The period comes from the URL (`?from`/`?to`, via
+ * `useMonthRangeQuery`), and `showHidden` comes from the Pinia transactions store
+ * (read/write, never duplicated). Exposes `listParams`/`summaryParams` ready for
  * `useInfiniteTransactions`/`useTransactionsSummary`, plus chip/count helpers.
  */
 export function useTransactionFilters(options: UseTransactionFiltersOptions = {}) {
@@ -81,11 +59,10 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
     const selectedCategoryIds = ref<string[]>([]);
     const sortOption = ref<TransactionSortOption>("newest");
 
+    // Period lives in the URL (?from/?to); a bare page load reads as the current month.
+    const { selection: period } = useMonthRangeQuery({ allowAll: true });
+
     // Store bridge (do NOT duplicate — read/write the store) ------------------
-    const selectedMonthRange = computed({
-        get: () => store.selectedMonthRange,
-        set: (range) => store.setSelectedMonthRange(range),
-    });
     const showHidden = computed({
         get: () => store.showHidden,
         set: (value) => store.setShowHidden(value),
@@ -95,8 +72,7 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
 
     // Params -----------------------------------------------------------------
     const listParams: ComputedRef<ITransactionListParams> = computed(() => {
-        const { from, to } = store.selectedMonthRange;
-        const { startDate, endDate } = rangeToDateBounds(from, to);
+        const { startDate, endDate } = selectionToDateBounds(period.value);
         const { sortBy, sortOrder } = SORT_MAP[sortOption.value];
 
         const params: ITransactionListParams = {
@@ -116,8 +92,7 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
     });
 
     const summaryParams: ComputedRef<ITransactionSummaryParams> = computed(() => {
-        const { from, to } = store.selectedMonthRange;
-        const { startDate, endDate } = rangeToDateBounds(from, to);
+        const { startDate, endDate } = selectionToDateBounds(period.value);
 
         const params: ITransactionSummaryParams = {};
 
@@ -208,8 +183,8 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
         selectedCategoryIds,
         sortOption,
 
-        // Store-bridged state
-        selectedMonthRange,
+        // URL-backed period and store-bridged show-hidden
+        period,
         showHidden,
 
         // Derived params

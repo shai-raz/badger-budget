@@ -15,6 +15,7 @@ import {
     transactionTypeSeverity,
 } from "~/components/transactions/formatters";
 import { budgetPeriodLabel } from "~/utils/budget";
+import { canGoBackTo } from "~/utils/pageHeader";
 import { formatCurrency } from "~/utils/currency";
 import { useGetTransaction, useDeleteTransaction } from "~/composables/transactions/useTransactions";
 import { useReimbursementPicker } from "~/composables/transactions/useReimbursementPicker";
@@ -133,7 +134,8 @@ const handleDelete = () => {
         accept: async () => {
             try {
                 await deleteMutation.mutateAsync(transactionId.value);
-                router.push("/transactions");
+                if (canGoBackTo(window.history.state?.back, "/transactions")) router.back();
+                else router.push("/transactions");
             } catch (deleteError) {
                 console.error("Error deleting transaction:", deleteError);
             }

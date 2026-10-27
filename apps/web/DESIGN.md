@@ -48,13 +48,14 @@ Rules and tokens for the web UI. Read before any UI change. How the app is built
 
 Reuse these before drawing your own (`components/shared/` unless noted): `SectionBand` (every page section, with its heading, meta, "see all", loading, error and empty states), `EmptyState`, `EntityAvatar` (sizes from `AVATAR_SIZES`), `IconPicker`, `CategoryChip`, `StatusTag`, `FormDialog`, `BrandLogo`, `transactions/TransactionRow`, `accounts/AccountRow` (mobile) / `dashboard/AccountTile` (desktop), `budgets/BudgetRow`, `BudgetList`, `BudgetProgressBar` and `PeriodStepper`.
 
+- **Period picker** (`SharedPeriodPicker`, with `SharedPeriodPanel`) is the one control for a month range: `‹ label ▾ ›` with presets and a month grid, in a popover from md up and a bottom sheet below md. Below md the labels use short years and there is no "This month" link. A first month click selects that month and keeps the panel open, with a dashed `outline-primary` ring on it and a live hint under the grid (`monthPickHint`); a second month completes the range and closes it, and presets close at once. A completed range draws as one band: solid ends, a `highlight`-tinted middle, and small row caps where it wraps (`monthBandCell`).
 - **Transaction row** (`TransactionRow`) owns its `px-4` gutter at every breakpoint, the one exception to [Spacing](#spacing); callers add no horizontal padding.
 - `BrandLogo` renders both the `-light` and `-dark` logo sets and lets `.dark` pick one; never place one set alone.
 - `CategoryChip` with `showIcon` false shows a colour dot instead of the icon; use it beside an `EntityAvatar` of the same category so the icon isn't shown twice.
 - `IconPicker` only picks registry names, never free text.
 - Avatars use Lucide icons through `utils/avatarIcons.ts`. Other UI uses PrimeIcons.
 - The update badge (hamburger mark, below md) keeps one 0.625rem box in every state, so the header never shifts: a `bg-primary` dot, a spinner while upgrading, an amber dot when stalled. The nav item's label and icon come from `updateNavItem` (`utils/upgradeTracking.ts`).
-- Period labels come from `budgetWindowLabel` (`utils/budget.ts`), never from `Date` formatting in a component.
+- Period labels come from `budgetWindowLabel` (`utils/budget.ts`) for budget windows and `selectionLabel` (`utils/monthRange.ts`) for month ranges, never from `Date` formatting in a component.
 - Settings links to its sub-pages with chevron rows in a divided band, not primary buttons.
 
 ## Rules

@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import type { TransactionSortOption } from "../../composables/transactions/useTransactionFilters";
-
-type MonthRange = { from: string; to: string };
-type TimeframePreset = "this-month" | "last-month" | "custom";
+import { TRANSACTIONS_PRESETS, type PeriodSelection } from "~/utils/monthRange";
 
 const props = defineProps<{
     /** Number of active filters, shown in the Filters button badge. */
@@ -10,9 +8,7 @@ const props = defineProps<{
 }>();
 
 const searchQuery = defineModel<string>("searchQuery", { default: "" });
-const selectedMonthRange = defineModel<MonthRange>("selectedMonthRange", {
-    default: () => ({ from: "", to: "" }),
-});
+const period = defineModel<PeriodSelection>("period", { required: true });
 const filtersOpen = defineModel<boolean>("filtersOpen", { default: false });
 const sortOption = defineModel<TransactionSortOption>("sortOption", { default: "newest" });
 
@@ -20,94 +16,17 @@ const sortOption = defineModel<TransactionSortOption>("sortOption", { default: "
 // in the page header's second row (LayoutPageHeader's toolbar slot).
 const isDesktop = useIsDesktop();
 
-// YYYY-MM keys for "now" and the previous calendar month. Built by hand from the
-// local date parts (never toISOString(), which would shift across timezones).
-const monthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-// Computed fresh on each call so a long-lived SPA that crosses a month boundary
-// while mounted stays correct without a reload.
-const monthKeys = () => {
-    const now = new Date();
-    return {
-        currentMonth: monthKey(now),
-        lastMonth: monthKey(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
-    };
-};
-
-const timeframeOptions: Array<{ label: string; value: TimeframePreset }> = [
-    { label: "This month", value: "this-month" },
-    { label: "Last month", value: "last-month" },
-    { label: "Custom", value: "custom" },
-];
-
-// Explicit custom mode lets the user open the range picker even while the range
-// still happens to match a preset.
-const explicitCustom = ref(false);
-
-const activeTimeframe = computed<TimeframePreset>(() => {
-    if (explicitCustom.value) return "custom";
-    const { from, to } = selectedMonthRange.value;
-    if (from && from === to) {
-        const { currentMonth, lastMonth } = monthKeys();
-        if (from === currentMonth) return "this-month";
-        if (from === lastMonth) return "last-month";
-    }
-    return "custom";
-});
-
-const showRangePicker = computed(() => activeTimeframe.value === "custom");
-
-function selectTimeframe(preset: TimeframePreset) {
-    if (preset === "this-month") {
-        explicitCustom.value = false;
-        const { currentMonth } = monthKeys();
-        selectedMonthRange.value = { from: currentMonth, to: currentMonth };
-    } else if (preset === "last-month") {
-        explicitCustom.value = false;
-        const { lastMonth } = monthKeys();
-        selectedMonthRange.value = { from: lastMonth, to: lastMonth };
-    } else {
-        explicitCustom.value = true;
-    }
-}
-
-// Compact month label for the mobile header, e.g. "Jul 2026" or "Jul – Sep 2026"
-// (shared year collapses to one trailing year). Built from local date parts.
-const monthName = (ym: string, opts: Intl.DateTimeFormatOptions) => {
-    const [year, month] = ym.split("-").map(Number);
-    if (!year || !month) return "";
-    return new Date(year, month - 1, 1).toLocaleString("en-US", opts);
-};
-
-const monthLabel = computed(() => {
-    const { from, to } = selectedMonthRange.value;
-    if (!from || !to) return "All dates";
-    if (from === to) return monthName(from, { month: "short", year: "numeric" });
-
-    const fromYear = from.split("-")[0];
-    const toYear = to.split("-")[0];
-    const fromShort = monthName(from, fromYear === toYear ? { month: "short" } : { month: "short", year: "numeric" });
-    const toShort = monthName(to, { month: "short", year: "numeric" });
-    return `${fromShort} – ${toShort}`;
-});
-
 // OverlayBadge always renders its Badge, and a Badge with no value degrades to
 // a bare dot — so with no active filters the badge is hidden outright through
 // the Badge passthrough rather than by dropping the wrapper.
 const filtersBadgePt = computed(() => ({
     pcBadge: { root: { class: props.activeFilterCount > 0 ? undefined : "hidden" } },
 }));
-
-// Popover holding the timeframe presets + custom range picker on mobile.
-const timeframePopover = ref<{ toggle: (event: Event) => void } | null>(null);
-const timeframeOpen = ref(false);
-function toggleTimeframe(event: Event) {
-    timeframePopover.value?.toggle(event);
-}
 </script>
 
 <template>
     <div>
-        <!-- Desktop toolbar: search + timeframe segmented + Filters toggle -->
+        <!-- Desktop toolbar: search + period picker + Filters toggle -->
         <div
             v-if="isDesktop"
             class="flex flex-wrap items-center gap-3"
@@ -122,22 +41,11 @@ function toggleTimeframe(event: Event) {
                 />
             </IconField>
 
-            <!-- Timeframe segmented control (+ inline range picker when Custom) -->
-            <div class="flex flex-wrap items-center gap-2">
-                <SelectButton
-                    :model-value="activeTimeframe"
-                    :options="timeframeOptions"
-                    option-label="label"
-                    option-value="value"
-                    :allow-empty="false"
-                    aria-label="Timeframe"
-                    @update:model-value="selectTimeframe"
-                />
-                <SharedMonthRangePicker
-                    v-if="showRangePicker"
-                    v-model="selectedMonthRange"
-                />
-            </div>
+            <!-- Period picker: ‹ label ▾ › with presets and a month grid -->
+            <SharedPeriodPicker
+                v-model="period"
+                :presets="TRANSACTIONS_PRESETS"
+            />
 
             <!-- Sort menu + Filters toggle -->
             <div class="ml-auto flex items-center gap-2.5">
@@ -210,52 +118,23 @@ function toggleTimeframe(event: Event) {
                 </OverlayBadge>
             </div>
 
-            <!-- Row 2: month label + chevron (opens timeframe presets) left, sort right.
-                 A wide custom range label (e.g. "Jul 2025 – Sep 2026") next to the
-                 widest sort label can run out of room on a narrow phone; the sort
-                 trigger holds its size (shrink-0) and the month label truncates
-                 instead of wrapping the row to two lines. -->
+            <!-- Row 2: period picker left, sort right. A wide custom range label
+                 can run out of room on a narrow phone: the picker shrinks and
+                 truncates its label, while the sort trigger is compact and
+                 holds its size (shrink-0) so the row never wraps to two lines. -->
             <div class="flex items-center justify-between gap-2">
-                <button
-                    type="button"
-                    class="inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold text-surface-700 dark:text-surface-200"
-                    :aria-expanded="timeframeOpen"
-                    @click="toggleTimeframe"
-                >
-                    <span class="min-w-0 truncate">{{ monthLabel }}</span>
-                    <i
-                        class="pi shrink-0 text-xs"
-                        :class="timeframeOpen ? 'pi-chevron-up' : 'pi-chevron-down'"
-                    ></i>
-                </button>
+                <SharedPeriodPicker
+                    v-model="period"
+                    class="min-w-0"
+                    :presets="TRANSACTIONS_PRESETS"
+                />
 
                 <TransactionsSortMenu
                     v-model="sortOption"
+                    compact
                     class="shrink-0"
                 />
             </div>
-
-            <Popover
-                ref="timeframePopover"
-                @show="timeframeOpen = true"
-                @hide="timeframeOpen = false"
-            >
-                <div class="flex min-w-[190px] flex-col gap-2">
-                    <SelectButton
-                        :model-value="activeTimeframe"
-                        :options="timeframeOptions"
-                        option-label="label"
-                        option-value="value"
-                        :allow-empty="false"
-                        aria-label="Timeframe"
-                        @update:model-value="selectTimeframe"
-                    />
-                    <SharedMonthRangePicker
-                        v-if="showRangePicker"
-                        v-model="selectedMonthRange"
-                    />
-                </div>
-            </Popover>
         </div>
     </div>
 </template>

@@ -8,3 +8,13 @@ export function resolveHeaderLeading(opts: { hasParent: boolean; isDesktop: bool
     if (opts.hasParent) return "back";
     return opts.isDesktop ? "none" : "menu";
 }
+
+/**
+ * True when the browser's back entry is `backTo`, ignoring its query and hash. Vue Router stores
+ * `history.state.back` as a full path, so `/transactions?from=2026-07` matches `/transactions`.
+ */
+export function canGoBackTo(historyBack: unknown, backTo: string): boolean {
+    if (typeof historyBack !== "string" || historyBack === "") return false;
+    const path = historyBack.split(/[?#]/, 1)[0];
+    return path === backTo;
+}

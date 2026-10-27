@@ -1,6 +1,5 @@
 // Build YYYY-MM-DD strings directly — never toISOString() on a local date.
-// Mirrors the lastDayOfMonth idiom in pages/reports/index.vue.
-const lastDayOfMonth = (year: number, month: number) => new Date(year, month, 0).getDate();
+import { lastDayOfMonth } from "./monthRange";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
