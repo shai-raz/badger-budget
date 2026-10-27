@@ -70,6 +70,15 @@ describe("page header contract", () => {
         expect(desktop).toContain("primary");
     });
 
+    // Reports keeps its period picker on the title row (PageHeader #controls), not in the toolbar slot.
+    it("puts the Reports period picker in the controls slot", () => {
+        const source = readFileSync(`${pagesDir}/reports/index.vue`, "utf8");
+        expect(source).toContain("<template #controls>");
+        expect(source).toContain("<SharedPeriodPicker");
+        expect(source).not.toContain("#toolbar");
+        expect(source).not.toContain("SelectButton");
+    });
+
     it("serves bank connections from their own page, not Accounts", () => {
         expect(readFileSync(`${pagesDir}/bank-connections.vue`, "utf8")).toContain("<BankSyncScraperConnectionModal");
         expect(readFileSync(`${pagesDir}/accounts/index.vue`, "utf8")).not.toContain("BankSyncScraperConnectionModal");

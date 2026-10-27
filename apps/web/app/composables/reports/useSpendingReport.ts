@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/vue-query";
-import type { SpendingReport } from "@badger/types";
+import type { ReportCompareMode, SpendingReport } from "@badger/types";
 import { useApiClient } from "../useApiClient";
 
 export interface SpendingReportParams {
     startDate: string;
     endDate: string;
     currency?: string;
+    compare?: ReportCompareMode;
 }
 
 // Query keys

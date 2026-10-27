@@ -177,6 +177,15 @@ describe("app shell viewport contract", () => {
         expect(pageHeader).toContain("<h1");
     });
 
+    // The controls slot sits on the title row at every breakpoint, before the actions wrapper, so its compact
+    // control is not caught in the wrapper's forced h-10/w-10 button sizing.
+    it("renders the controls slot on the title row before the actions wrapper", () => {
+        expect(pageHeader).toContain('name="controls"');
+        expect(pageHeader.indexOf('name="controls"')).toBeLessThan(
+            pageHeader.indexOf('v-if="$slots.actions || overflowItems?.length"'),
+        );
+    });
+
     // The update item lives in the sidebar bottom group and the drawer footer. Both read one composable, which
     // opens the layout-mounted dialog, or reloads straight away once the upgrade is ready.
     it("renders the update nav item from useUpdateNavItem in the sidebar and drawer, opening UpdateDialog", () => {

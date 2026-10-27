@@ -3,6 +3,8 @@ import {
     addMonths,
     applyGridEmit,
     canStepNext,
+    comparisonLabel,
+    compareModeFor,
     currentMonthSelection,
     isCurrentMonthSelection,
     isYearAligned,
@@ -24,6 +26,7 @@ import {
     selectionToDateBounds,
     selectionToQuery,
     stepRange,
+    toReportParams,
     TRANSACTIONS_PRESETS,
     type MonthRange,
     type PeriodSelection,
@@ -321,6 +324,105 @@ describe("selectionToDateBounds", () => {
         expect(selectionToDateBounds(range("2028-02", "2028-02"))).toEqual({
             startDate: "2028-02-01",
             endDate: "2028-02-29",
+        });
+    });
+});
+
+describe("compareModeFor", () => {
+    it("uses year-over-year for year-aligned ranges", () => {
+        expect(compareModeFor(range("2026-01", "2026-10"))).toBe("yearOverYear");
+        expect(compareModeFor(range("2025-01", "2025-12"))).toBe("yearOverYear");
+    });
+
+    it("uses the previous period otherwise", () => {
+        expect(compareModeFor(range("2026-10", "2026-10"))).toBe("previous");
+        expect(compareModeFor(range("2026-08", "2026-10"))).toBe("previous");
+    });
+});
+
+describe("toReportParams", () => {
+    it("stops a this-month range at today", () => {
+        expect(toReportParams(range("2026-10", "2026-10"), NOW)).toEqual({
+            startDate: "2026-10-01",
+            endDate: "2026-10-26",
+            compare: "previous",
+        });
+    });
+
+    it("stops a last-3-months range at today", () => {
+        expect(toReportParams(range("2026-08", "2026-10"), NOW)).toEqual({
+            startDate: "2026-08-01",
+            endDate: "2026-10-26",
+            compare: "previous",
+        });
+    });
+
+    it("stops year-to-date at today with year-over-year compare", () => {
+        expect(toReportParams(range("2026-01", "2026-10"), NOW)).toEqual({
+            startDate: "2026-01-01",
+            endDate: "2026-10-26",
+            compare: "yearOverYear",
+        });
+    });
+
+    it("ends a past month on its last day", () => {
+        expect(toReportParams(range("2026-06", "2026-06"), NOW)).toEqual({
+            startDate: "2026-06-01",
+            endDate: "2026-06-30",
+            compare: "previous",
+        });
+    });
+
+    it("ends a past leap-year February on the 29th", () => {
+        expect(toReportParams(range("2028-02", "2028-02"), new Date(2028, 4, 10))).toEqual({
+            startDate: "2028-02-01",
+            endDate: "2028-02-29",
+            compare: "previous",
+        });
+    });
+
+    it("ends a full last year on its last day with year-over-year compare", () => {
+        expect(toReportParams(range("2025-01", "2025-12"), NOW)).toEqual({
+            startDate: "2025-01-01",
+            endDate: "2025-12-31",
+            compare: "yearOverYear",
+        });
+    });
+});
+
+describe("comparisonLabel", () => {
+    it("labels a this-month range against the same days last month", () => {
+        expect(comparisonLabel(range("2026-10", "2026-10"), NOW)).toBe("vs same days last month");
+    });
+
+    it("labels a multi-month range ending this month against the same days of the previous months", () => {
+        expect(comparisonLabel(range("2026-08", "2026-10"), NOW)).toBe("vs same days of the previous 3 months");
+    });
+
+    it("labels year-to-date as year over year", () => {
+        expect(comparisonLabel(range("2026-01", "2026-10"), NOW)).toBe("vs same period last year");
+    });
+
+    it("labels a past single month against the previous month", () => {
+        expect(comparisonLabel(range("2026-06", "2026-06"), NOW)).toBe("vs previous month");
+    });
+
+    it("labels a past year-aligned range as year over year", () => {
+        expect(comparisonLabel(range("2025-01", "2025-10"), NOW)).toBe("vs same period last year");
+        expect(comparisonLabel(range("2025-01", "2025-12"), NOW)).toBe("vs same period last year");
+    });
+
+    it("labels a past multi-month range against the previous months", () => {
+        expect(comparisonLabel(range("2026-03", "2026-05"), NOW)).toBe("vs previous 3 months");
+    });
+
+    it("labels a January current month as the same days last month when today is January", () => {
+        const jan26 = new Date(2026, 0, 26);
+        expect(comparisonLabel(range("2026-01", "2026-01"), jan26)).toBe("vs same days last month");
+        expect(toReportParams(range("2026-01", "2026-01"), jan26)).toEqual({
+            startDate: "2026-01-01",
+            endDate: "2026-01-26",
+            compare: "previous",
         });
     });
 });
