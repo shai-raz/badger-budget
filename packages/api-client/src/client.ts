@@ -26,6 +26,8 @@ import type {
     IUpdateScraperConnection,
     ISyncJob,
     SpendingReport,
+    MonthlySpending,
+    ReportCompareMode,
     IAccountResponse,
     IUpdateLedgerBalance,
     ILedgerBalanceUpdateResponse,
@@ -370,8 +372,18 @@ export class ApiClient {
     }
 
     // Reports
-    async getSpendingReport(params: { startDate: string; endDate: string; currency?: string }) {
+    async getSpendingReport(params: {
+        startDate: string;
+        endDate: string;
+        currency?: string;
+        compare?: ReportCompareMode;
+    }) {
         const response = await this.client.get<SpendingReport>("/reports/spending", { params });
+        return response.data;
+    }
+
+    async getMonthlySpending(params: { startMonth: string; endMonth: string; currency?: string }) {
+        const response = await this.client.get<MonthlySpending>("/reports/monthly-spending", { params });
         return response.data;
     }
 

@@ -1,5 +1,11 @@
 // Spending report
 
+/**
+ * Which period a spending report compares against. `previous` is the period
+ * preceding the window; `yearOverYear` is the same dates one year earlier.
+ */
+export type ReportCompareMode = "previous" | "yearOverYear";
+
 export interface SpendingReportCurrency {
     code: string;
     symbol: string;
@@ -19,7 +25,7 @@ export interface SpendingReportCategoryItem {
 }
 
 export interface SpendingReportComparison {
-    /** Previous equal-length period, inclusive YYYY-MM-DD bounds. */
+    /** Comparison period (per the request's compare mode), inclusive YYYY-MM-DD bounds. */
     startDate: string;
     endDate: string;
     total: number;
@@ -37,4 +43,25 @@ export interface SpendingReport {
     comparison: SpendingReportComparison;
     /** All categories with spending in the period, sorted by amount descending. */
     categories: SpendingReportCategoryItem[];
+}
+
+// Monthly spending
+
+export interface MonthlySpendingPoint {
+    /** Calendar month, YYYY-MM. */
+    month: string;
+    /** Total spent in this month, in the report's display currency. */
+    total: number;
+    transactionCount: number;
+}
+
+export interface MonthlySpending {
+    /** Inclusive YYYY-MM bounds of the requested range. */
+    startMonth: string;
+    endMonth: string;
+    currency: SpendingReportCurrency;
+    /** One entry per month in the range, ascending; months without spending are zero-filled. */
+    months: MonthlySpendingPoint[];
+    /** Earliest month with a counted expense (any date), or null when there is none. */
+    firstMonth: string | null;
 }
