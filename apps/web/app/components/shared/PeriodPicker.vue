@@ -80,12 +80,12 @@ const sheetPt = {
             @click="sel = currentMonthSelection(now)"
         />
 
-        <ButtonGroup>
+        <ButtonGroup class="min-w-0">
             <Button
                 icon="pi pi-chevron-left"
                 severity="secondary"
                 outlined
-                :class="isDesktop ? 'h-9 w-9' : 'h-8 w-8'"
+                :class="isDesktop ? 'h-9 w-9 shrink-0' : 'h-8 w-8 shrink-0'"
                 aria-label="Previous period"
                 :disabled="sel.kind === 'all'"
                 @click="step(-1)"
@@ -113,7 +113,7 @@ const sheetPt = {
                 icon="pi pi-chevron-right"
                 severity="secondary"
                 outlined
-                :class="isDesktop ? 'h-9 w-9' : 'h-8 w-8'"
+                :class="isDesktop ? 'h-9 w-9 shrink-0' : 'h-8 w-8 shrink-0'"
                 aria-label="Next period"
                 :disabled="!canNext"
                 @click="step(1)"

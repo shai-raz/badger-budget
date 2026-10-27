@@ -65,6 +65,7 @@ describe("PeriodPicker", () => {
     it("labels a single month and hides This month when it is the current month", async () => {
         const wrapper = await mountPicker({ kind: "range", from: "2026-10", to: "2026-10" });
 
+        expect(wrapper.find(".p-buttongroup").classes()).toContain("min-w-0");
         expect(labelButton(wrapper).text()).toContain("Oct 2026");
         expect(nextButton(wrapper).attributes("disabled")).toBeDefined();
         expect(thisMonthButton(wrapper)).toBeUndefined();

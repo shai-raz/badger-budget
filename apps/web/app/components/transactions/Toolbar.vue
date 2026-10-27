@@ -119,8 +119,8 @@ const filtersBadgePt = computed(() => ({
             </div>
 
             <!-- Row 2: period picker left, sort right. A wide custom range label
-                 can run out of room on a narrow phone; the picker takes the
-                 leftover width and truncates its label, while the sort trigger
+                 can run out of room on a narrow phone: the picker shrinks and
+                 truncates its label, while the sort trigger is compact and
                  holds its size (shrink-0) so the row never wraps to two lines. -->
             <div class="flex items-center justify-between gap-2">
                 <SharedPeriodPicker
@@ -131,6 +131,7 @@ const filtersBadgePt = computed(() => ({
 
                 <TransactionsSortMenu
                     v-model="sortOption"
+                    compact
                     class="shrink-0"
                 />
             </div>
