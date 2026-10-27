@@ -44,6 +44,9 @@ const dragLabel = computed(() => {
         : null;
 });
 const hint = computed(() => stripHint(interaction.value, { mobile: !isDesktop.value, dragLabel: dragLabel.value }));
+const hintClass = computed(() =>
+    interaction.value.kind === "pending" ? "font-medium text-surface-900 dark:text-surface-0" : "text-muted-color",
+);
 
 const formatAmount = (amount: number) => formatCurrency(amount, currency.value?.code);
 </script>
@@ -57,9 +60,14 @@ const formatAmount = (amount: number) => formatCurrency(amount, currency.value?.
             v-if="isDesktop"
             #header-extra
         >
-            <span class="text-xs text-muted-color">
+            <!-- One persistent live region per placement: it announces each pick and the reset after a range. -->
+            <p
+                aria-live="polite"
+                class="text-xs"
+                :class="hintClass"
+            >
                 {{ hint }}
-            </span>
+            </p>
         </template>
 
         <div class="px-4 pb-4 md:px-0 md:pb-0">
@@ -87,14 +95,14 @@ const formatAmount = (amount: number) => formatCurrency(amount, currency.value?.
                 :visible-count="visibleCount"
                 :format-amount="formatAmount"
             />
-            <div
+            <p
                 v-if="!isDesktop"
-                class="mt-2 flex justify-center"
+                aria-live="polite"
+                class="mt-2 text-center text-xs"
+                :class="hintClass"
             >
-                <span class="text-xs text-muted-color">
-                    {{ hint }}
-                </span>
-            </div>
+                {{ hint }}
+            </p>
         </div>
     </SharedSectionBand>
 </template>

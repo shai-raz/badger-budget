@@ -29,7 +29,14 @@ const OCT_2026: MonthRange = { kind: "range", from: "2026-10", to: "2026-10" };
 const mounted: { unmount: () => void }[] = [];
 
 const mountStrip = async (
-    options: { totals?: Record<string, number>; firstMonth?: string | null; range?: MonthRange } = {},
+    options: {
+        totals?: Record<string, number>;
+        firstMonth?: string | null;
+        range?: MonthRange;
+        attach?: boolean;
+        // A parent that applies the strip's range emits, as the page does: the range prop follows every commit.
+        wired?: boolean;
+    } = {},
 ) => {
     const wrapper = await mountSuspended(MonthStrip, {
         props: {
@@ -40,7 +47,11 @@ const mountStrip = async (
             formatAmount: (n: number) => `$${n}`,
             modelValue: options.range ?? OCT_2026,
             windowStart: "2025-11",
+            "onUpdate:modelValue": (value: MonthRange) => {
+                if (options.wired) void wrapper.setProps({ modelValue: value });
+            },
         },
+        attachTo: options.attach ? document.body : undefined,
     });
     mounted.push(wrapper);
     return wrapper;
@@ -93,6 +104,7 @@ describe("MonthStrip", () => {
         await bar(wrapper, "2026-07").trigger("click");
         expect(lastEmit(wrapper, "update:interaction")).toEqual({ kind: "pending", start: "2026-07" });
         expect(lastEmit(wrapper, "update:modelValue")).toEqual({ kind: "range", from: "2026-07", to: "2026-07" });
+        expect(bar(wrapper, "2026-07").classes()).toContain("outline-dashed");
 
         const emitsBeforeArrow = wrapper.emitted("update:modelValue")?.length ?? 0;
         await earlierArrow(wrapper).trigger("click");
@@ -109,6 +121,65 @@ describe("MonthStrip", () => {
         await bar(wrapper, "2026-03").trigger("click");
 
         expect(lastEmit(wrapper, "update:modelValue")).toEqual({ kind: "range", from: "2026-03", to: "2026-07" });
+        expect(lastEmit(wrapper, "update:interaction")).toEqual({ kind: "idle" });
+    });
+
+    it("clears the pending start when the same month is tapped twice", async () => {
+        const wrapper = await mountStrip();
+
+        await bar(wrapper, "2026-07").trigger("click");
+        await bar(wrapper, "2026-07").trigger("click");
+
+        expect(lastEmit(wrapper, "update:modelValue")).toEqual({ kind: "range", from: "2026-07", to: "2026-07" });
+        expect(lastEmit(wrapper, "update:interaction")).toEqual({ kind: "idle" });
+    });
+
+    it("keeps its own pending start when the committed single month comes back as the range", async () => {
+        const wrapper = await mountStrip({ wired: true });
+
+        await bar(wrapper, "2026-07").trigger("click");
+
+        expect(lastEmit(wrapper, "update:interaction")).toEqual({ kind: "pending", start: "2026-07" });
+        expect(bar(wrapper, "2026-07").classes()).toContain("outline-dashed");
+    });
+
+    it("clears the pending start when a click lands outside the strip", async () => {
+        const wrapper = await mountStrip({ attach: true });
+
+        await bar(wrapper, "2026-07").trigger("click");
+        // VueUse drops a second click in the same task, so let the first one's task end before the outside click.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        const emitsBefore = wrapper.emitted("update:modelValue")?.length ?? 0;
+        document.body.click();
+
+        expect(lastEmit(wrapper, "update:interaction")).toEqual({ kind: "idle" });
+        expect(wrapper.emitted("update:modelValue")?.length ?? 0).toBe(emitsBefore);
+    });
+
+    it("keeps the pending start when an arrow is clicked", async () => {
+        const wrapper = await mountStrip({ attach: true });
+
+        await bar(wrapper, "2026-07").trigger("click");
+        await earlierArrow(wrapper).trigger("click");
+
+        expect(lastEmit(wrapper, "update:interaction")).toEqual({ kind: "pending", start: "2026-07" });
+    });
+
+    it("clears the pending start when the range is set from elsewhere", async () => {
+        const wrapper = await mountStrip();
+
+        await bar(wrapper, "2026-07").trigger("click");
+        await wrapper.setProps({ modelValue: { kind: "range", from: "2026-03", to: "2026-03" } });
+
+        expect(lastEmit(wrapper, "update:interaction")).toEqual({ kind: "idle" });
+    });
+
+    it("clears the pending start on Escape, wherever focus is", async () => {
+        const wrapper = await mountStrip();
+
+        await bar(wrapper, "2026-07").trigger("click");
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+
         expect(lastEmit(wrapper, "update:interaction")).toEqual({ kind: "idle" });
     });
 

@@ -63,7 +63,24 @@ describe("MonthlySpendingCard", () => {
     it("shows the pick hint in the header on desktop", async () => {
         const wrapper = await mountCard();
 
-        expect(wrapper.text()).toContain("Pick a month, or two for a range");
+        expect(wrapper.find('[aria-live="polite"]').text()).toBe("Pick a month, or two for a range");
+    });
+
+    it("names the picked month after a first tap, and returns to the idle hint after a range", async () => {
+        mockState.totals = { ...mockState.totals, "2026-07": 1600, "2026-03": 1300 };
+        const wrapper = await mountCard();
+        const hint = () => wrapper.find('[aria-live="polite"]');
+
+        await wrapper.find('[data-month="2026-07"] button').trigger("click");
+        expect(hint().text()).toBe("Jul 2026 selected · pick another month to make a range");
+        expect(wrapper.emitted("update:modelValue")?.at(-1)?.[0]).toEqual({
+            kind: "range",
+            from: "2026-07",
+            to: "2026-07",
+        });
+
+        await wrapper.find('[data-month="2026-03"] button').trigger("click");
+        expect(hint().text()).toBe("Pick a month, or two for a range");
     });
 
     it("shows its error in the band and no strip when no month has loaded", async () => {

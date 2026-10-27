@@ -12,6 +12,7 @@ import {
     edgeDirection,
     monthAtOffset,
     previewRange,
+    reconcileInteraction,
     edgeZonePx,
     slideWindow,
     stripAverage,
@@ -129,6 +130,13 @@ watch(
     { immediate: true },
 );
 
+// A pending start lasts only while the range is still that one month. A picker, preset or step elsewhere changes
+// the range and drops it. The strip's own first tap commits that single month, so it passes through unchanged.
+watch([() => range.value.from, () => range.value.to], () => {
+    const next = reconcileInteraction(interaction.value, range.value);
+    if (next !== interaction.value) interaction.value = next;
+});
+
 interface Press {
     pointerId: number;
     pointerType: string;
@@ -142,6 +150,7 @@ interface Press {
 
 const EDGE_PX = 24;
 
+const root = ref<HTMLElement | null>(null);
 const viewport = ref<HTMLElement | null>(null);
 let press: Press | null = null;
 let edgeTimer: ReturnType<typeof setInterval> | null = null;
@@ -268,16 +277,26 @@ function cancelPress(event: PointerEvent) {
     reset();
 }
 
-function onEscape() {
+// Esc cancels a drag and drops a pending start, whatever has focus. Idle, Esc is left to the page.
+onKeyStroke("Escape", () => {
+    if (interaction.value.kind !== "pending" && interaction.value.kind !== "dragging") return;
     reset();
     interaction.value = { kind: "idle" };
-}
+});
+
+// A click outside the strip (arrows, bars and their gaps included) drops a pending start. A range commit is left alone.
+onClickOutside(root, () => {
+    if (interaction.value.kind === "pending") interaction.value = { kind: "idle" };
+});
 
 onBeforeUnmount(stopEdge);
 </script>
 
 <template>
-    <div class="flex items-center gap-1">
+    <div
+        ref="root"
+        class="flex items-center gap-1"
+    >
         <Button
             icon="pi pi-chevron-left"
             text
@@ -299,7 +318,6 @@ onBeforeUnmount(stopEdge);
             @pointercancel="cancelPress"
             @lostpointercapture="cancelPress"
             @pointerleave="hovered = null"
-            @keydown.esc="onEscape"
             @scroll="resetScroll"
         >
             <div
