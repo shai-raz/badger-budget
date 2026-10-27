@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockNuxtImport, mountSuspended } from "@nuxt/test-utils/runtime";
-import { ref } from "vue";
+import { defineComponent, nextTick, ref } from "vue";
 import MonthlySpendingCard from "./MonthlySpendingCard.vue";
 import type { MonthRange } from "~/utils/monthRange";
+import type { StripInteraction } from "~/utils/monthStrip";
 
 // Oct 26 2026: the current month is Oct 2026.
 const NOW = new Date(2026, 9, 26);
@@ -81,6 +82,32 @@ describe("MonthlySpendingCard", () => {
 
         await wrapper.find('[data-month="2026-03"] button').trigger("click");
         expect(hint().text()).toBe("Pick a month, or two for a range");
+    });
+
+    it("silences the live hint while a drag is in progress and announces it again after", async () => {
+        const drive: { emit: null | ((interaction: StripInteraction) => void) } = { emit: null };
+        const StubStrip = defineComponent({
+            emits: ["update:interaction"],
+            setup(_props, { emit }) {
+                drive.emit = (interaction) => emit("update:interaction", interaction);
+                return () => null;
+            },
+        });
+        const wrapper = await mountSuspended(MonthlySpendingCard, {
+            props: { modelValue: OCT_2026, now: NOW },
+            global: { stubs: { SharedMonthStrip: StubStrip } },
+        });
+        mounted.push(wrapper);
+        const hint = () => wrapper.find("[aria-live]");
+
+        drive.emit?.({ kind: "dragging", anchor: "2026-07", current: "2026-09" });
+        await nextTick();
+        expect(hint().attributes("aria-live")).toBe("off");
+        expect(hint().text()).toContain("Jul");
+
+        drive.emit?.({ kind: "idle" });
+        await nextTick();
+        expect(hint().attributes("aria-live")).toBe("polite");
     });
 
     it("shows its error in the band and no strip when no month has loaded", async () => {

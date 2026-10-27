@@ -44,6 +44,8 @@ const dragLabel = computed(() => {
         : null;
 });
 const hint = computed(() => stripHint(interaction.value, { mobile: !isDesktop.value, dragLabel: dragLabel.value }));
+// A drag relabels the hint on every month crossing, so it stays silent; the pick and the reset after a range are announced.
+const liveMode = computed(() => (interaction.value.kind === "dragging" ? "off" : "polite"));
 const hintClass = computed(() =>
     interaction.value.kind === "pending" ? "font-medium text-surface-900 dark:text-surface-0" : "text-muted-color",
 );
@@ -62,7 +64,7 @@ const formatAmount = (amount: number) => formatCurrency(amount, currency.value?.
         >
             <!-- One persistent live region per placement: it announces each pick and the reset after a range. -->
             <p
-                aria-live="polite"
+                :aria-live="liveMode"
                 class="text-xs"
                 :class="hintClass"
             >
@@ -97,7 +99,7 @@ const formatAmount = (amount: number) => formatCurrency(amount, currency.value?.
             />
             <p
                 v-if="!isDesktop"
-                aria-live="polite"
+                :aria-live="liveMode"
                 class="mt-2 text-center text-xs"
                 :class="hintClass"
             >
