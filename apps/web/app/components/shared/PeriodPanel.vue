@@ -26,6 +26,10 @@ const emit = defineEmits<{ done: [] }>();
 // Captured once per open, so the presets, the disabled future months and the matched preset all agree.
 const now = new Date();
 
+// The grid's upper bound: the last day of this month, so future months are disabled. PrimeVue clamps a click on a
+// later month to this date, never to the 1st.
+const maxDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
 // The month of a first grid click, waiting for the second. Only ever set while the panel is open: PrimeVue
 // unmounts the panel on every close, so an unfinished pick is discarded with it.
 const pendingStart = ref<MonthKey | null>(null);
@@ -106,8 +110,9 @@ const choosePreset = (id: PeriodPresetId | null) => {
 // logic in `applyGridEmit` reads both, so the result does not depend on which month was clicked first. A first
 // click selects its month and keeps the panel open; the second completes the range and closes it.
 const onGridUpdate = (value: Date | Date[] | (Date | null)[] | null | undefined) => {
-    // PrimeVue does not block a click on a future month, and clamps it to the max date (not the 1st). Ignore that.
-    if (Array.isArray(value) && value.some((date) => date && date.getDate() !== 1)) return;
+    // PrimeVue does not block a click on a future month; it clamps the click to `maxDate`. A real month click is
+    // always the 1st, so any emitted `maxDate` is a future click to drop.
+    if (Array.isArray(value) && value.some((date) => date?.getTime() === maxDate.getTime())) return;
     const emitted = Array.isArray(value) ? value.map((date) => (date ? monthKeyOf(date) : null)) : null;
     const [first = null, second = null] = emitted ?? [];
     const result = applyGridEmit(pendingStart.value, emitted === null ? null : [first, second]);
@@ -152,7 +157,7 @@ const onGridUpdate = (value: Date | Date[] | (Date | null)[] | null | undefined)
             view="month"
             selection-mode="range"
             date-format="mm/yy"
-            :max-date="now"
+            :max-date="maxDate"
             :model-value="gridValue"
             :pt="monthPt"
             aria-label="Month range"

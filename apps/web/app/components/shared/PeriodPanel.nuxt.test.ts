@@ -125,6 +125,24 @@ describe("PeriodPanel", () => {
         expect(wrapper.emitted("done")).toBeUndefined();
     });
 
+    it("ignores a click on a future month on the 1st of the month, with or without a pending start", async () => {
+        vi.setSystemTime(new Date(2026, 9, 1));
+        const wrapper = await mountPanel();
+
+        await monthCell(wrapper, "Nov").trigger("click");
+        expect(wrapper.emitted("update:modelValue")).toBeUndefined();
+        expect(wrapper.emitted("done")).toBeUndefined();
+
+        await monthCell(wrapper, "Aug").trigger("click");
+        expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-08", to: "2026-08" });
+        const emitCount = wrapper.emitted("update:modelValue")?.length ?? 0;
+
+        await monthCell(wrapper, "Nov").trigger("click");
+        expect(wrapper.emitted("update:modelValue")).toHaveLength(emitCount);
+        expect(wrapper.emitted("done")).toBeUndefined();
+        expect(monthCell(wrapper, "Aug").attributes("data-band")).toBe("pending");
+    });
+
     it("renders every side-layout preset without an inner scroll", async () => {
         const wrapper = await mountPanel({ layout: "side", presets: TRANSACTIONS_PRESETS });
 
