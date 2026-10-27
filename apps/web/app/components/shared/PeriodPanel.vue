@@ -75,6 +75,7 @@ const onGridUpdate = (value: Date | Date[] | (Date | null)[] | null | undefined)
             option-label="label"
             option-value="id"
             class="w-40 shrink-0"
+            scroll-height="none"
             :pt="{ root: { class: 'border-0' } }"
             aria-label="Period presets"
             @update:model-value="choosePreset"

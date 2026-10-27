@@ -91,6 +91,15 @@ describe("PeriodPanel", () => {
         expect(wrapper.emitted("done")).toBeUndefined();
     });
 
+    it("renders every side-layout preset without an inner scroll", async () => {
+        const wrapper = await mountPanel({ layout: "side", presets: TRANSACTIONS_PRESETS });
+
+        expect(wrapper.findAll('[role="option"]')).toHaveLength(TRANSACTIONS_PRESETS.length);
+        const list = wrapper.find(".p-listbox-list-container");
+        expect(list.attributes("style")).not.toContain("14rem");
+        expect(list.attributes("style")).toContain("max-height: none");
+    });
+
     it("shows an All time chip in the stacked layout and commits all time", async () => {
         const wrapper = await mountPanel({ layout: "stacked" });
 
