@@ -1,6 +1,54 @@
 {
     "releases": [
         {
+            "version": "0.7.0",
+            "date": "2026-10-27",
+            "items": [
+                {
+                    "type": "docs",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "rules for agent docs, and cut every doc to them",
+                    "pr": 58
+                },
+                {
+                    "type": "test",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "DOM component tests with @nuxt/test-utils (1/5)",
+                    "pr": 64
+                },
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "report comparison modes and monthly spending endpoint (2/5)",
+                    "pr": 65
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "shared period picker on Transactions (Fixes #12) (3/5)",
+                    "pr": 66
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "period picker and partial-month comparison on Reports (4/5)",
+                    "pr": 67
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "monthly spending strip on Reports (5/5)",
+                    "pr": 68
+                }
+            ]
+        },
+        {
             "version": "0.6.0",
             "date": "2026-10-26",
             "items": [
