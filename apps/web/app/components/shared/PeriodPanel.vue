@@ -46,8 +46,13 @@ const monthStart = (key: MonthKey): Date => {
     return date;
 };
 
+// Bumped when a future-month click is dropped. PrimeVue writes its own month highlight before it emits, so a dropped
+// emit leaves that highlight stale; a fresh `gridValue` makes PrimeVue's watcher reset it.
+const gridResync = ref(0);
+
 // While a month is pending, PrimeVue sees `[start, null]`, so its next click completes the range.
 const gridValue = computed<(Date | null)[] | null>(() => {
+    void gridResync.value;
     if (pendingStart.value !== null) return [monthStart(pendingStart.value), null];
     if (selection.value.kind === "all") return null;
     return [monthStart(selection.value.from), monthStart(selection.value.to)];
@@ -112,7 +117,10 @@ const choosePreset = (id: PeriodPresetId | null) => {
 const onGridUpdate = (value: Date | Date[] | (Date | null)[] | null | undefined) => {
     // PrimeVue does not block a click on a future month; it clamps the click to `maxDate`. A real month click is
     // always the 1st, so any emitted `maxDate` is a future click to drop.
-    if (Array.isArray(value) && value.some((date) => date?.getTime() === maxDate.getTime())) return;
+    if (Array.isArray(value) && value.some((date) => date?.getTime() === maxDate.getTime())) {
+        gridResync.value += 1;
+        return;
+    }
     const emitted = Array.isArray(value) ? value.map((date) => (date ? monthKeyOf(date) : null)) : null;
     const [first = null, second = null] = emitted ?? [];
     const result = applyGridEmit(pendingStart.value, emitted === null ? null : [first, second]);

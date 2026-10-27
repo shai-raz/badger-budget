@@ -141,6 +141,22 @@ describe("PeriodPanel", () => {
         expect(wrapper.emitted("update:modelValue")).toHaveLength(emitCount);
         expect(wrapper.emitted("done")).toBeUndefined();
         expect(monthCell(wrapper, "Aug").attributes("data-band")).toBe("pending");
+        // PrimeVue's own highlight must follow the panel: only the pending month, not the clamped Aug-to-Oct span.
+        expect(monthCell(wrapper, "Aug").attributes("data-p-selected")).toBe("true");
+        expect(monthCell(wrapper, "Sep").attributes("data-p-selected")).not.toBe("true");
+        expect(monthCell(wrapper, "Oct").attributes("data-p-selected")).not.toBe("true");
+    });
+
+    it("resets PrimeVue's highlight after a dropped future click on a committed range", async () => {
+        vi.setSystemTime(new Date(2026, 9, 1));
+        const wrapper = await mountPanel({ modelValue: { kind: "range", from: "2026-03", to: "2026-05" } });
+
+        await monthCell(wrapper, "Dec").trigger("click");
+
+        expect(wrapper.emitted("update:modelValue")).toBeUndefined();
+        expect(monthCell(wrapper, "Oct").attributes("data-p-selected")).not.toBe("true");
+        expect(monthCell(wrapper, "Mar").attributes("data-p-selected")).toBe("true");
+        expect(monthCell(wrapper, "May").attributes("data-p-selected")).toBe("true");
     });
 
     it("renders every side-layout preset without an inner scroll", async () => {
