@@ -35,6 +35,7 @@ const mountStrip = async (
         props: {
             totals: options.totals ?? TOTALS,
             firstMonth: options.firstMonth === undefined ? "2024-01" : options.firstMonth,
+            now: NOW,
             visibleCount: 12,
             formatAmount: (n: number) => `$${n}`,
             modelValue: options.range ?? OCT_2026,
@@ -123,5 +124,37 @@ describe("MonthStrip", () => {
         const wrapper = await mountStrip({ firstMonth: null });
 
         expect(earlierArrow(wrapper).attributes("disabled")).toBeDefined();
+    });
+
+    it("takes only the visible window's bars out of the tab order", async () => {
+        const wrapper = await mountStrip({ totals: { ...TOTALS, "2025-05": 900 } });
+
+        // The window is 2025-11 through 2026-10. Bars outside it sit off-screen inside the overflow-hidden track.
+        expect(bar(wrapper, "2025-05").attributes("tabindex")).toBe("-1");
+        expect(bar(wrapper, "2026-10").attributes("tabindex")).toBeUndefined();
+    });
+
+    it("keeps the viewport at scroll position zero when it is scrolled", async () => {
+        const wrapper = await mountStrip();
+
+        const viewport = wrapper.find(".overflow-hidden").element as HTMLElement;
+        viewport.scrollLeft = 40;
+        await wrapper.find(".overflow-hidden").trigger("scroll");
+
+        expect(viewport.scrollLeft).toBe(0);
+    });
+
+    it("shows a month that starts after mount once the page's clock moves on", async () => {
+        const wrapper = await mountStrip();
+        const NOV_2026: MonthRange = { kind: "range", from: "2026-11", to: "2026-11" };
+
+        // The page ticks from Oct 26 into November: the newest window now ends at Nov 2026.
+        await wrapper.setProps({
+            now: new Date(2026, 10, 1),
+            totals: { ...TOTALS, "2026-11": 700 },
+            modelValue: NOV_2026,
+        });
+
+        expect(bar(wrapper, "2026-11").exists()).toBe(true);
     });
 });

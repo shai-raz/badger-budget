@@ -17,18 +17,19 @@ import {
 } from "~/utils/monthStrip";
 
 const range = defineModel<MonthRange>({ required: true });
+// The page's clock. It ticks while the page stays open, so the bounds and the page keys follow the month.
+const props = defineProps<{ now: Date }>();
 
 const isDesktop = useIsDesktop();
 const visibleCount = computed(() => STRIP_VISIBLE[isDesktop.value ? "desktop" : "mobile"]);
-// Read once per mount, like the strip: "now" only bounds the months shown.
-const now = new Date();
 
 // Starts on the newest window. Once the first month is known, the strip slides it to show the range.
-const windowStart = ref(stripBounds(null, now, visibleCount.value).highestStart);
-const pages = computed(() => pagesForWindow(windowStart.value, visibleCount.value, now));
-const { totals, firstMonth, currency, error } = useMonthlySpending(pages, now);
+const windowStart = ref(stripBounds(null, props.now, visibleCount.value).highestStart);
+const pages = computed(() => pagesForWindow(windowStart.value, visibleCount.value, props.now));
+const { totals, firstMonth, currency, error, refetch } = useMonthlySpending(pages, () => props.now);
 
-const bounds = computed(() => stripBounds(firstMonth.value, now, visibleCount.value));
+const hasTotals = computed(() => Object.keys(totals.value).length > 0);
+const bounds = computed(() => stripBounds(firstMonth.value, props.now, visibleCount.value));
 watch(visibleCount, () => {
     windowStart.value = clampWindowStart(windowStart.value, bounds.value);
 });
@@ -37,7 +38,7 @@ const interaction = ref<StripInteraction>({ kind: "idle" });
 const dragLabel = computed(() => {
     const span = previewRange(interaction.value, null);
     return interaction.value.kind === "dragging" && span
-        ? selectionLabel(span, now, { shortYear: !isDesktop.value })
+        ? selectionLabel(span, props.now, { shortYear: !isDesktop.value })
         : null;
 });
 const hint = computed(() => stripHint(interaction.value, { mobile: !isDesktop.value, dragLabel: dragLabel.value }));
@@ -48,7 +49,7 @@ const formatAmount = (amount: number) => formatCurrency(amount, currency.value?.
 <template>
     <SharedSectionBand
         title="Monthly spending"
-        :error="error && Object.keys(totals).length === 0 ? error : undefined"
+        :error="error && !hasTotals ? error : undefined"
     >
         <template
             v-if="isDesktop"
@@ -67,12 +68,27 @@ const formatAmount = (amount: number) => formatCurrency(amount, currency.value?.
         </template>
 
         <div class="px-4 pb-4 md:px-0 md:pb-0">
+            <div
+                v-if="error && hasTotals"
+                role="alert"
+                class="mb-2 flex items-center justify-between gap-2 text-sm text-muted-color"
+            >
+                <span>Couldn't load some months.</span>
+                <Button
+                    label="Retry"
+                    text
+                    size="small"
+                    severity="secondary"
+                    @click="refetch"
+                />
+            </div>
             <SharedMonthStrip
                 v-model="range"
                 v-model:window-start="windowStart"
                 v-model:interaction="interaction"
                 :totals="totals"
                 :first-month="firstMonth"
+                :now="props.now"
                 :visible-count="visibleCount"
                 :format-amount="formatAmount"
             />

@@ -6,6 +6,7 @@ import {
     classifyGesture,
     clampWindowStart,
     edgeDirection,
+    edgeZonePx,
     mergeMonthlyPages,
     monthAtOffset,
     pagesForWindow,
@@ -132,6 +133,13 @@ describe("pointer geometry", () => {
         expect(edgeDirection(150, 300, 40)).toBe(0);
         expect(edgeDirection(40, 300, 40)).toBe(0);
         expect(edgeDirection(260, 300, 40)).toBe(0);
+    });
+
+    it("caps the edge zone at half a month column on a narrow strip", () => {
+        // 250px over 12 months: a column is about 21px, so the zone is half of it, not the 24px maximum.
+        expect(edgeZonePx(250, 12, 24)).toBeCloseTo(250 / 24);
+        // A wide strip keeps the full zone.
+        expect(edgeZonePx(2000, 24, 24)).toBe(24);
     });
 
     it("classifies a gesture as horizontal, vertical or undecided", () => {

@@ -1,4 +1,4 @@
-import { computed, type Ref } from "vue";
+import { computed, toValue, type MaybeRefOrGetter, type Ref } from "vue";
 import { useQueries } from "@tanstack/vue-query";
 import { mergeMonthlyPages, stripPageRange } from "~/utils/monthStrip";
 import type { MonthKey } from "~/utils/monthRange";
@@ -11,15 +11,16 @@ const MONTHLY_STALE_MS = 30 * 60 * 1000;
 /**
  * Loads the monthly spending totals for the given strip pages. Each page covers 24 months ending
  * at the current month (see `stripPageRange`). The long `staleTime` keeps the FX provider calls
- * bounded, since the totals for past months rarely change.
+ * bounded, since the totals for past months rarely change. `now` follows the page's clock, so the
+ * page keys move with the month.
  */
-export function useMonthlySpending(pageIndexes: Ref<number[]>, now: Date) {
+export function useMonthlySpending(pageIndexes: Ref<number[]>, now: MaybeRefOrGetter<Date>) {
     const apiClient = useApiClient();
 
     const results = useQueries({
         queries: computed(() =>
             pageIndexes.value.map((index) => {
-                const range = stripPageRange(index, now);
+                const range = stripPageRange(index, toValue(now));
                 return {
                     queryKey: reportKeys.monthly(range),
                     queryFn: () => apiClient.getMonthlySpending(range),

@@ -81,6 +81,14 @@ export function monthAtOffset(x: number, width: number, windowStart: MonthKey, v
     return addMonths(windowStart, Math.min(visibleCount - 1, Math.max(0, raw)));
 }
 
+/**
+ * The edge-scroll zone width: `maxPx`, capped at half a month column. On a narrow strip a column is
+ * narrower than `maxPx`, and a full-width zone would cover the edge months so they could not be picked.
+ */
+export function edgeZonePx(width: number, visibleCount: number, maxPx: number): number {
+    return Math.min(maxPx, width / visibleCount / 2);
+}
+
 /** -1 when `x` is within `edgePx` of the left edge, 1 within `edgePx` of the right edge, else 0. */
 export function edgeDirection(x: number, width: number, edgePx: number): -1 | 0 | 1 {
     if (x < edgePx) return -1;

@@ -3,6 +3,7 @@ import type { MaybeRefOrGetter } from "vue";
 import type { ITransactionListParams, ITransactionSummaryParams } from "@badger/types";
 import { useApiClient } from "../useApiClient";
 import { accountKeys } from "../accounts/accountKeys";
+import { reportKeys } from "../reports/useSpendingReport";
 import type { CreateTransactionPayload } from "../../utils/transactionForm";
 
 // Query keys
@@ -106,6 +107,7 @@ export function useCreateTransaction() {
             queryClient.invalidateQueries({ queryKey: transactionKeys.all });
             // Cash-wallet balances are derived from transactions.
             queryClient.invalidateQueries({ queryKey: accountKeys.all });
+            queryClient.invalidateQueries({ queryKey: reportKeys.all });
         },
     });
 }
@@ -121,6 +123,7 @@ export function useDeleteTransaction() {
             queryClient.invalidateQueries({ queryKey: transactionKeys.all });
             queryClient.invalidateQueries({ queryKey: transactionKeys.detail(id) });
             queryClient.invalidateQueries({ queryKey: accountKeys.all });
+            queryClient.invalidateQueries({ queryKey: reportKeys.all });
         },
     });
 }

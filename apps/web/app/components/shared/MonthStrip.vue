@@ -12,6 +12,7 @@ import {
     edgeDirection,
     monthAtOffset,
     previewRange,
+    edgeZonePx,
     slideWindow,
     stripAverage,
     stripBounds,
@@ -26,6 +27,8 @@ import { addMonths, monthIndex, rangeFromEnds, type MonthKey, type MonthRange } 
 const props = defineProps<{
     totals: Record<MonthKey, number>;
     firstMonth: MonthKey | null;
+    /** The page's clock: the newest window ends at this month. The page passes it so the strip follows the month. */
+    now: Date;
     visibleCount: number;
     formatAmount: (n: number) => string;
 }>();
@@ -35,15 +38,12 @@ const windowStart = defineModel<MonthKey>("windowStart", { required: true });
 const interaction = defineModel<StripInteraction>("interaction", { default: () => ({ kind: "idle" }) });
 
 const isDesktop = useIsDesktop();
-// Read once per mount: the strip only needs "now" to bound its months.
-const now = new Date();
 
-const bounds = computed(() => stripBounds(props.firstMonth, now, props.visibleCount));
+const bounds = computed(() => stripBounds(props.firstMonth, props.now, props.visibleCount));
 const months = computed(() => stripMonths(bounds.value, props.visibleCount));
 const windowEnd = computed(() => addMonths(windowStart.value, props.visibleCount - 1));
-const visibleMonths = computed(() =>
-    months.value.filter((month) => month >= windowStart.value && month <= windowEnd.value),
-);
+const inWindow = (month: MonthKey) => month >= windowStart.value && month <= windowEnd.value;
+const visibleMonths = computed(() => months.value.filter(inWindow));
 
 const average = computed(() => stripAverage(props.totals, visibleMonths.value, props.firstMonth));
 // The tallest bar sets the scale for the visible months. The average line can sit above every bar.
@@ -143,6 +143,12 @@ let press: Press | null = null;
 let edgeTimer: ReturnType<typeof setInterval> | null = null;
 let edgeDir: -1 | 1 | null = null;
 
+// The track is slid with a transform, so the viewport's own scroll must stay at 0. A focus that scrolls it would
+// put the pointer mapping out of step with windowStart.
+function resetScroll() {
+    if (viewport.value && viewport.value.scrollLeft !== 0) viewport.value.scrollLeft = 0;
+}
+
 function metrics(clientX: number): { x: number; width: number } {
     const rect = viewport.value?.getBoundingClientRect();
     return { x: clientX - (rect?.left ?? 0), width: rect?.width ?? 0 };
@@ -180,7 +186,7 @@ function tickEdge(dir: -1 | 1) {
 }
 
 function updateEdge(x: number, width: number) {
-    const dir = edgeDirection(x, width, EDGE_PX);
+    const dir = edgeDirection(x, width, edgeZonePx(width, props.visibleCount, EDGE_PX));
     if (dir === 0) {
         stopEdge();
         return;
@@ -290,6 +296,7 @@ onBeforeUnmount(stopEdge);
             @lostpointercapture="cancelPress"
             @pointerleave="hovered = null"
             @keydown.esc="onEscape"
+            @scroll="resetScroll"
         >
             <div
                 class="flex transition-transform"
@@ -322,6 +329,7 @@ onBeforeUnmount(stopEdge);
                             :title="barLabel(month, totals[month])"
                             :aria-label="barLabel(month, totals[month])"
                             :aria-pressed="inSpan(range, month)"
+                            :tabindex="inWindow(month) ? undefined : -1"
                             @click="onBarClick(month, $event)"
                         />
                         <span

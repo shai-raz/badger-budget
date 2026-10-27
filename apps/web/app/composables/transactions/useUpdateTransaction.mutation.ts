@@ -7,6 +7,7 @@ import type {
 } from "@badger/types";
 import { budgetKeys } from "../useBudgets";
 import { accountKeys } from "../accounts/accountKeys";
+import { reportKeys } from "../reports/useSpendingReport";
 import { transactionKeys } from "./useTransactions";
 
 function isInfiniteTransactions(v: unknown): v is InfiniteData<PaginatedResponse<ITransactionResponse>> {
@@ -97,6 +98,8 @@ export function useUpdateTransactionMutation() {
             queryClient.invalidateQueries({ queryKey: budgetKeys.all });
             // Cash-wallet balances are derived from transactions.
             queryClient.invalidateQueries({ queryKey: accountKeys.all });
+            // The monthly strip caches for 30 minutes, so it must refetch with the report it sits above.
+            queryClient.invalidateQueries({ queryKey: reportKeys.all });
         },
     });
 }

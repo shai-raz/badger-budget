@@ -59,7 +59,10 @@ watch(monthCount, (count) => {
             </template>
         </LayoutPageHeader>
 
-        <ReportsMonthlySpendingCard v-model="rangeModel" />
+        <ReportsMonthlySpendingCard
+            v-model="rangeModel"
+            :now="now"
+        />
 
         <ProgressSpinner v-if="isLoading" />
 
