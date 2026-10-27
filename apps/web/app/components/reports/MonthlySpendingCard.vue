@@ -57,15 +57,8 @@ const formatAmount = (amount: number) => formatCurrency(amount, currency.value?.
             v-if="isDesktop"
             #header-extra
         >
-            <SharedStatusTag
-                v-if="hint.kind === 'tag'"
-                :value="hint.text"
-            />
-            <span
-                v-else
-                class="text-xs text-muted-color"
-            >
-                {{ hint.text }}
+            <span class="text-xs text-muted-color">
+                {{ hint }}
             </span>
         </template>
 
@@ -98,15 +91,8 @@ const formatAmount = (amount: number) => formatCurrency(amount, currency.value?.
                 v-if="!isDesktop"
                 class="mt-2 flex justify-center"
             >
-                <SharedStatusTag
-                    v-if="hint.kind === 'tag'"
-                    :value="hint.text"
-                />
-                <span
-                    v-else
-                    class="text-xs text-muted-color"
-                >
-                    {{ hint.text }}
+                <span class="text-xs text-muted-color">
+                    {{ hint }}
                 </span>
             </div>
         </div>

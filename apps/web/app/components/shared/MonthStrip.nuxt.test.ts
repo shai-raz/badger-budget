@@ -87,16 +87,18 @@ describe("MonthStrip", () => {
         expect(pressed).toEqual(["2026-10"]);
     });
 
-    it("starts a pending selection on a keyboard tap and slides the window without changing the range", async () => {
+    it("starts a pending selection on a keyboard tap, commits that month, and slides the window without changing the range", async () => {
         const wrapper = await mountStrip();
 
         await bar(wrapper, "2026-07").trigger("click");
         expect(lastEmit(wrapper, "update:interaction")).toEqual({ kind: "pending", start: "2026-07" });
+        expect(lastEmit(wrapper, "update:modelValue")).toEqual({ kind: "range", from: "2026-07", to: "2026-07" });
 
+        const emitsBeforeArrow = wrapper.emitted("update:modelValue")?.length ?? 0;
         await earlierArrow(wrapper).trigger("click");
 
         expect(wrapper.emitted("update:windowStart")).toBeDefined();
-        expect(wrapper.emitted("update:modelValue")).toBeUndefined();
+        expect(wrapper.emitted("update:modelValue")?.length ?? 0).toBe(emitsBeforeArrow);
         expect(lastEmit(wrapper, "update:interaction")).toEqual({ kind: "pending", start: "2026-07" });
     });
 

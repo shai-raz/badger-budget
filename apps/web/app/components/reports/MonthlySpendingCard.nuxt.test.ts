@@ -60,6 +60,12 @@ describe("MonthlySpendingCard", () => {
         expect(wrapper.find('[data-month="2026-10"] button').attributes("aria-label")).toContain("$900.00");
     });
 
+    it("shows the pick hint in the header on desktop", async () => {
+        const wrapper = await mountCard();
+
+        expect(wrapper.text()).toContain("Pick a month, or two for a range");
+    });
+
     it("shows its error in the band and no strip when no month has loaded", async () => {
         mockState.totals = {};
         mockState.error = new Error("boom");

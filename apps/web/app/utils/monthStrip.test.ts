@@ -11,6 +11,7 @@ import {
     monthAtOffset,
     pagesForWindow,
     previewRange,
+    reconcileInteraction,
     slideWindow,
     stripAverage,
     stripBounds,
@@ -153,10 +154,10 @@ describe("pointer geometry", () => {
 describe("tap-tap selection", () => {
     const idle: StripInteraction = { kind: "idle" };
 
-    it("sets a pending start from idle without committing", () => {
+    it("commits the tapped month alone and sets it as the pending start from idle", () => {
         expect(tapMonth(idle, "2026-03")).toEqual({
             interaction: { kind: "pending", start: "2026-03" },
-            commit: null,
+            commit: range("2026-03", "2026-03"),
         });
     });
 
@@ -167,22 +168,46 @@ describe("tap-tap selection", () => {
         });
     });
 
-    it("commits in either order", () => {
-        expect(tapMonth({ kind: "pending", start: "2026-06" }, "2026-03").commit).toEqual(range("2026-03", "2026-06"));
+    it("commits in either order when the second tap is earlier", () => {
+        expect(tapMonth({ kind: "pending", start: "2026-06" }, "2026-03")).toEqual({
+            interaction: { kind: "idle" },
+            commit: range("2026-03", "2026-06"),
+        });
     });
 
-    it("commits a single month when the same month is tapped twice", () => {
+    it("commits the pending month alone when the same month is tapped again", () => {
         expect(tapMonth({ kind: "pending", start: "2026-06" }, "2026-06")).toEqual({
             interaction: { kind: "idle" },
             commit: range("2026-06", "2026-06"),
         });
     });
 
-    it("treats a tap during a drag as a new pending start", () => {
+    it("treats a tap during a drag as a new first tap", () => {
         expect(tapMonth({ kind: "dragging", anchor: "2026-01", current: "2026-04" }, "2026-08")).toEqual({
             interaction: { kind: "pending", start: "2026-08" },
-            commit: null,
+            commit: range("2026-08", "2026-08"),
         });
+    });
+});
+
+describe("reconcileInteraction", () => {
+    const pending: StripInteraction = { kind: "pending", start: "2026-05" };
+
+    it("keeps the same pending object while the range is still that single month", () => {
+        expect(reconcileInteraction(pending, range("2026-05", "2026-05"))).toBe(pending);
+    });
+
+    it("drops a pending start when the range has changed to another month", () => {
+        expect(reconcileInteraction(pending, range("2026-02", "2026-05"))).toEqual({ kind: "idle" });
+        expect(reconcileInteraction(pending, range("2026-05", "2026-08"))).toEqual({ kind: "idle" });
+        expect(reconcileInteraction(pending, range("2026-01", "2026-01"))).toEqual({ kind: "idle" });
+    });
+
+    it("leaves an idle or dragging interaction unchanged", () => {
+        const idle: StripInteraction = { kind: "idle" };
+        const dragging: StripInteraction = { kind: "dragging", anchor: "2026-01", current: "2026-04" };
+        expect(reconcileInteraction(idle, range("2026-02", "2026-05"))).toBe(idle);
+        expect(reconcileInteraction(dragging, range("2026-02", "2026-05"))).toBe(dragging);
     });
 });
 
@@ -265,37 +290,27 @@ describe("stripHint", () => {
     const pending: StripInteraction = { kind: "pending", start: "2026-03" };
     const dragging: StripInteraction = { kind: "dragging", anchor: "2026-03", current: "2026-06" };
 
-    it("shows the idle hint for each layout", () => {
-        expect(stripHint(idle, { mobile: false, dragLabel: null })).toEqual({
-            kind: "meta",
-            text: "Click or drag to select months",
-        });
-        expect(stripHint(idle, { mobile: true, dragLabel: null })).toEqual({
-            kind: "meta",
-            text: "Tap or drag to select months",
-        });
+    it("shows the pick hint when idle, for each layout", () => {
+        expect(stripHint(idle, { mobile: false, dragLabel: null })).toBe("Pick a month, or two for a range");
+        expect(stripHint(idle, { mobile: true, dragLabel: null })).toBe("Tap a month, or two for a range");
     });
 
-    it("shows the pending tag for each layout", () => {
-        expect(stripHint(pending, { mobile: false, dragLabel: null })).toEqual({
-            kind: "tag",
-            text: "Select end month",
-        });
-        expect(stripHint(pending, { mobile: true, dragLabel: null })).toEqual({ kind: "tag", text: "Tap end month" });
+    it("names the pending month, for each layout", () => {
+        expect(stripHint(pending, { mobile: false, dragLabel: null })).toBe(
+            "Mar 2026 selected · pick another month to make a range",
+        );
+        expect(stripHint(pending, { mobile: true, dragLabel: null })).toBe(
+            "Mar 2026 selected · tap another month to make a range",
+        );
     });
 
     it("shows the drag label while dragging", () => {
-        expect(stripHint(dragging, { mobile: false, dragLabel: "Mar – Jun 2026" })).toEqual({
-            kind: "meta",
-            text: "Mar – Jun 2026",
-        });
+        expect(stripHint(dragging, { mobile: false, dragLabel: "Mar – Jun 2026" })).toBe("Mar – Jun 2026");
     });
 
-    it("falls back to the idle hint while dragging with no label", () => {
-        expect(stripHint(dragging, { mobile: true, dragLabel: null })).toEqual({
-            kind: "meta",
-            text: "Tap or drag to select months",
-        });
+    it("falls back to the pick hint while dragging with no label", () => {
+        expect(stripHint(dragging, { mobile: true, dragLabel: null })).toBe("Tap a month, or two for a range");
+        expect(stripHint(dragging, { mobile: false, dragLabel: null })).toBe("Pick a month, or two for a range");
     });
 });
 

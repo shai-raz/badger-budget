@@ -10,6 +10,7 @@ import {
     monthCount,
     monthIndex,
     monthKeyOf,
+    monthPickHint,
     rangeFromEnds,
     type MonthKey,
     type MonthRange,
@@ -113,17 +114,30 @@ export type StripInteraction =
     | { kind: "dragging"; anchor: MonthKey; current: MonthKey };
 
 /**
- * Tap-tap selection. A tap with no pending start sets one. A tap with a pending start commits
- * the range between the two months, in either order, including a single month tapped twice.
+ * Tap-tap selection. A first tap (from idle or dragging) commits that single month and sets it as
+ * the pending start, so the picked month shows at once and a second tap can extend it. A tap with
+ * a pending start commits the range between the two months, in either order. Tapping the pending
+ * month again commits it as a single month.
  */
 export function tapMonth(
     interaction: StripInteraction,
     month: MonthKey,
-): { interaction: StripInteraction; commit: MonthRange | null } {
+): { interaction: StripInteraction; commit: MonthRange } {
     if (interaction.kind === "pending") {
         return { interaction: { kind: "idle" }, commit: rangeFromEnds(interaction.start, month) };
     }
-    return { interaction: { kind: "pending", start: month }, commit: null };
+    return { interaction: { kind: "pending", start: month }, commit: rangeFromEnds(month, month) };
+}
+
+/**
+ * Drops a pending start when the committed range was set from elsewhere (the picker, a preset, or
+ * stepping). A pending start stays only while the range is still exactly that one month. Other
+ * interactions pass through unchanged.
+ */
+export function reconcileInteraction(interaction: StripInteraction, range: MonthRange): StripInteraction {
+    if (interaction.kind !== "pending") return interaction;
+    const stillSingle = range.from === interaction.start && range.to === interaction.start;
+    return stillSingle ? interaction : { kind: "idle" };
 }
 
 /** The range to highlight while selecting: from a pending start to the hovered month, or the drag span. */
@@ -177,19 +191,15 @@ export function stripMonthLabel(month: MonthKey): { month: string; year: string 
     return { month: name, year: monthNumber === 0 ? String(year) : null };
 }
 
-/** The hint line under the strip: a plain meta line, or a highlighted tag while a start month is pending. */
-export function stripHint(
-    interaction: StripInteraction,
-    opts: { mobile: boolean; dragLabel: string | null },
-): { kind: "meta" | "tag"; text: string } {
-    const idleText = opts.mobile ? "Tap or drag to select months" : "Click or drag to select months";
-    if (interaction.kind === "pending") {
-        return { kind: "tag", text: opts.mobile ? "Tap end month" : "Select end month" };
-    }
-    if (interaction.kind === "dragging") {
-        return { kind: "meta", text: opts.dragLabel ?? idleText };
-    }
-    return { kind: "meta", text: idleText };
+/**
+ * The hint line under the strip, shared wording with the period picker via `monthPickHint`. Idle and
+ * pending name the pick so far; while dragging, the drag's span label wins when there is one.
+ */
+export function stripHint(interaction: StripInteraction, opts: { mobile: boolean; dragLabel: string | null }): string {
+    const touch = opts.mobile;
+    if (interaction.kind === "pending") return monthPickHint(interaction.start, { touch });
+    if (interaction.kind === "dragging") return opts.dragLabel ?? monthPickHint(null, { touch });
+    return monthPickHint(null, { touch });
 }
 
 /** Months covered by a page. Page 0 ends at the current month, and each later page is one page size older. */
