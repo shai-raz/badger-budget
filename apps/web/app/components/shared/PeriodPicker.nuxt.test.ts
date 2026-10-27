@@ -177,6 +177,84 @@ describe("PeriodPicker", () => {
         await vi.waitFor(() => expect(bodyElement(".p-popover")).toBeNull());
     });
 
+    it("closes the popover when the same month is pressed twice", async () => {
+        const wrapper = await mountPicker({ kind: "range", from: "2026-10", to: "2026-10" });
+
+        await labelButton(wrapper).trigger("click");
+        await nextTick();
+
+        pressBodyMonthCell("Oct");
+        await nextTick();
+        expect(bodyElement(".p-popover")).not.toBeNull();
+
+        pressBodyMonthCell("Oct");
+        await nextTick();
+
+        expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-10", to: "2026-10" });
+        await vi.waitFor(() => expect(bodyElement(".p-popover")).toBeNull());
+    });
+
+    it("keeps the first pick on Escape and reopens to the idle hint", async () => {
+        const wrapper = await mountPicker({ kind: "range", from: "2026-10", to: "2026-10" });
+
+        await labelButton(wrapper).trigger("click");
+        await nextTick();
+
+        pressBodyMonthCell("Aug");
+        await nextTick();
+
+        document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape", key: "Escape", bubbles: true }));
+        await nextTick();
+
+        expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-08", to: "2026-08" });
+        await vi.waitFor(() => expect(bodyElement(".p-popover")).toBeNull());
+        expect(labelButton(wrapper).attributes("aria-expanded")).toBe("false");
+
+        await labelButton(wrapper).trigger("click");
+        await nextTick();
+
+        expect(bodyElement("p[aria-live='polite']")?.textContent?.trim()).toBe("Pick a month, or two for a range");
+        expect(document.body.querySelectorAll(".p-datepicker-month.outline-dashed")).toHaveLength(0);
+    });
+
+    it("keeps the first pick on an outside click and closes", async () => {
+        const wrapper = await mountPicker({ kind: "range", from: "2026-10", to: "2026-10" });
+
+        await labelButton(wrapper).trigger("click");
+        await nextTick();
+
+        pressBodyMonthCell("Aug");
+        await nextTick();
+
+        document.body.click();
+        await nextTick();
+
+        expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-08", to: "2026-08" });
+        await vi.waitFor(() => expect(bodyElement(".p-popover")).toBeNull());
+    });
+
+    it("keeps the bottom sheet open after the first tap and closes on the second", async () => {
+        layout.desktop = false;
+        const wrapper = await mountPicker({ kind: "range", from: "2026-10", to: "2026-10" });
+
+        await labelButton(wrapper).trigger("click");
+        await nextTick();
+
+        pressBodyMonthCell("Aug");
+        await nextTick();
+
+        expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-08", to: "2026-08" });
+        expect(bodyElement("[data-period-sheet]")).not.toBeNull();
+        expect(labelButton(wrapper).attributes("aria-expanded")).toBe("true");
+
+        pressBodyMonthCell("Sep");
+        await nextTick();
+
+        expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-08", to: "2026-09" });
+        expect(labelButton(wrapper).attributes("aria-expanded")).toBe("false");
+        await vi.waitFor(() => expect(bodyElement("[data-period-sheet]")).toBeNull());
+    });
+
     it("opens only the bottom sheet below md, and choosing a preset closes it", async () => {
         layout.desktop = false;
         const wrapper = await mountPicker({ kind: "range", from: "2026-10", to: "2026-10" });

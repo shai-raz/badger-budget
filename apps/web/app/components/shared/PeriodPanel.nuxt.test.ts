@@ -35,6 +35,9 @@ const lastEmit = (wrapper: Awaited<ReturnType<typeof mountPanel>>) => {
     return emits[emits.length - 1]?.[0];
 };
 
+// The grid's own hint paragraph, not the hidden live region PrimeVue puts inside a selected cell.
+const hintText = (wrapper: Awaited<ReturnType<typeof mountPanel>>) => wrapper.find("p[aria-live='polite']").text();
+
 describe("PeriodPanel", () => {
     beforeEach(() => {
         vi.useFakeTimers({ toFake: ["Date"] });
@@ -51,6 +54,8 @@ describe("PeriodPanel", () => {
         await monthCell(wrapper, "Jul").trigger("click");
         expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-07", to: "2026-07" });
         expect(wrapper.emitted("done")).toBeUndefined();
+        expect(monthCell(wrapper, "Jul").classes()).toContain("outline-dashed");
+        expect(hintText(wrapper)).toBe("Jul 2026 selected · tap another month to make a range");
 
         await clickYearPrev(wrapper);
         await monthCell(wrapper, "Mar").trigger("click");
@@ -59,14 +64,41 @@ describe("PeriodPanel", () => {
         expect(wrapper.emitted("done")).toHaveLength(1);
     });
 
+    it("keeps the panel open after the first click and completes a later month as a range", async () => {
+        const wrapper = await mountPanel();
+
+        await monthCell(wrapper, "Jul").trigger("click");
+        expect(wrapper.emitted("done")).toBeUndefined();
+
+        await monthCell(wrapper, "Sep").trigger("click");
+
+        expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-07", to: "2026-09" });
+        expect(wrapper.emitted("done")).toHaveLength(1);
+    });
+
     it("commits a single month when the same month is clicked twice", async () => {
         const wrapper = await mountPanel();
 
         await monthCell(wrapper, "Jul").trigger("click");
+        expect(wrapper.emitted("done")).toBeUndefined();
+
         await monthCell(wrapper, "Jul").trigger("click");
 
         expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-07", to: "2026-07" });
         expect(wrapper.emitted("done")).toHaveLength(1);
+    });
+
+    it("shows no pending ring and the idle hint before any grid click", async () => {
+        const wrapper = await mountPanel({ layout: "stacked" });
+
+        expect(wrapper.findAll(".p-datepicker-month.outline-dashed")).toHaveLength(0);
+        expect(hintText(wrapper)).toBe("Tap a month, or two for a range");
+    });
+
+    it("uses the side-layout idle hint wording", async () => {
+        const wrapper = await mountPanel({ layout: "side" });
+
+        expect(hintText(wrapper)).toBe("Pick a month, or two for a range");
     });
 
     it("chooses a preset from the side list and commits it", async () => {

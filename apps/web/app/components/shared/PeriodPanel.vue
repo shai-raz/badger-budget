@@ -4,6 +4,7 @@ import {
     applyGridEmit,
     matchPreset,
     monthKeyOf,
+    monthPickHint,
     presetSelection,
     type MonthKey,
     type PeriodPresetId,
@@ -22,7 +23,8 @@ const emit = defineEmits<{ done: [] }>();
 // Captured once per open, so the presets, the disabled future months and the matched preset all agree.
 const now = new Date();
 
-// The first month of a range the user has clicked but not yet closed.
+// The month of a first grid click, waiting for the second. Only ever set while the panel is open: PrimeVue
+// unmounts the panel on every close, so an unfinished pick is discarded with it.
 const pendingStart = ref<MonthKey | null>(null);
 
 const activePreset = computed(() => matchPreset(selection.value, props.presets, now));
@@ -37,25 +39,34 @@ const monthStart = (key: MonthKey): Date => {
     return date;
 };
 
+// While a month is pending, PrimeVue sees `[start, null]`, so its next click completes the range.
 const gridValue = computed<(Date | null)[] | null>(() => {
     if (pendingStart.value !== null) return [monthStart(pendingStart.value), null];
     if (selection.value.kind === "all") return null;
     return [monthStart(selection.value.from), monthStart(selection.value.to)];
 });
 
-const commit = (next: PeriodSelection) => {
-    pendingStart.value = null;
-    selection.value = next;
-    emit("done");
+// The pending ring. PrimeVue marks only the start's year in the `[start, null]` state, so `selected` here
+// lands on the pending cell alone; once a range is complete no cell carries the ring.
+const monthPt = {
+    month: ({ context }: { context: { selected: boolean } }) => ({
+        class:
+            pendingStart.value !== null && context.selected
+                ? "bg-transparent text-primary outline-dashed outline-2 -outline-offset-2 outline-primary"
+                : undefined,
+    }),
 };
 
 const choosePreset = (id: PeriodPresetId | null) => {
     if (id === null) return;
-    commit(presetSelection(id, now));
+    pendingStart.value = null;
+    selection.value = presetSelection(id, now);
+    emit("done");
 };
 
 // PrimeVue's range grid emits `[start, end]`, or `[clicked, null]` when a click starts a new range. The month
-// logic in `applyGridEmit` reads both, so the result does not depend on which month was clicked first.
+// logic in `applyGridEmit` reads both, so the result does not depend on which month was clicked first. A first
+// click selects its month and keeps the panel open; the second completes the range and closes it.
 const onGridUpdate = (value: Date | Date[] | (Date | null)[] | null | undefined) => {
     // PrimeVue does not block a click on a future month, and clamps it to the max date (not the 1st). Ignore that.
     if (Array.isArray(value) && value.some((date) => date && date.getDate() !== 1)) return;
@@ -105,8 +116,20 @@ const onGridUpdate = (value: Date | Date[] | (Date | null)[] | null | undefined)
             date-format="mm/yy"
             :max-date="now"
             :model-value="gridValue"
+            :pt="monthPt"
             aria-label="Month range"
             @update:model-value="onGridUpdate"
-        />
+        >
+            <template #footer>
+                <!-- One persistent live region: it announces the first pick and the reset after a range. -->
+                <p
+                    aria-live="polite"
+                    class="mt-2 text-center text-xs"
+                    :class="pendingStart ? 'font-medium text-surface-900 dark:text-surface-0' : 'text-muted-color'"
+                >
+                    {{ monthPickHint(pendingStart, { touch: layout === "stacked" }) }}
+                </p>
+            </template>
+        </DatePicker>
     </div>
 </template>
