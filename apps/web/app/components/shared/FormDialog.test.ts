@@ -1,5 +1,5 @@
-// Source-text contract for the shared form dialog's Escape handling. The web test runner is Vitest in a node
-// environment with no DOM, so the dialog is checked against its source, not mounted.
+// Source-text contract for the shared form dialog's Escape handling. This runs in the node `unit` project, so the
+// dialog is checked against its source, not mounted. DOM component tests live in `*.nuxt.test.ts` (the `nuxt` project).
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";

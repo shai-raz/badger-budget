@@ -7,7 +7,8 @@ Nuxt 4 SPA (`ssr: false`; Vite 8 / Rolldown, Lightning CSS minification). `nuxt`
 - **API base URL** is the same-origin `/api/v1`. `NUXT_PUBLIC_API_BASE_URL` overrides it at build time only. In `pnpm dev:web`, `nitro.devProxy` forwards `/api` and `/.well-known` to port 3000.
 - **Instance flags**: `useInstanceConfig()` wraps the public `GET /config`. Gate UI through the helpers in `utils/appConfig.ts`; unknown (loading or failed) config hides or skips, never guesses.
 - **Bank sync**: `useBankSyncFlow()` is provided by the `app` layout, so sync controls only work inside it. The passkey unlock (`useSyncUnlock`, `utils/syncPasskey*`) never persists the PIN client-side.
-- **PWA**: `@vite-pwa/nuxt`. `/api`, `/.well-known` and `/oauth` are excluded from the SPA navigation fallback; keep them out.
+- **PWA**: `@vite-pwa/nuxt`. `/api`, `/.well-known` and `/oauth` are excluded from the SPA navigation fallback; keep them out. Not loaded under vitest (`nuxt.config.ts`), since its client plugin imports a virtual module the test env cannot resolve.
+- **Tests**: Vitest has two projects. `unit` is node (`*.test.ts`); pure logic belongs in `utils/` with node tests. `nuxt` mounts real components (`*.nuxt.test.ts`, `mountSuspended`) on happy-dom.
 - **Pages** mirror API resources. `pages/auth/` and `pages/oauth/` are standalone (no layout).
 
 ## CSS layer order

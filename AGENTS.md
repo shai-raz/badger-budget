@@ -48,7 +48,7 @@ docker build -t badger-budget .   # Production image: API + bundled SPA on one p
 
 - `pnpm check-types` must pass for every package. Isolate one with `pnpm check-types --filter=web` / `--filter=api` (through turbo, so shared packages rebuild first); `pnpm --filter <pkg> check-types` skips that and can report phantom errors from a stale `dist/`. Nothing else type-checks the API: its build, watch and Jest all run through SWC, and CI skips it.
 - `pnpm lint`: `apps/web` must stay at 0 warnings (`--max-warnings 0`, enforced in CI). `apps/api` has ~196 pre-existing warnings; don't chase them, and add none.
-- `pnpm test`: Jest (api) and Vitest (web), both in CI's `Tests` job. No database needed: specs mock `PrismaService`.
+- `pnpm test`: Jest (api) and Vitest (web, its `unit` and `nuxt` projects), both in CI's `Tests` job. No database needed: specs mock `PrismaService`.
 - For UI changes, also run the app and exercise the feature in a browser; passing checks don't prove it works. Sign in as the demo user (`demo@demo.demo` / `demo123QWEasd`; seeded only with `SEED_DEMO=true` in `apps/api/.env`), whose data is topped up to today on each login.
 
 ### Pull requests and releases

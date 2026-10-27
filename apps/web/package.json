@@ -39,10 +39,13 @@
     },
     "devDependencies": {
         "@nuxt/eslint": "^1.9.0",
+        "@nuxt/test-utils": "^4.3.4",
         "@primevue/nuxt-module": "^4.2.1",
         "@repo/eslint-config": "workspace:^",
         "@vite-pwa/nuxt": "^1.1.1",
+        "@vue/test-utils": "^2.4.6",
         "eslint": "^9.39.1",
+        "happy-dom": "^20",
         "sass": "^1.82.0",
         "typescript": "^5.9.2",
         "vitest": "^5.0.2",
