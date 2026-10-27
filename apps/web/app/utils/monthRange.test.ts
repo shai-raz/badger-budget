@@ -8,6 +8,7 @@ import {
     isYearAligned,
     lastDayOfMonth,
     matchPreset,
+    monthBandCell,
     monthCount,
     monthIndex,
     monthKeyLabel,
@@ -419,5 +420,64 @@ describe("monthPickHint", () => {
         expect(monthPickHint("2025-12", { touch: false })).toBe(
             "Dec 2025 selected · pick another month to make a range",
         );
+    });
+});
+
+describe("monthBandCell", () => {
+    // Column = monthOfYear % 3. Caps go on row edges only: a middle or end at a row start, a middle or start at a row end.
+    const band = (from: string, to: string) => range(from, to);
+
+    it("draws a Mar–Oct band with row caps where it wraps", () => {
+        const b = band("2026-03", "2026-10");
+        expect(monthBandCell(2026, 2, b, null)).toEqual({ role: "start", capLeft: false, capRight: true }); // Mar
+        expect(monthBandCell(2026, 3, b, null)).toEqual({ role: "middle", capLeft: true, capRight: false }); // Apr
+        expect(monthBandCell(2026, 4, b, null)).toEqual({ role: "middle", capLeft: false, capRight: false }); // May
+        expect(monthBandCell(2026, 5, b, null)).toEqual({ role: "middle", capLeft: false, capRight: true }); // Jun
+        expect(monthBandCell(2026, 6, b, null)).toEqual({ role: "middle", capLeft: true, capRight: false }); // Jul
+        expect(monthBandCell(2026, 8, b, null)).toEqual({ role: "middle", capLeft: false, capRight: true }); // Sep
+        expect(monthBandCell(2026, 9, b, null)).toEqual({ role: "end", capLeft: true, capRight: false }); // Oct
+    });
+
+    it("leaves the months outside the band with no role", () => {
+        const b = band("2026-03", "2026-10");
+        expect(monthBandCell(2026, 1, b, null)).toEqual({ role: "none", capLeft: false, capRight: false }); // Feb
+        expect(monthBandCell(2026, 10, b, null)).toEqual({ role: "none", capLeft: false, capRight: false }); // Nov
+    });
+
+    it("gives a start and end inside one row no caps", () => {
+        const b = band("2026-04", "2026-05");
+        expect(monthBandCell(2026, 3, b, null)).toEqual({ role: "start", capLeft: false, capRight: false }); // Apr
+        expect(monthBandCell(2026, 4, b, null)).toEqual({ role: "end", capLeft: false, capRight: false }); // May
+    });
+
+    it("draws a single-month range as a single", () => {
+        expect(monthBandCell(2026, 6, band("2026-07", "2026-07"), null)).toEqual({
+            role: "single",
+            capLeft: false,
+            capRight: false,
+        });
+    });
+
+    it("shows the pending month alone, with no caps, while a start is pending", () => {
+        const b = band("2026-07", "2026-07");
+        expect(monthBandCell(2026, 6, b, "2026-07")).toEqual({ role: "pending", capLeft: false, capRight: false });
+        expect(monthBandCell(2026, 7, b, "2026-07")).toEqual({ role: "none", capLeft: false, capRight: false }); // Aug
+    });
+
+    it("handles a range across a year change, viewing the later year", () => {
+        const b = band("2025-11", "2026-02");
+        expect(monthBandCell(2026, 0, b, null)).toEqual({ role: "middle", capLeft: true, capRight: false }); // Jan
+        expect(monthBandCell(2026, 1, b, null)).toEqual({ role: "end", capLeft: false, capRight: false }); // Feb
+        expect(monthBandCell(2026, 2, b, null)).toEqual({ role: "none", capLeft: false, capRight: false }); // Mar
+    });
+
+    it("handles a range across a year change, viewing the earlier year", () => {
+        const b = band("2025-11", "2026-02");
+        expect(monthBandCell(2025, 10, b, null)).toEqual({ role: "start", capLeft: false, capRight: false }); // Nov
+        expect(monthBandCell(2025, 11, b, null)).toEqual({ role: "middle", capLeft: false, capRight: true }); // Dec
+    });
+
+    it("has no role without a band", () => {
+        expect(monthBandCell(2026, 6, null, null)).toEqual({ role: "none", capLeft: false, capRight: false });
     });
 });

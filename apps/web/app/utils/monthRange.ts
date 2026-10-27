@@ -310,3 +310,42 @@ export function monthPickHint(pendingStart: MonthKey | null, opts: { touch: bool
     }
     return `${monthKeyLabel(pendingStart)} selected · ${verb} another month to make a range`;
 }
+
+export type MonthBandRole = "none" | "single" | "pending" | "start" | "end" | "middle";
+
+export interface MonthBandCell {
+    role: MonthBandRole;
+    /** Whether the cell's left side is a row edge where the band continues into it, so it gets the small cap. */
+    capLeft: boolean;
+    /** Whether the cell's right side is a row edge where the band continues into it, so it gets the small cap. */
+    capRight: boolean;
+}
+
+function bandRole(cell: MonthKey, band: MonthRange | null, pendingStart: MonthKey | null): MonthBandRole {
+    if (pendingStart !== null) return cell === pendingStart ? "pending" : "none";
+    if (band === null || cell < band.from || cell > band.to) return "none";
+    if (band.from === cell && band.to === cell) return "single";
+    if (cell === band.from) return "start";
+    if (cell === band.to) return "end";
+    return "middle";
+}
+
+/**
+ * Where one month cell of the 3-column month grid sits in the shown range. `monthOfYear` is 0-based (PrimeVue's
+ * `context.monthIndex`). A range edge in a year the grid is not showing never equals a visible cell, so its
+ * visible neighbour month reads as a middle.
+ */
+export function monthBandCell(
+    year: number,
+    monthOfYear: number,
+    band: MonthRange | null,
+    pendingStart: MonthKey | null,
+): MonthBandCell {
+    const role = bandRole(formatKey(year, monthOfYear + 1), band, pendingStart);
+    const column = monthOfYear % 3;
+    return {
+        role,
+        capLeft: column === 0 && (role === "middle" || role === "end"),
+        capRight: column === 2 && (role === "middle" || role === "start"),
+    };
+}

@@ -8,10 +8,12 @@ const NOW = new Date(2026, 9, 26);
 
 const ALL: PeriodSelection = { kind: "all" };
 
-const mountPanel = (opts: { layout?: "side" | "stacked"; presets?: readonly PeriodPresetId[] } = {}) =>
+const mountPanel = (
+    opts: { layout?: "side" | "stacked"; presets?: readonly PeriodPresetId[]; modelValue?: PeriodSelection } = {},
+) =>
     mountSuspended(PeriodPanel, {
         props: {
-            modelValue: ALL,
+            modelValue: opts.modelValue ?? ALL,
             presets: opts.presets ?? TRANSACTIONS_PRESETS,
             layout: opts.layout ?? "stacked",
         },
@@ -130,6 +132,79 @@ describe("PeriodPanel", () => {
         const list = wrapper.find(".p-listbox-list-container");
         expect(list.attributes("style")).not.toContain("14rem");
         expect(list.attributes("style")).toContain("max-height: none");
+    });
+
+    it("draws a completed range as one band, with caps only where it wraps (AC 12)", async () => {
+        const wrapper = await mountPanel({ modelValue: { kind: "range", from: "2026-03", to: "2026-10" } });
+
+        const mar = monthCell(wrapper, "Mar");
+        expect(mar.attributes("data-band")).toBe("start");
+        expect(mar.attributes("data-band-cap")).toBe("right");
+        expect(mar.classes()).toEqual(expect.arrayContaining(["rounded-l-md", "rounded-r-sm"]));
+
+        for (const label of ["Apr", "Jun", "Jul", "Sep"]) {
+            expect(monthCell(wrapper, label).attributes("data-band")).toBe("middle");
+        }
+        expect(monthCell(wrapper, "Apr").attributes("data-band-cap")).toBe("left");
+        expect(monthCell(wrapper, "Jun").attributes("data-band-cap")).toBe("right");
+        expect(monthCell(wrapper, "Jul").attributes("data-band-cap")).toBe("left");
+        expect(monthCell(wrapper, "Sep").attributes("data-band-cap")).toBe("right");
+
+        const may = monthCell(wrapper, "May");
+        expect(may.attributes("data-band")).toBe("middle");
+        expect(may.attributes("data-band-cap")).toBeUndefined();
+        expect(may.classes()).toEqual(expect.arrayContaining(["rounded-l-none", "rounded-r-none"]));
+
+        const oct = monthCell(wrapper, "Oct");
+        expect(oct.attributes("data-band")).toBe("end");
+        expect(oct.attributes("data-band-cap")).toBe("left");
+        expect(oct.classes()).toEqual(expect.arrayContaining(["rounded-r-md", "rounded-l-sm"]));
+
+        expect(monthCell(wrapper, "Feb").attributes("data-band")).toBeUndefined();
+        expect(monthCell(wrapper, "Nov").attributes("data-band")).toBeUndefined();
+
+        // Caps are always the small radius, never the cell radius.
+        for (const label of ["Apr", "Jun", "Jul", "Sep"]) {
+            const classes = monthCell(wrapper, label).classes();
+            expect(classes.some((name) => /^rounded-[lr]-md$/.test(name))).toBe(false);
+        }
+    });
+
+    it("draws a range across a year change, viewing both years (AC 13)", async () => {
+        const wrapper = await mountPanel({ modelValue: { kind: "range", from: "2025-11", to: "2026-02" } });
+
+        const jan = monthCell(wrapper, "Jan");
+        expect(jan.attributes("data-band")).toBe("middle");
+        expect(jan.attributes("data-band-cap")).toBe("left");
+        expect(monthCell(wrapper, "Feb").attributes("data-band")).toBe("end");
+
+        await clickYearPrev(wrapper);
+
+        expect(monthCell(wrapper, "Nov").attributes("data-band")).toBe("start");
+        expect(monthCell(wrapper, "Nov").attributes("data-band-cap")).toBeUndefined();
+        const dec = monthCell(wrapper, "Dec");
+        expect(dec.attributes("data-band")).toBe("middle");
+        expect(dec.attributes("data-band-cap")).toBe("right");
+    });
+
+    it("draws a single-month range as one solid cell", async () => {
+        const wrapper = await mountPanel({ modelValue: { kind: "range", from: "2026-07", to: "2026-07" } });
+
+        const jul = monthCell(wrapper, "Jul");
+        expect(jul.attributes("data-band")).toBe("single");
+        expect(jul.classes()).toEqual(expect.arrayContaining(["bg-primary", "rounded-md"]));
+        expect(wrapper.findAll("[data-band]")).toHaveLength(1);
+    });
+
+    it("shows only the pending month, with the ring, after a first click", async () => {
+        const wrapper = await mountPanel();
+
+        await monthCell(wrapper, "Jul").trigger("click");
+
+        const jul = monthCell(wrapper, "Jul");
+        expect(jul.attributes("data-band")).toBe("pending");
+        expect(jul.classes()).toContain("outline-dashed");
+        expect(wrapper.findAll("[data-band]")).toHaveLength(1);
     });
 
     it("shows an All time chip in the stacked layout and commits all time", async () => {

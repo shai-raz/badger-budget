@@ -1,11 +1,14 @@
 <script setup lang="ts">
+import type { DatePickerPassThroughMethodOptions } from "primevue/datepicker";
 import {
     PERIOD_PRESET_LABELS,
     applyGridEmit,
     matchPreset,
+    monthBandCell,
     monthKeyOf,
     monthPickHint,
     presetSelection,
+    type MonthBandCell,
     type MonthKey,
     type PeriodPresetId,
     type PeriodSelection,
@@ -46,15 +49,50 @@ const gridValue = computed<(Date | null)[] | null>(() => {
     return [monthStart(selection.value.from), monthStart(selection.value.to)];
 });
 
-// The pending ring. PrimeVue marks only the start's year in the `[start, null]` state, so `selected` here
-// lands on the pending cell alone; once a range is complete no cell carries the ring.
+// The range band, drawn per cell. Only a completed range is a band: while a start is pending the grid shows just
+// that month, with the dashed ring. Every cell takes `w-1/3 my-0.5`, which closes the sub-pixel gap between
+// columns and separates rows, so one row reads as one band.
+const band = computed(() => (pendingStart.value === null && selection.value.kind === "range" ? selection.value : null));
+
+// Literal class strings, so Tailwind sees them. The row cap is `rounded-*-sm` (2px), a third of the cell radius
+// (`rounded-*-md`), so a wrapped row edge never reads as a range end. This is a deliberate exception to
+// apps/web/AGENTS.md's "keep PrimeVue radii" rule: PrimeVue's month range fills every month alike, so the band
+// is drawn by hand. Tailwind utilities sit above the `primevue` layer and need no `!`.
+const bandClass = (cell: MonthBandCell): string | undefined => {
+    const left = cell.capLeft ? "rounded-l-sm" : "rounded-l-none";
+    const right = cell.capRight ? "rounded-r-sm" : "rounded-r-none";
+    switch (cell.role) {
+        case "none":
+            return undefined;
+        case "single":
+            return "bg-primary text-primary-contrast rounded-md";
+        case "pending":
+            return "rounded-md bg-transparent text-primary outline-dashed outline-2 -outline-offset-2 outline-primary";
+        case "start":
+            return `bg-primary text-primary-contrast rounded-l-md ${right}`;
+        case "end":
+            return `bg-primary text-primary-contrast rounded-r-md ${left}`;
+        case "middle":
+            return `bg-[var(--p-highlight-background)] text-color ${left} ${right}`;
+    }
+};
+
+const bandCap = (cell: MonthBandCell): "both" | "left" | "right" | undefined => {
+    if (cell.capLeft && cell.capRight) return "both";
+    if (cell.capLeft) return "left";
+    if (cell.capRight) return "right";
+    return undefined;
+};
+
 const monthPt = {
-    month: ({ context }: { context: { selected: boolean } }) => ({
-        class:
-            pendingStart.value !== null && context.selected
-                ? "bg-transparent text-primary outline-dashed outline-2 -outline-offset-2 outline-primary"
-                : undefined,
-    }),
+    month: ({ state, context }: DatePickerPassThroughMethodOptions) => {
+        const cell = monthBandCell(state.currentYear, context.monthIndex, band.value, pendingStart.value);
+        return {
+            class: ["w-1/3 my-0.5", bandClass(cell)],
+            "data-band": cell.role === "none" ? undefined : cell.role,
+            "data-band-cap": bandCap(cell),
+        };
+    },
 };
 
 const choosePreset = (id: PeriodPresetId | null) => {
