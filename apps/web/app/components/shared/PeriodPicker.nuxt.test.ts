@@ -138,6 +138,7 @@ describe("PeriodPicker", () => {
 
         expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-08", to: "2026-10" });
         expect(labelButton(wrapper).attributes("aria-expanded")).toBe("false");
+        await vi.waitFor(() => expect(bodyElement(".p-popover")).toBeNull());
     });
 
     it("opens only the bottom sheet below md, and choosing a preset closes it", async () => {
