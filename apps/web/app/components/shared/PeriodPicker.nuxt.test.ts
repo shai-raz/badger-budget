@@ -165,7 +165,7 @@ describe("PeriodPicker", () => {
         pressBodyMonthCell("Aug");
         await nextTick();
 
-        expect(wrapper.emitted("update:modelValue")).toBeUndefined();
+        expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-08", to: "2026-08" });
         expect(bodyElement(".p-popover")).not.toBeNull();
         expect(labelButton(wrapper).attributes("aria-expanded")).toBe("true");
 

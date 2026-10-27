@@ -10,7 +10,9 @@ import {
     matchPreset,
     monthCount,
     monthIndex,
+    monthKeyLabel,
     monthKeyOf,
+    monthPickHint,
     parseMonthKey,
     parseSelectionQuery,
     PERIOD_PRESET_LABELS,
@@ -323,44 +325,99 @@ describe("selectionToDateBounds", () => {
 });
 
 describe("applyGridEmit", () => {
-    it("resets the pending start on a null emit", () => {
-        expect(applyGridEmit("2026-07", null)).toEqual({ pendingStart: null, commit: null });
+    it("clears everything on a null emit and does not close", () => {
+        expect(applyGridEmit("2026-07", null)).toEqual({ pendingStart: null, commit: null, close: false });
     });
 
-    it("records a first click as the pending start without committing", () => {
-        expect(applyGridEmit(null, ["2026-07", null])).toEqual({ pendingStart: "2026-07", commit: null });
+    it("commits a first click as that single month, keeps it pending, and stays open", () => {
+        expect(applyGridEmit(null, ["2026-07", null])).toEqual({
+            pendingStart: "2026-07",
+            commit: range("2026-07", "2026-07"),
+            close: false,
+        });
     });
 
-    it("commits a completed range and clears the pending start", () => {
+    it("extends a pending start to a later month and closes", () => {
         expect(applyGridEmit("2026-07", ["2026-07", "2026-09"])).toEqual({
             pendingStart: null,
             commit: range("2026-07", "2026-09"),
+            close: true,
         });
     });
 
-    it("commits a backwards second click in order", () => {
+    it("completes a range when the second click is earlier than the pending start", () => {
+        expect(applyGridEmit("2026-09", ["2026-09", "2026-07"])).toEqual({
+            pendingStart: null,
+            commit: range("2026-07", "2026-09"),
+            close: true,
+        });
+    });
+
+    it("completes a range when the emit is [clicked, null] after an earlier pending start", () => {
         expect(applyGridEmit("2026-09", ["2026-07", null])).toEqual({
             pendingStart: null,
             commit: range("2026-07", "2026-09"),
+            close: true,
         });
     });
 
-    it("commits the same month clicked twice as a single-month range", () => {
+    it("completes a range when the emit is [clicked, null] after a later pending start", () => {
+        expect(applyGridEmit("2026-07", ["2026-09", null])).toEqual({
+            pendingStart: null,
+            commit: range("2026-07", "2026-09"),
+            close: true,
+        });
+    });
+
+    it("commits the pending month clicked again as a single-month range and closes", () => {
+        expect(applyGridEmit("2026-07", ["2026-07", null])).toEqual({
+            pendingStart: null,
+            commit: range("2026-07", "2026-07"),
+            close: true,
+        });
+    });
+
+    it("commits the same month clicked twice as a single-month range and closes", () => {
         expect(applyGridEmit("2026-07", ["2026-07", "2026-07"])).toEqual({
             pendingStart: null,
             commit: range("2026-07", "2026-07"),
+            close: true,
         });
     });
 
-    it("treats a repeated click on the pending month as a new start", () => {
-        expect(applyGridEmit("2026-07", ["2026-07", null])).toEqual({ pendingStart: "2026-07", commit: null });
+    it("clears the pending start and does not commit on [null, null]", () => {
+        expect(applyGridEmit("2026-07", [null, null])).toEqual({ pendingStart: null, commit: null, close: false });
+    });
+});
+
+describe("monthKeyLabel", () => {
+    it("labels a month with its short name and full year", () => {
+        expect(monthKeyLabel("2026-10")).toBe("Oct 2026");
+        expect(monthKeyLabel("2026-01")).toBe("Jan 2026");
     });
 
-    it("replaces the pending start when the click is after it", () => {
-        expect(applyGridEmit("2026-07", ["2026-09", null])).toEqual({ pendingStart: "2026-09", commit: null });
+    it("labels a month in a year boundary", () => {
+        expect(monthKeyLabel("2025-12")).toBe("Dec 2025");
+        expect(monthKeyLabel("2027-01")).toBe("Jan 2027");
+    });
+});
+
+describe("monthPickHint", () => {
+    it("says how to start when idle", () => {
+        expect(monthPickHint(null, { touch: true })).toBe("Tap a month, or two for a range");
+        expect(monthPickHint(null, { touch: false })).toBe("Pick a month, or two for a range");
     });
 
-    it("clears the pending start on [null, null]", () => {
-        expect(applyGridEmit("2026-07", [null, null])).toEqual({ pendingStart: null, commit: null });
+    it("names the pending month and the next action when pending", () => {
+        expect(monthPickHint("2026-10", { touch: true })).toBe("Oct 2026 selected · tap another month to make a range");
+        expect(monthPickHint("2026-10", { touch: false })).toBe(
+            "Oct 2026 selected · pick another month to make a range",
+        );
+    });
+
+    it("names a pending month across a year boundary", () => {
+        expect(monthPickHint("2025-12", { touch: false })).toBe(
+            "Dec 2025 selected · pick another month to make a range",
+        );
     });
 });

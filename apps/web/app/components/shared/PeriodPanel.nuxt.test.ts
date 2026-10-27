@@ -49,7 +49,7 @@ describe("PeriodPanel", () => {
         const wrapper = await mountPanel();
 
         await monthCell(wrapper, "Jul").trigger("click");
-        expect(wrapper.emitted("update:modelValue")).toBeUndefined();
+        expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-07", to: "2026-07" });
         expect(wrapper.emitted("done")).toBeUndefined();
 
         await clickYearPrev(wrapper);

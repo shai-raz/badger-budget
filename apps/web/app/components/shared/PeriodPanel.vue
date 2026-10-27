@@ -57,12 +57,15 @@ const choosePreset = (id: PeriodPresetId | null) => {
 // PrimeVue's range grid emits `[start, end]`, or `[clicked, null]` when a click starts a new range. The month
 // logic in `applyGridEmit` reads both, so the result does not depend on which month was clicked first.
 const onGridUpdate = (value: Date | Date[] | (Date | null)[] | null | undefined) => {
+    // PrimeVue does not block a click on a future month, and clamps it to the max date (not the 1st). Ignore that.
+    if (Array.isArray(value) && value.some((date) => date && date.getDate() !== 1)) return;
     const emitted = Array.isArray(value) ? value.map((date) => (date ? monthKeyOf(date) : null)) : null;
     const [first = null, second = null] = emitted ?? [];
     const result = applyGridEmit(pendingStart.value, emitted === null ? null : [first, second]);
 
     pendingStart.value = result.pendingStart;
-    if (result.commit) commit(result.commit);
+    if (result.commit) selection.value = result.commit;
+    if (result.close) emit("done");
 };
 </script>
 

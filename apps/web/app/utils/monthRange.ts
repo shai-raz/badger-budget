@@ -253,24 +253,60 @@ export function selectionToDateBounds(selection: PeriodSelection): { startDate?:
     };
 }
 
+export interface GridEmitResult {
+    /** The month a second click would extend from, or null when no range is being picked. */
+    pendingStart: MonthKey | null;
+    /** The selection to apply now, or null to leave it alone. */
+    commit: MonthRange | null;
+    /** Whether the picker should close (a range is complete). */
+    close: boolean;
+}
+
 /**
  * Interprets one emit of PrimeVue's range month grid. PrimeVue emits `[start, end]`, and
  * on a click before the pending start it emits `[clicked, null]` (resetting the start).
- * Treating that as "range from clicked to pending" keeps the grid order-independent.
+ *
+ * The model: a first click selects that month and becomes the pending start, and the
+ * picker stays open. A second click completes the range in either order, and closes it.
+ * Clicking the pending month again completes a single-month range. Only a completed range
+ * closes the picker.
  */
 export function applyGridEmit(
     pendingStart: MonthKey | null,
     emitted: readonly [MonthKey | null, MonthKey | null] | null,
-): { pendingStart: MonthKey | null; commit: MonthRange | null } {
-    if (emitted === null) return { pendingStart: null, commit: null };
+): GridEmitResult {
+    if (emitted === null) return { pendingStart: null, commit: null, close: false };
 
     const [first, second] = emitted;
     if (second !== null) {
-        return { pendingStart: null, commit: rangeFromEnds(first ?? pendingStart ?? second, second) };
+        return {
+            pendingStart: null,
+            commit: rangeFromEnds(first ?? pendingStart ?? second, second),
+            close: true,
+        };
     }
-    if (first === null) return { pendingStart: null, commit: null };
-    if (pendingStart !== null && first < pendingStart) {
-        return { pendingStart: null, commit: rangeFromEnds(first, pendingStart) };
+    if (first === null) return { pendingStart: null, commit: null, close: false };
+    if (pendingStart !== null) {
+        return { pendingStart: null, commit: rangeFromEnds(first, pendingStart), close: true };
     }
-    return { pendingStart: first, commit: null };
+    return { pendingStart: first, commit: rangeFromEnds(first, first), close: false };
+}
+
+/** Label for a `YYYY-MM` key, e.g. `Oct 2026`. */
+export function monthKeyLabel(key: MonthKey): string {
+    const { year, month } = partsOf(key);
+    const monthName = new Date(year, month - 1, 1).toLocaleString("en-US", { month: "short" });
+    return `${monthName} ${year}`;
+}
+
+/**
+ * The hint under the month grid, shared by SharedPeriodPanel's grid and SharedMonthStrip so
+ * both read the same. Idle says how to start; pending names the month picked so far.
+ */
+export function monthPickHint(pendingStart: MonthKey | null, opts: { touch: boolean }): string {
+    const verb = opts.touch ? "tap" : "pick";
+    if (pendingStart === null) {
+        return opts.touch ? "Tap a month, or two for a range" : "Pick a month, or two for a range";
+    }
+    return `${monthKeyLabel(pendingStart)} selected · ${verb} another month to make a range`;
 }
