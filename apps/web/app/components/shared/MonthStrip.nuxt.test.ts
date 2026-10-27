@@ -52,6 +52,13 @@ const bar = (wrapper: Wrapper, month: string) => wrapper.find(`[data-month="${mo
 const earlierArrow = (wrapper: Wrapper) => wrapper.find('[aria-label="Earlier months"]');
 const laterArrow = (wrapper: Wrapper) => wrapper.find('[aria-label="Later months"]');
 
+// Months whose bars are inside the window (the others sit off-screen with tabindex -1).
+const visibleMonths = (wrapper: Wrapper) =>
+    wrapper
+        .findAll("[data-month] button")
+        .filter((button) => button.attributes("tabindex") === undefined)
+        .map((button) => button.element.closest("[data-month]")?.getAttribute("data-month"));
+
 const lastEmit = (wrapper: Wrapper, event: string) => {
     const emits = wrapper.emitted(event) ?? [];
     return emits[emits.length - 1]?.[0];
@@ -156,5 +163,27 @@ describe("MonthStrip", () => {
         });
 
         expect(bar(wrapper, "2026-11").exists()).toBe(true);
+    });
+
+    it("keeps a browsed window and its visible bars when the clock ticks within the same month", async () => {
+        // A total for every month, so each bar is a button and the visible set is exact.
+        const everyMonth: Record<string, number> = {};
+        for (let year = 2024; year <= 2026; year++) {
+            for (let month = 1; month <= 12; month++) {
+                const key = `${year}-${String(month).padStart(2, "0")}`;
+                if (key <= "2026-10") everyMonth[key] = 1000;
+            }
+        }
+        const wrapper = await mountStrip({ totals: everyMonth });
+
+        await earlierArrow(wrapper).trigger("click");
+        const before = visibleMonths(wrapper);
+        expect(before[0]).toBe("2025-05");
+
+        // A minute later in the same month: the page hands the strip a new Date, not a new month.
+        await wrapper.setProps({ now: new Date(2026, 9, 26, 0, 1) });
+
+        expect(visibleMonths(wrapper)).toEqual(before);
+        expect(bar(wrapper, "2026-10").attributes("tabindex")).toBe("-1");
     });
 });

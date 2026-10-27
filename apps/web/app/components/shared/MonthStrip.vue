@@ -22,7 +22,7 @@ import {
     windowToShow,
     type StripInteraction,
 } from "~/utils/monthStrip";
-import { addMonths, monthIndex, rangeFromEnds, type MonthKey, type MonthRange } from "~/utils/monthRange";
+import { addMonths, monthIndex, monthKeyOf, rangeFromEnds, type MonthKey, type MonthRange } from "~/utils/monthRange";
 
 const props = defineProps<{
     totals: Record<MonthKey, number>;
@@ -39,7 +39,9 @@ const interaction = defineModel<StripInteraction>("interaction", { default: () =
 
 const isDesktop = useIsDesktop();
 
-const bounds = computed(() => stripBounds(props.firstMonth, props.now, props.visibleCount));
+// The page's clock ticks every minute, but the strip only moves when the month changes: bounds key on the month.
+const currentMonth = computed(() => monthKeyOf(props.now));
+const bounds = computed(() => stripBounds(props.firstMonth, currentMonth.value, props.visibleCount));
 const months = computed(() => stripMonths(bounds.value, props.visibleCount));
 const windowEnd = computed(() => addMonths(windowStart.value, props.visibleCount - 1));
 const inWindow = (month: MonthKey) => month >= windowStart.value && month <= windowEnd.value;
@@ -117,10 +119,12 @@ function applyTap(month: MonthKey, from: StripInteraction) {
 
 // Follow the range: when it is set from outside (or by a tap), slide the window just enough to show it. Bounds
 // are a source too: the first month arrives after the first page, so a range older than the window is shown then.
+// The sources are compared by value. A new range or bounds object with the same months must not move a window
+// the user has browsed away from the range.
 watch(
-    [range, bounds],
-    ([next]) => {
-        windowStart.value = windowToShow(windowStart.value, next, props.visibleCount, bounds.value);
+    [() => range.value.from, () => range.value.to, () => bounds.value.lowestStart, () => bounds.value.highestStart],
+    () => {
+        windowStart.value = windowToShow(windowStart.value, range.value, props.visibleCount, bounds.value);
     },
     { immediate: true },
 );

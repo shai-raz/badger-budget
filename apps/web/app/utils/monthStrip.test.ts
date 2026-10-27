@@ -32,19 +32,19 @@ const range = (from: string, to: string): MonthRange => ({ kind: "range", from, 
 describe("stripBounds", () => {
     it("uses the newest start as the lowest start when there is no first month", () => {
         // 24 visible months ending Oct 2026 start Nov 2024.
-        expect(stripBounds(null, NOW, 24)).toEqual({ lowestStart: "2024-11", highestStart: "2024-11" });
+        expect(stripBounds(null, "2026-10", 24)).toEqual({ lowestStart: "2024-11", highestStart: "2024-11" });
     });
 
     it("reaches back to an older first month", () => {
-        expect(stripBounds("2020-03", NOW, 24)).toEqual({ lowestStart: "2020-03", highestStart: "2024-11" });
+        expect(stripBounds("2020-03", "2026-10", 24)).toEqual({ lowestStart: "2020-03", highestStart: "2024-11" });
     });
 
     it("ignores a first month newer than the highest start", () => {
-        expect(stripBounds("2025-01", NOW, 24)).toEqual({ lowestStart: "2024-11", highestStart: "2024-11" });
+        expect(stripBounds("2025-01", "2026-10", 24)).toEqual({ lowestStart: "2024-11", highestStart: "2024-11" });
     });
 
     it("sizes the newest start to the visible count", () => {
-        expect(stripBounds(null, NOW, 12)).toEqual({ lowestStart: "2025-11", highestStart: "2025-11" });
+        expect(stripBounds(null, "2026-10", 12)).toEqual({ lowestStart: "2025-11", highestStart: "2025-11" });
     });
 });
 
@@ -316,32 +316,31 @@ describe("stripPageRange", () => {
 describe("pagesForWindow", () => {
     it("loads only the current page when the window and its buffer stay inside it", () => {
         // Mobile window Nov 2025 – Oct 2026; buffer reaches May 2025, still page 0.
-        expect(pagesForWindow("2025-11", 12, NOW)).toEqual([0]);
+        expect(pagesForWindow("2025-11", 12, "2026-10")).toEqual([0]);
     });
 
     it("includes the older page when the buffer crosses a page boundary", () => {
         // Window Mar 2024 – Feb 2025; buffer reaches Sep 2023, which is on page 1.
-        expect(pagesForWindow("2024-03", 12, NOW)).toEqual([0, 1]);
+        expect(pagesForWindow("2024-03", 12, "2026-10")).toEqual([0, 1]);
     });
 
     it("loads only an older page when the window and its buffer both sit inside it", () => {
         // Window Jun 2023 – May 2024 with buffer from Dec 2022: all on page 1 (Nov 2022 – Oct 2024).
-        expect(pagesForWindow("2023-06", 12, NOW)).toEqual([1]);
+        expect(pagesForWindow("2023-06", 12, "2026-10")).toEqual([1]);
     });
 
     it("includes the page holding the buffer when the window's buffer reaches further back", () => {
         // Window Jan 2023 – Dec 2023; buffer reaches Jul 2022, on page 2.
-        expect(pagesForWindow("2023-01", 12, NOW)).toEqual([1, 2]);
+        expect(pagesForWindow("2023-01", 12, "2026-10")).toEqual([1, 2]);
     });
 
     it("loads both pages for the desktop window at its oldest-reachable start", () => {
-        expect(pagesForWindow("2024-11", 24, NOW)).toEqual([0, 1]);
+        expect(pagesForWindow("2024-11", 24, "2026-10")).toEqual([0, 1]);
     });
 
     it("never returns a page in the future when the window ends after now", () => {
         // Relative to Oct 2025, the window Nov 2025 – Oct 2026 runs into the future.
-        const earlier = new Date(2025, 9, 1);
-        expect(pagesForWindow("2025-11", 12, earlier)).toEqual([0]);
+        expect(pagesForWindow("2025-11", 12, "2025-10")).toEqual([0]);
     });
 });
 

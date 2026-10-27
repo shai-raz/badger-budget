@@ -36,8 +36,8 @@ export interface StripBounds {
  * one reaches back to the first month with spending, or stays at the newest start when there
  * is no earlier history.
  */
-export function stripBounds(firstMonth: MonthKey | null, now: Date, visibleCount: number): StripBounds {
-    const highestStart = addMonths(monthKeyOf(now), -(visibleCount - 1));
+export function stripBounds(firstMonth: MonthKey | null, currentMonth: MonthKey, visibleCount: number): StripBounds {
+    const highestStart = addMonths(currentMonth, -(visibleCount - 1));
     const lowestStart = firstMonth && firstMonth < highestStart ? firstMonth : highestStart;
     return { lowestStart, highestStart };
 }
@@ -198,8 +198,8 @@ export function stripPageRange(pageIndex: number, now: Date): { startMonth: Mont
     return { startMonth: addMonths(endMonth, -(STRIP_PAGE_SIZE - 1)), endMonth };
 }
 
-function pageOfMonth(month: MonthKey, now: Date): number {
-    const distance = monthIndex(monthKeyOf(now)) - monthIndex(month);
+function pageOfMonth(month: MonthKey, currentMonth: MonthKey): number {
+    const distance = monthIndex(currentMonth) - monthIndex(month);
     return Math.floor(distance / STRIP_PAGE_SIZE);
 }
 
@@ -207,9 +207,9 @@ function pageOfMonth(month: MonthKey, now: Date): number {
  * The ascending page indexes that cover the window plus a slide-step buffer on its older side,
  * so a slide can render without waiting. Pages that would lie in the future are dropped.
  */
-export function pagesForWindow(windowStart: MonthKey, visibleCount: number, now: Date): number[] {
-    const newestPage = Math.max(0, pageOfMonth(addMonths(windowStart, visibleCount - 1), now));
-    const oldestPage = pageOfMonth(addMonths(windowStart, -STRIP_SLIDE_STEP), now);
+export function pagesForWindow(windowStart: MonthKey, visibleCount: number, currentMonth: MonthKey): number[] {
+    const newestPage = Math.max(0, pageOfMonth(addMonths(windowStart, visibleCount - 1), currentMonth));
+    const oldestPage = pageOfMonth(addMonths(windowStart, -STRIP_SLIDE_STEP), currentMonth);
 
     const pages: number[] = [];
     for (let page = newestPage; page <= oldestPage; page++) pages.push(page);

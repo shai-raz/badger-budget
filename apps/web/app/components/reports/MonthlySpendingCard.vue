@@ -5,7 +5,7 @@
  */
 import { useMonthlySpending } from "~/composables/reports/useMonthlySpending";
 import { formatCurrency } from "~/utils/currency";
-import { selectionLabel, type MonthRange } from "~/utils/monthRange";
+import { monthKeyOf, selectionLabel, type MonthRange } from "~/utils/monthRange";
 import {
     clampWindowStart,
     pagesForWindow,
@@ -24,12 +24,14 @@ const isDesktop = useIsDesktop();
 const visibleCount = computed(() => STRIP_VISIBLE[isDesktop.value ? "desktop" : "mobile"]);
 
 // Starts on the newest window. Once the first month is known, the strip slides it to show the range.
-const windowStart = ref(stripBounds(null, props.now, visibleCount.value).highestStart);
-const pages = computed(() => pagesForWindow(windowStart.value, visibleCount.value, props.now));
+// Keyed on the month, not the clock's Date: the page ticks every minute and the window must not move with it.
+const currentMonth = computed(() => monthKeyOf(props.now));
+const windowStart = ref(stripBounds(null, currentMonth.value, visibleCount.value).highestStart);
+const pages = computed(() => pagesForWindow(windowStart.value, visibleCount.value, currentMonth.value));
 const { totals, firstMonth, currency, error, refetch } = useMonthlySpending(pages, () => props.now);
 
 const hasTotals = computed(() => Object.keys(totals.value).length > 0);
-const bounds = computed(() => stripBounds(firstMonth.value, props.now, visibleCount.value));
+const bounds = computed(() => stripBounds(firstMonth.value, currentMonth.value, visibleCount.value));
 watch(visibleCount, () => {
     windowStart.value = clampWindowStart(windowStart.value, bounds.value);
 });
