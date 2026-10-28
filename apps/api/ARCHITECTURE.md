@@ -21,7 +21,9 @@ NestJS 11 REST API under the global prefix `/api/v1` (Swagger at `/api/docs`). P
 
 ## Attachment storage (`transactions/attachments`)
 
-- Attachment bytes live in a private S3-compatible bucket, never in the database. The bucket has no public ACL. The browser reads objects only through short-lived presigned GET URLs the API signs, so the bucket endpoint (or `ATTACHMENTS_S3_PUBLIC_ENDPOINT`) must be reachable from users' browsers.
+- Attachment bytes live in a private S3-compatible bucket, never in the database. The bucket has no public ACL. The browser reads objects only through presigned GET URLs the API signs, valid for 1 h (`ATTACHMENT_URL_TTL_SECONDS`) and signed with the stored Content-Type and Content-Disposition. Signing uses a second client on `ATTACHMENTS_S3_PUBLIC_ENDPOINT` (falls back to the endpoint); signing makes no network call, but that host must be reachable from users' browsers.
+- Thumbnails (`attachment-thumbnail.ts`): image uploads (not PDFs) get a 320px WebP with EXIF rotation, metadata stripped, no enlargement and a 50 MP input cap. A thumbnail that fails to build or store is skipped and the upload still succeeds. `thumbnailUrl` is presigned inline only on upload and detail responses.
+- Rename (`PATCH /transactions/:id/attachments/:attachmentId`) changes only the row's `fileName`, so it makes no storage call and works with storage disabled. The shared sanitizer keeps the extension of the stored MIME type.
 - Configured by `ATTACHMENTS_S3_*` (parsed in `attachment-storage.config.ts`, same rules as the deploy webhook). Unless the endpoint, bucket and both keys are set, uploads return 503 and `/config` reports `attachmentsEnabled: false`.
 - Always path-style addressing; checksums only when a request requires them, for S3-compatible services that reject the SDK defaults.
 - Keys are `attachments/<userId>/<uuid>`, thumbnails `<key>-thumb`. The user's file name is only a display name on the row and never reaches a key.

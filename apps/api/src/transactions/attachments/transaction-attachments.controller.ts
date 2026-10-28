@@ -1,5 +1,6 @@
 import {
     BadRequestException,
+    Body,
     Controller,
     Delete,
     Get,
@@ -7,6 +8,7 @@ import {
     HttpStatus,
     Param,
     ParseUUIDPipe,
+    Patch,
     Post,
     Query,
     UseGuards,
@@ -21,6 +23,7 @@ import { JwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
 import { CurrentUser } from "../../auth/decorators/current-user.decorator";
 import { AttachmentUrlQueryDto } from "../dto/attachment-url-query.dto";
 import { AttachmentUrlResponseDto } from "../dto/attachment-url-response.dto";
+import { RenameTransactionAttachmentDto } from "../dto/rename-transaction-attachment.dto";
 import { TransactionAttachmentResponseDto } from "../dto/transaction-attachment-response.dto";
 import { AttachmentUploadGuard } from "./attachment-upload.guard";
 import { AttachmentUploadThrottlerGuard } from "./attachment-upload-throttler.guard";
@@ -91,6 +94,19 @@ export class TransactionAttachmentsController {
         @CurrentUser() user: { id: string },
     ): Promise<AttachmentUrlResponseDto> {
         return this.attachments.getUrl(user.id, id, attachmentId, query.disposition);
+    }
+
+    @Patch(":attachmentId")
+    @ApiResponse({ status: 200, description: "Attachment renamed", type: TransactionAttachmentResponseDto })
+    @ApiResponse({ status: 400, description: "The name is empty after sanitizing, or the body is invalid" })
+    @ApiResponse({ status: 404, description: "Attachment not found" })
+    rename(
+        @Param("id", ParseUUIDPipe) id: string,
+        @Param("attachmentId", ParseUUIDPipe) attachmentId: string,
+        @Body() dto: RenameTransactionAttachmentDto,
+        @CurrentUser() user: { id: string },
+    ): Promise<TransactionAttachmentResponseDto> {
+        return this.attachments.rename(user.id, id, attachmentId, dto.fileName);
     }
 
     @Delete(":attachmentId")

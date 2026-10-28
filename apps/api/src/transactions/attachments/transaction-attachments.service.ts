@@ -2,18 +2,20 @@ import {
     BadRequestException,
     ConflictException,
     Injectable,
+    InternalServerErrorException,
     Logger,
     NotFoundException,
     UnsupportedMediaTypeException,
 } from "@nestjs/common";
 import type { TransactionAttachment } from "@prisma/client";
 import {
+    ATTACHMENT_EXTENSION_BY_MIME,
     ATTACHMENT_MAX_PER_TRANSACTION,
     ATTACHMENT_URL_TTL_SECONDS,
     type AttachmentDisposition,
     isAttachmentMimeType,
 } from "@badger/shared-data";
-import { sanitizeAttachmentFileName } from "@badger/utils";
+import { sanitizeAttachmentBaseName, sanitizeAttachmentFileName } from "@badger/utils";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AttachmentUrlResponseDto } from "../dto/attachment-url-response.dto";
 import { TransactionAttachmentResponseDto } from "../dto/transaction-attachment-response.dto";
@@ -162,6 +164,36 @@ export class TransactionAttachmentsService {
             data: { deletedAt: new Date() },
         });
         await this.deleteObjectsForRows([row]);
+    }
+
+    /** Changes the display name only, so it makes no storage call. The sanitizer keeps the stored type's extension. */
+    async rename(
+        userId: string,
+        transactionId: string,
+        attachmentId: string,
+        rawBaseName: string,
+    ): Promise<TransactionAttachmentResponseDto> {
+        const row = await this.prisma.transactionAttachment.findFirst({
+            where: { id: attachmentId, transactionId, userId, deletedAt: null },
+        });
+        if (!row) {
+            throw new NotFoundException(`Attachment with ID ${attachmentId} not found`);
+        }
+        if (!isAttachmentMimeType(row.mimeType)) {
+            throw new InternalServerErrorException();
+        }
+
+        const ext = ATTACHMENT_EXTENSION_BY_MIME[row.mimeType];
+        const base = sanitizeAttachmentBaseName(rawBaseName, ext);
+        if (base === "") {
+            throw new BadRequestException("Enter a name");
+        }
+
+        const updated = await this.prisma.transactionAttachment.update({
+            where: { id: attachmentId },
+            data: { fileName: `${base}.${ext}` },
+        });
+        return this.toResponse(updated);
     }
 
     /** Presigned URL for the attachment's bytes, served with the stored type and the requested disposition. */

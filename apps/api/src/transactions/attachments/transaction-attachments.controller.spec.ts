@@ -16,7 +16,7 @@ describe("TransactionAttachmentsController", () => {
     let app: INestApplication;
     let currentUser: { id: string; email: string };
     let storage: { enabled: boolean };
-    let service: { upload: jest.Mock; remove: jest.Mock; getUrl: jest.Mock };
+    let service: { upload: jest.Mock; rename: jest.Mock; remove: jest.Mock; getUrl: jest.Mock };
 
     beforeEach(async () => {
         currentUser = { id: "user-1", email: "user@example.com" };
@@ -28,6 +28,16 @@ describe("TransactionAttachmentsController", () => {
                 fileName: file.originalname,
                 mimeType: "image/jpeg",
                 sizeBytes: JPEG.length,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            })),
+            rename: jest.fn(async (_userId: string, _transactionId: string, _attachmentId: string, name: string) => ({
+                id: ATTACHMENT_ID,
+                transactionId: TRANSACTION_ID,
+                fileName: `${name}.jpg`,
+                mimeType: "image/jpeg",
+                sizeBytes: JPEG.length,
+                thumbnailUrl: null,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             })),
@@ -130,6 +140,34 @@ describe("TransactionAttachmentsController", () => {
 
         expect(response.status).toBe(400);
         expect(service.upload).not.toHaveBeenCalled();
+    });
+
+    describe("PATCH attachment", () => {
+        const itemPath = `${uploadPath}/${ATTACHMENT_ID}`;
+
+        it("renames the attachment for the signed-in user and returns it", async () => {
+            const response = await request(app.getHttpServer()).patch(itemPath).send({ fileName: "new name" });
+
+            expect(response.status).toBe(200);
+            expect(response.body).toMatchObject({ id: ATTACHMENT_ID, fileName: "new name.jpg" });
+            expect(service.rename).toHaveBeenCalledWith("user-1", TRANSACTION_ID, ATTACHMENT_ID, "new name");
+        });
+
+        it("returns 400 when fileName is missing, without calling the service", async () => {
+            const response = await request(app.getHttpServer()).patch(itemPath).send({});
+
+            expect(response.status).toBe(400);
+            expect(service.rename).not.toHaveBeenCalled();
+        });
+
+        it("returns 400 for an attachment id that is not a uuid, without calling the service", async () => {
+            const response = await request(app.getHttpServer())
+                .patch(`${uploadPath}/not-a-uuid`)
+                .send({ fileName: "new name" });
+
+            expect(response.status).toBe(400);
+            expect(service.rename).not.toHaveBeenCalled();
+        });
     });
 
     it("deletes an attachment for the signed-in user", async () => {

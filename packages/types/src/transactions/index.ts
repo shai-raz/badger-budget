@@ -8,6 +8,7 @@ export type { ITransactionsSummaryResponse } from "./ITransactionsSummaryRespons
 export type { ITransactionCounterpart, ITransactionCounterpartSource } from "./ITransactionCounterpart";
 export type { ITransactionAttachmentResponse } from "./ITransactionAttachmentResponse";
 export type { IAttachmentUrlResponse } from "./IAttachmentUrlResponse";
+export type { IRenameTransactionAttachment } from "./IRenameTransactionAttachment";
 export type { ICreateTransaction } from "./ICreateTransaction";
 export type { IUpdateTransaction } from "./IUpdateTransaction";
 export type { IUpdateLedgerBalance, ILedgerBalanceUpdateResponse } from "./ILedgerBalanceUpdate";
