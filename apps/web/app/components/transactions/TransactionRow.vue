@@ -94,6 +94,17 @@ const handleMenuToggle = (event: Event) => {
                 <span v-if="transaction.hidden">&#9676; Hidden &middot; </span
                 >{{ formatDate(transaction.transactionDate) }} &middot;
                 {{ subLine === "date-category" ? categoryName : transaction.account.name }}
+                <span v-if="transaction.attachmentCount > 0">
+                    &middot;
+                    <i
+                        class="pi pi-paperclip text-[11px]"
+                        aria-hidden="true"
+                    ></i>
+                    {{ transaction.attachmentCount
+                    }}<span class="sr-only">
+                        {{ transaction.attachmentCount === 1 ? "attachment" : "attachments" }}</span
+                    >
+                </span>
             </div>
             <!-- Reimbursement link summary (expense: back so far; income: what it pays back) -->
             <div
