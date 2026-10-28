@@ -1,13 +1,23 @@
 <script setup lang="ts">
 import type { ITransactionAttachmentResponse, ITransactionResponse } from "@badger/types";
-import { ATTACHMENT_MAX_BYTES, ATTACHMENT_MIME_TYPES } from "@badger/shared-data";
+import { ATTACHMENT_MAX_BYTES } from "@badger/shared-data";
 import type { FileUploadUploaderEvent } from "primevue/fileupload";
 import { useConfirm } from "primevue/useconfirm";
 import { useToast } from "primevue/usetoast";
 import {
     useRemoveTransactionAttachment,
-    useUploadTransactionAttachment,
+    useUploadTransactionAttachments,
 } from "~/composables/transactions/useTransactionAttachments";
+import {
+    ATTACHMENT_ACCEPT,
+    attachmentRejectMessage,
+    failedUploadsDetail,
+    fileIcon,
+    fileIconClass,
+    fileKind,
+    formatFileSize,
+    validateAttachmentPick,
+} from "~/utils/attachments";
 
 interface Props {
     transaction: ITransactionResponse;
@@ -17,35 +27,33 @@ const props = defineProps<Props>();
 
 const confirm = useConfirm();
 const toast = useToast();
-const uploadMutation = useUploadTransactionAttachment();
+const { uploadFiles } = useUploadTransactionAttachments();
 const removeMutation = useRemoveTransactionAttachment();
 
 const attachments = computed(() => props.transaction.attachments ?? []);
 const countLabel = computed(() => (attachments.value.length === 1 ? "1 file" : `${attachments.value.length} files`));
 
 const fileUpload = ref();
-const acceptedTypes = ATTACHMENT_MIME_TYPES.join(",");
 
 const handleUpload = async (event: FileUploadUploaderEvent) => {
-    const file = Array.isArray(event.files) ? event.files[0] : event.files;
+    const picked = Array.isArray(event.files) ? event.files : [event.files];
     // Reset so picking the same file again re-triggers the uploader event.
     fileUpload.value?.clear();
-    if (!file) return;
 
-    if (file.size === 0) {
-        toast.add({ severity: "warn", summary: "Empty file", detail: "This file has no content", life: 3000 });
-        return;
+    const { accepted, rejected } = validateAttachmentPick(picked, attachments.value.length);
+    for (const { file, reason } of rejected) {
+        const message = attachmentRejectMessage(file.name, reason);
+        toast.add({ severity: "warn", summary: message.summary, detail: message.detail, life: 3000 });
     }
+    if (accepted.length === 0) return;
 
-    try {
-        await uploadMutation.mutateAsync({ transactionId: props.transaction.id, file });
-    } catch (error) {
-        console.error("Error uploading attachment:", error);
+    const { failed } = await uploadFiles(props.transaction.id, accepted);
+    if (failed.length > 0) {
         toast.add({
             severity: "error",
             summary: "Error",
-            detail: getApiErrorMessage(error, "Failed to add attachment"),
-            life: 3000,
+            detail: failedUploadsDetail(failed.map((file) => file.name)),
+            life: 5000,
         });
     }
 };
@@ -69,30 +77,6 @@ const handleRemove = (attachment: ITransactionAttachmentResponse) => {
         },
     });
 };
-
-const fileIcon = (mimeType: string) => {
-    if (mimeType.startsWith("image/")) return "pi pi-image";
-    if (mimeType === "application/pdf") return "pi pi-file-pdf";
-    return "pi pi-file";
-};
-
-const fileIconClass = (mimeType: string) => {
-    if (mimeType.startsWith("image/")) return "text-teal-500";
-    if (mimeType === "application/pdf") return "text-rose-500";
-    return "text-surface-500 dark:text-surface-400";
-};
-
-const fileKind = (mimeType: string) => {
-    if (mimeType.startsWith("image/")) return "Photo";
-    if (mimeType === "application/pdf") return "PDF";
-    return "File";
-};
-
-const formatFileSize = (bytes: number) => {
-    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
-    if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
-    return `${bytes} B`;
-};
 </script>
 
 <template>
@@ -109,7 +93,7 @@ const formatFileSize = (bytes: number) => {
                 mode="basic"
                 custom-upload
                 auto
-                :accept="acceptedTypes"
+                :accept="ATTACHMENT_ACCEPT"
                 :max-file-size="ATTACHMENT_MAX_BYTES"
                 choose-icon="pi pi-plus"
                 choose-label="Add file"
