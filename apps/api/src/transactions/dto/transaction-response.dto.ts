@@ -104,8 +104,14 @@ export class TransactionResponseDto implements ITransactionResponse {
     @ApiProperty({ type: BudgetResponseDto, nullable: true })
     budget: BudgetResponseDto | null;
 
-    @ApiProperty({ type: [TransactionAttachmentResponseDto] })
-    attachments: TransactionAttachmentResponseDto[];
+    @ApiProperty({ description: "Live attachments on this transaction; the count is on every list row" })
+    attachmentCount: number;
+
+    @ApiPropertyOptional({
+        type: [TransactionAttachmentResponseDto],
+        description: "Only populated on the single-transaction detail endpoint",
+    })
+    attachments?: TransactionAttachmentResponseDto[];
 
     @ApiPropertyOptional({
         type: String,
