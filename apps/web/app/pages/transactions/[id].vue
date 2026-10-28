@@ -336,7 +336,10 @@ const handleDelete = () => {
 
                 <!-- Attachments -->
                 <div class="md:sticky md:top-4">
-                    <TransactionsAttachmentsCard :transaction="transaction" />
+                    <TransactionsAttachmentsCard
+                        :transaction="transaction"
+                        :is-mirror="isMirror"
+                    />
                 </div>
             </div>
         </div>
