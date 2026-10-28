@@ -7,17 +7,18 @@ import { uploadAttachmentsInParallel, type AttachmentUploadState } from "../../u
 
 /**
  * Uploads a batch of files in parallel. `uploads` tracks every batch in flight, and the batch's
- * entries are cleared once it settles. The transaction is refreshed once per batch, not per file.
+ * entries are cleared once the transaction's refetch lands. The transaction is refreshed once per batch, not per file.
  */
 export function useUploadTransactionAttachments(): {
     uploads: Ref<AttachmentUploadState[]>;
+    /** True from a batch's start until its detail refetch lands, so adds stay off while the count is stale. */
     isUploading: ComputedRef<boolean>;
     uploadFiles: (transactionId: string, files: File[]) => Promise<{ failed: File[] }>;
 } {
     const apiClient = useApiClient();
     const queryClient = useQueryClient();
     const uploads = ref<AttachmentUploadState[]>([]);
-    const isUploading = computed(() => uploads.value.some((upload) => upload.status === "uploading"));
+    const isUploading = computed(() => uploads.value.length > 0);
 
     const uploadFiles = async (transactionId: string, files: File[]) => {
         const batchIds = new Set<string>();
@@ -37,9 +38,10 @@ export function useUploadTransactionAttachments(): {
             syncBatch,
         );
 
+        // Keep the batch's tiles until the refetched detail lands, so the count beside them is never stale.
+        await queryClient.invalidateQueries({ queryKey: transactionKeys.detail(transactionId) });
         uploads.value = uploads.value.filter((upload) => !batchIds.has(upload.id));
-        queryClient.invalidateQueries({ queryKey: transactionKeys.detail(transactionId) });
-        // Widened to the root key so the infinite list and summary refresh too.
+        // Widened to the root key so the infinite list and summary refresh too. Not awaited: the card doesn't wait on them.
         queryClient.invalidateQueries({ queryKey: transactionKeys.all });
 
         return { failed: failed.map((entry) => entry.file) };
