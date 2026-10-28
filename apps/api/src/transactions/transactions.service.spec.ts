@@ -5,6 +5,7 @@ import { TransactionsService } from "./transactions.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { CardPayoffPatternsService } from "../card-payoff-patterns/card-payoff-patterns.service";
 import { FxConversionService } from "./fx-conversion.service";
+import { TransactionAttachmentsService } from "./attachments/transaction-attachments.service";
 import { UpdateTransactionDto } from "./dto/update-transaction.dto";
 
 describe("TransactionsService", () => {
@@ -43,8 +44,15 @@ describe("TransactionsService", () => {
         transactionAttachment: {
             create: jest.fn(),
             findFirst: jest.fn(),
+            findMany: jest.fn().mockResolvedValue([]),
             update: jest.fn(),
+            updateMany: jest.fn().mockResolvedValue({ count: 0 }),
         },
+    };
+
+    const mockAttachmentsService = {
+        listForTransaction: jest.fn().mockResolvedValue([]),
+        deleteObjectsForRows: jest.fn().mockResolvedValue(undefined),
     };
 
     // The service re-reads the row it just wrote: resolve with whatever the latest create/update returned.
@@ -63,7 +71,7 @@ describe("TransactionsService", () => {
         originalCurrency: true,
         category: true,
         budget: true,
-        attachments: { where: { deletedAt: null }, orderBy: { createdAt: "asc" } },
+        _count: { select: { attachments: { where: { deletedAt: null } } } },
         counterpart: {
             select: {
                 id: true,
@@ -156,11 +164,14 @@ describe("TransactionsService", () => {
         currency: { id: "currency-id", code: "USD" },
         category: { id: "category-id", name: "Food" },
         budget: { id: "budget-id", name: "Monthly Budget" },
-        attachments: [],
+        _count: { attachments: 0 },
         counterpartOfId: null,
         counterpart: null,
         counterpartOf: null,
     };
+
+    // The response shape: the `_count` relation is flattened to attachmentCount. toEqual ignores the undefined `_count`.
+    const mockTransactionResponse = { ...mockTransaction, _count: undefined, attachmentCount: 0 };
 
     beforeEach(async () => {
         mockPrismaService.account.findFirst.mockResolvedValue({
@@ -184,6 +195,10 @@ describe("TransactionsService", () => {
                 {
                     provide: FxConversionService,
                     useValue: mockFxConversionService,
+                },
+                {
+                    provide: TransactionAttachmentsService,
+                    useValue: mockAttachmentsService,
                 },
             ],
         }).compile();
@@ -402,7 +417,7 @@ describe("TransactionsService", () => {
 
             const result = await service.create("test-user", createDto);
 
-            expect(result).toEqual({ ...mockTransaction, reimbursement: null });
+            expect(result).toEqual({ ...mockTransactionResponse, reimbursement: null });
             expect(mockPrismaService.transaction.create).toHaveBeenCalledWith({
                 data: {
                     ...createDto,
@@ -448,12 +463,27 @@ describe("TransactionsService", () => {
     });
 
     describe("findAll", () => {
+        it("maps the attachment count onto list rows without attachments", async () => {
+            mockPrismaService.transaction.findMany.mockResolvedValue([
+                { ...mockTransaction, _count: { attachments: 3 } },
+            ]);
+
+            const result = await service.findAll("test-user");
+            if (!Array.isArray(result)) throw new Error("expected an unpaginated list");
+            const [row] = result;
+
+            expect(row.attachmentCount).toBe(3);
+            expect(row).not.toHaveProperty("attachments");
+            expect(row).not.toHaveProperty("_count");
+            expect(mockAttachmentsService.listForTransaction).not.toHaveBeenCalled();
+        });
+
         it("should return all transactions without filters", async () => {
             mockPrismaService.transaction.findMany.mockResolvedValue([mockTransaction]);
 
             const result = await service.findAll("test-user");
 
-            expect(result).toEqual([{ ...mockTransaction, reimbursement: null }]);
+            expect(result).toEqual([{ ...mockTransactionResponse, reimbursement: null }]);
             expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith({
                 where: {
                     userId: "test-user",
@@ -672,7 +702,7 @@ describe("TransactionsService", () => {
                 endDate: "2025-12-31",
             });
 
-            expect(result).toEqual([{ ...mockTransaction, reimbursement: null }]);
+            expect(result).toEqual([{ ...mockTransactionResponse, reimbursement: null }]);
             expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith({
                 where: {
                     userId: "test-user",
@@ -704,7 +734,7 @@ describe("TransactionsService", () => {
             const result = await service.findAll("test-user", { page: 2, limit: 3 });
 
             expect(result).toEqual({
-                data: [{ ...mockTransaction, reimbursement: null }],
+                data: [{ ...mockTransactionResponse, reimbursement: null }],
                 total: 7,
                 page: 2,
                 pageSize: 3,
@@ -1051,6 +1081,32 @@ describe("TransactionsService", () => {
     });
 
     describe("findOne", () => {
+        it("includes the live attachments from the attachments service", async () => {
+            const attachments = [
+                {
+                    id: "attachment-id",
+                    transactionId: "transaction-id",
+                    fileName: "receipt.pdf",
+                    mimeType: "application/pdf",
+                    sizeBytes: 1024,
+                    createdAt: new Date("2025-12-14"),
+                    updatedAt: new Date("2025-12-14"),
+                },
+            ];
+            mockPrismaService.transaction.findFirst.mockResolvedValue({
+                ...mockTransaction,
+                _count: { attachments: 1 },
+            });
+            mockPrismaService.budget.findMany.mockResolvedValue([]);
+            mockAttachmentsService.listForTransaction.mockResolvedValueOnce(attachments);
+
+            const result = await service.findOne("transaction-id", "test-user");
+
+            expect(mockAttachmentsService.listForTransaction).toHaveBeenCalledWith("transaction-id");
+            expect(result.attachments).toEqual(attachments);
+            expect(result.attachmentCount).toBe(1);
+        });
+
         it("should return a transaction by id with applicable budgets", async () => {
             mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction);
             mockPrismaService.budget.findMany.mockResolvedValue([
@@ -1065,8 +1121,9 @@ describe("TransactionsService", () => {
             const result = await service.findOne("transaction-id", "test-user");
 
             expect(result).toEqual({
-                ...mockTransaction,
+                ...mockTransactionResponse,
                 reimbursement: null,
+                attachments: [],
                 applicableBudgets: [
                     {
                         id: "budget-id",
@@ -2149,6 +2206,45 @@ describe("TransactionsService", () => {
             expect(mockPrismaService.reimbursementAllocation.deleteMany.mock.invocationCallOrder[0]).toBeGreaterThan(
                 lockOrder,
             );
+        });
+
+        it("soft-deletes the source's attachments with the same timestamp as the transaction", async () => {
+            mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction);
+            mockPrismaService.transaction.update.mockResolvedValue({ ...mockTransaction, deletedAt: new Date() });
+
+            await service.remove("transaction-id", "test-user");
+
+            const { deletedAt } = mockPrismaService.transaction.update.mock.calls[0][0].data;
+            expect(mockPrismaService.transactionAttachment.updateMany).toHaveBeenCalledWith({
+                where: { transactionId: "transaction-id", deletedAt: null },
+                data: { deletedAt },
+            });
+        });
+
+        it("collects the source's and its mirror's storage keys, then deletes them after the transaction", async () => {
+            const rows = [
+                { storageKey: "source-file", thumbnailKey: null },
+                { storageKey: "mirror-file", thumbnailKey: "mirror-thumb" },
+            ];
+            mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction);
+            mockPrismaService.transaction.update.mockResolvedValue({ ...mockTransaction, deletedAt: new Date() });
+            mockPrismaService.transactionAttachment.findMany.mockResolvedValueOnce(rows);
+
+            await service.remove("transaction-id", "test-user");
+
+            expect(mockPrismaService.transactionAttachment.findMany).toHaveBeenCalledWith({
+                where: {
+                    deletedAt: null,
+                    OR: [{ transactionId: "transaction-id" }, { transaction: { counterpartOfId: "transaction-id" } }],
+                },
+                select: { storageKey: true, thumbnailKey: true },
+            });
+            expect(mockAttachmentsService.deleteObjectsForRows).toHaveBeenCalledWith(rows);
+            const keysCollected = mockPrismaService.transactionAttachment.findMany.mock.invocationCallOrder[0];
+            const mirrorDeleted = mockPrismaService.transaction.deleteMany.mock.invocationCallOrder[0];
+            const storageCleaned = mockAttachmentsService.deleteObjectsForRows.mock.invocationCallOrder[0];
+            expect(keysCollected).toBeLessThan(mirrorDeleted);
+            expect(storageCleaned).toBeGreaterThan(mirrorDeleted);
         });
     });
 });

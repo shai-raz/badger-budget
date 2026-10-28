@@ -46,7 +46,13 @@ export interface ITransactionResponse {
     originalCurrency: ICurrencyResponse | null;
     category: ICategoryResponse | null;
     budget: IBudgetResponse | null;
-    attachments: ITransactionAttachmentResponse[];
+    /** Live attachments on this transaction. Present on every row, including list rows. */
+    attachmentCount: number;
+    /**
+     * The transaction's live attachments. Only populated on the
+     * single-transaction detail endpoint.
+     */
+    attachments?: ITransactionAttachmentResponse[];
     /**
      * Set only on the app-created mirror row of a linked transfer: the id of
      * the source transaction it mirrors. Null on every other row.
