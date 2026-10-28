@@ -8,7 +8,6 @@ import type {
     ITransactionsSummaryResponse,
     PaginatedResponse,
     ITransactionAttachmentResponse,
-    ICreateTransactionAttachment,
     CreateCategoryMappingRuleDto,
     ICategoryMappingRule,
     DeleteCategoryOptions,
@@ -471,11 +470,26 @@ export class ApiClient {
         return response.data;
     }
 
-    // Metadata only for now — the file itself is uploaded in a later phase.
-    async createTransactionAttachment(transactionId: string, data: ICreateTransactionAttachment) {
+    async uploadTransactionAttachment(
+        transactionId: string,
+        file: Blob,
+        fileName: string,
+        options: { onProgress?: (fraction: number) => void; signal?: AbortSignal } = {},
+    ): Promise<ITransactionAttachmentResponse> {
+        const form = new FormData();
+        form.append("file", file, fileName);
         const response = await this.client.post<ITransactionAttachmentResponse>(
             `/transactions/${transactionId}/attachments`,
-            data,
+            form,
+            {
+                // The instance default is application/json, which makes axios JSON-encode FormData. This override lets the browser set the boundary.
+                headers: { "Content-Type": "multipart/form-data" },
+                timeout: 5 * 60_000,
+                signal: options.signal,
+                onUploadProgress: (e) => {
+                    if (e.total) options.onProgress?.(e.loaded / e.total);
+                },
+            },
         );
         return response.data;
     }

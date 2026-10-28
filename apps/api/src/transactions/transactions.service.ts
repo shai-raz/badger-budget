@@ -3,10 +3,8 @@ import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { CardPayoffPatternsService } from "../card-payoff-patterns/card-payoff-patterns.service";
 import { CreateTransactionDto } from "./dto/create-transaction.dto";
-import { CreateTransactionAttachmentDto } from "./dto/create-transaction-attachment.dto";
 import { UpdateTransactionDto } from "./dto/update-transaction.dto";
 import { TransactionResponseDto } from "./dto/transaction-response.dto";
-import { TransactionAttachmentResponseDto } from "./dto/transaction-attachment-response.dto";
 import { PaginatedTransactionsResponseDto } from "./dto/transaction-list-response.dto";
 import { TransactionsSummaryResponseDto } from "./dto/transactions-summary-response.dto";
 import { assertSyncedEditAllowed, LOCKED_FIELDS, SyncedLockSnapshot } from "./synced-edit-lock";
@@ -1032,45 +1030,6 @@ export class TransactionsService {
         return this.prisma.transaction.findFirst({
             where: { id: sourceId },
             select: { description: true, account: { select: { name: true } } },
-        });
-    }
-
-    async addAttachment(
-        transactionId: string,
-        userId: string,
-        createAttachmentDto: CreateTransactionAttachmentDto,
-    ): Promise<TransactionAttachmentResponseDto> {
-        await this.assertTransactionOwned(transactionId, userId);
-
-        // Metadata-only phase: the file itself is not uploaded yet, so
-        // storageKey stays null until the object-storage phase lands.
-        return this.db.transactionAttachment.create({
-            data: {
-                ...createAttachmentDto,
-                transactionId,
-                userId,
-            },
-        }) as unknown as TransactionAttachmentResponseDto;
-    }
-
-    async removeAttachment(transactionId: string, attachmentId: string, userId: string): Promise<void> {
-        const attachment = await this.db.transactionAttachment.findFirst({
-            where: {
-                id: attachmentId,
-                transactionId,
-                userId,
-                deletedAt: null,
-            },
-            select: { id: true },
-        });
-
-        if (!attachment) {
-            throw new NotFoundException(`Attachment with ID ${attachmentId} not found`);
-        }
-
-        await this.db.transactionAttachment.update({
-            where: { id: attachmentId },
-            data: { deletedAt: new Date() },
         });
     }
 
