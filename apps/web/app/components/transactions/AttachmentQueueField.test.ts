@@ -1,0 +1,65 @@
+// Source-text contract for the transaction form's attachment queue. The web test runner is Vitest in a node environment
+// with no DOM, so the wiring is checked against its source, not mounted.
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+const source = readFileSync(fileURLToPath(new URL("./AttachmentQueueField.vue", import.meta.url)), "utf8");
+
+// The template's own text: everything after the first <template> tag, which the script block precedes.
+const template = source.slice(source.indexOf("\n<template>"));
+
+// The remove button: the <Button> element whose aria-label names the queued file.
+const removeButton = (() => {
+    const label = template.indexOf("`Remove ${file.name}`");
+    const start = template.lastIndexOf("<Button", label);
+    const end = template.indexOf("/>", label);
+    return label === -1 || start === -1 || end === -1 ? "" : template.slice(start, end);
+})();
+
+describe("AttachmentQueueField picker", () => {
+    it("takes multiple files in one file input and accepts the shared MIME list", () => {
+        expect(template).toContain("multiple");
+        expect(template).toContain(':accept="ATTACHMENT_ACCEPT"');
+    });
+
+    it("never sets capture, so mobile pickers offer the camera natively", () => {
+        expect(source).not.toContain("capture");
+    });
+
+    it("validates each pick and toasts each rejection as a warning", () => {
+        expect(source).toContain("validateAttachmentPick(picked, props.modelValue.length)");
+        expect(source).toContain('severity: "warn"');
+        expect(source).toContain("attachmentRejectMessage(file.name, reason)");
+    });
+
+    it("uses the shared helper text under the drop zone", () => {
+        expect(template).toContain("ATTACHMENT_HELPER_TEXT");
+    });
+});
+
+describe("AttachmentQueueField drop zone", () => {
+    it("uses a drop zone with a highlight while a file is over it", () => {
+        expect(source).toContain("useDropZone(");
+        expect(template).toContain("isOverDropZone");
+    });
+
+    it("is inert when disabled and hidden once the queue is full", () => {
+        expect(template).toContain(':inert="disabled"');
+        expect(template).toContain('v-if="remainingSlots() > 0"');
+    });
+});
+
+describe("AttachmentQueueField thumbnails", () => {
+    it("revokes object URLs when files leave the queue and when the field unmounts", () => {
+        expect(source).toContain("URL.revokeObjectURL(");
+        expect(source).toContain("onBeforeUnmount(");
+    });
+});
+
+describe("AttachmentQueueField remove", () => {
+    it("disables the remove button with the field", () => {
+        expect(removeButton).not.toBe("");
+        expect(removeButton).toContain(':disabled="disabled"');
+    });
+});

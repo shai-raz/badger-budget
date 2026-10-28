@@ -5,6 +5,8 @@ import { transactionAmountClass, transactionSign } from "./formatters";
 import { getLocaleCurrencyCode } from "../../utils/locale-currency";
 import { accountTypeCaption } from "../../utils/accountBalance";
 import LockHint from "./LockHint.vue";
+import AttachmentQueueField from "./AttachmentQueueField.vue";
+import type { AttachmentUploadState } from "../../utils/attachmentUploads";
 import { matchesCashWithdrawal, pickCashWallet } from "../../utils/cashWithdrawal";
 import { nextPendingCategory, type PendingCategory } from "../../utils/pendingCategory";
 import {
@@ -51,6 +53,10 @@ const props = defineProps<{
     transaction?: ITransactionResponse | null;
     /** Create mode: initial account, type and category. */
     prefill?: TransactionFormPrefill;
+    /** Create mode: shows the Attachments field. Off until the dialog wires uploads. */
+    showAttachments?: boolean;
+    /** Create mode: upload states for the queued attachments, while the create is running. */
+    attachmentUploads?: AttachmentUploadState[];
 }>();
 
 const emit = defineEmits<{
@@ -90,6 +96,8 @@ const directionOptions = [
     { label: "Out", value: "out" },
     { label: "In", value: "in" },
 ];
+
+const queuedAttachments = ref<File[]>([]);
 
 const submitted = ref(false);
 const touched = reactive(new Set<string>());
@@ -273,6 +281,7 @@ defineExpose({
         values.categoryId = id;
         pendingCategory.value = null;
     },
+    queuedAttachments: (): File[] => (props.showAttachments ? [...queuedAttachments.value] : []),
 });
 
 const { data: cashWithdrawalPatterns } = useGetCashWithdrawalPatterns();
@@ -812,6 +821,13 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
                 {{ showError("notes") }}
             </small>
         </div>
+
+        <AttachmentQueueField
+            v-if="!isEdit && showAttachments"
+            v-model="queuedAttachments"
+            :disabled="disabled"
+            :uploads="attachmentUploads"
+        />
 
         <div class="flex items-center gap-2">
             <ToggleSwitch
