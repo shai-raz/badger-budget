@@ -53,7 +53,7 @@ const props = defineProps<{
     transaction?: ITransactionResponse | null;
     /** Create mode: initial account, type and category. */
     prefill?: TransactionFormPrefill;
-    /** Create mode: shows the Attachments field. Off until the dialog wires uploads. */
+    /** Create mode: shows the Attachments field (the dialog sets it from the storage and demo gates). */
     showAttachments?: boolean;
     /** Create mode: upload states for the queued attachments, while the create is running. */
     attachmentUploads?: AttachmentUploadState[];
