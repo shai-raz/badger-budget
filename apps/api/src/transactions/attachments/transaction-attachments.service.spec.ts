@@ -1,6 +1,7 @@
 import {
     BadRequestException,
     ConflictException,
+    InternalServerErrorException,
     NotFoundException,
     ServiceUnavailableException,
     UnsupportedMediaTypeException,
@@ -490,6 +491,92 @@ describe("TransactionAttachmentsService", () => {
                 ServiceUnavailableException,
             );
             expect(mockPrisma.transactionAttachment.findFirst).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("rename", () => {
+        const PDF_ROW = { ...attachmentRow({ thumbnailKey: null }), mimeType: "application/pdf", fileName: "a.pdf" };
+
+        beforeEach(() => {
+            mockPrisma.transactionAttachment.findFirst.mockResolvedValue(PDF_ROW);
+            mockPrisma.transactionAttachment.update.mockImplementation(({ data }: { data: { fileName: string } }) =>
+                Promise.resolve({ ...PDF_ROW, fileName: data.fileName }),
+            );
+        });
+
+        it("keeps the stored extension when the new name has none", async () => {
+            const result = await service.rename("user-1", "transaction-id", "a", "new name");
+
+            expect(mockPrisma.transactionAttachment.update).toHaveBeenCalledWith({
+                where: { id: "a" },
+                data: { fileName: "new name.pdf" },
+            });
+            expect(result).toMatchObject({ id: "a", fileName: "new name.pdf", thumbnailUrl: null });
+        });
+
+        it("does not double the extension when the new name already ends with it", async () => {
+            await service.rename("user-1", "transaction-id", "a", "foo.pdf");
+
+            expect(mockPrisma.transactionAttachment.update).toHaveBeenCalledWith({
+                where: { id: "a" },
+                data: { fileName: "foo.pdf" },
+            });
+        });
+
+        it("strips reserved characters from the new name", async () => {
+            await service.rename("user-1", "transaction-id", "a", 'a/b:c*?"<>|d');
+
+            expect(mockPrisma.transactionAttachment.update).toHaveBeenCalledWith({
+                where: { id: "a" },
+                data: { fileName: "abcd.pdf" },
+            });
+        });
+
+        it("keeps Hebrew characters", async () => {
+            await service.rename("user-1", "transaction-id", "a", "חשבונית מס");
+
+            expect(mockPrisma.transactionAttachment.update).toHaveBeenCalledWith({
+                where: { id: "a" },
+                data: { fileName: "חשבונית מס.pdf" },
+            });
+        });
+
+        it("returns 400 'Enter a name' when nothing is left after sanitizing, and writes nothing", async () => {
+            await expect(service.rename("user-1", "transaction-id", "a", "***")).rejects.toThrow(
+                new BadRequestException("Enter a name"),
+            );
+            expect(mockPrisma.transactionAttachment.update).not.toHaveBeenCalled();
+        });
+
+        it("returns 404 for another user's attachment and writes nothing", async () => {
+            mockPrisma.transactionAttachment.findFirst.mockResolvedValue(null);
+
+            await expect(service.rename("other-user", "transaction-id", "a", "new name")).rejects.toThrow(
+                new NotFoundException("Attachment with ID a not found"),
+            );
+            expect(mockPrisma.transactionAttachment.findFirst).toHaveBeenCalledWith({
+                where: { id: "a", transactionId: "transaction-id", userId: "other-user", deletedAt: null },
+            });
+            expect(mockPrisma.transactionAttachment.update).not.toHaveBeenCalled();
+        });
+
+        it("fails with 500 when the stored MIME type is not an accepted one", async () => {
+            mockPrisma.transactionAttachment.findFirst.mockResolvedValue({ ...PDF_ROW, mimeType: "image/gif" });
+
+            await expect(service.rename("user-1", "transaction-id", "a", "new name")).rejects.toThrow(
+                InternalServerErrorException,
+            );
+            expect(mockPrisma.transactionAttachment.update).not.toHaveBeenCalled();
+        });
+
+        it("renames without checking storage or signing URLs when storage is disabled", async () => {
+            storage.enabled = false;
+
+            const result = await service.rename("user-1", "transaction-id", "a", "new name");
+
+            expect(storage.assertEnabled).not.toHaveBeenCalled();
+            expect(storage.presignGetUrl).not.toHaveBeenCalled();
+            expect(result.fileName).toBe("new name.pdf");
         });
     });
 

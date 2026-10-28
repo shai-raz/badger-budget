@@ -9,6 +9,7 @@ import type {
     PaginatedResponse,
     ITransactionAttachmentResponse,
     IAttachmentUrlResponse,
+    IRenameTransactionAttachment,
     CreateCategoryMappingRuleDto,
     ICategoryMappingRule,
     DeleteCategoryOptions,
@@ -491,6 +492,19 @@ export class ApiClient {
                     if (e.total) options.onProgress?.(e.loaded / e.total);
                 },
             },
+        );
+        return response.data;
+    }
+
+    async renameTransactionAttachment(
+        transactionId: string,
+        attachmentId: string,
+        fileName: string,
+    ): Promise<ITransactionAttachmentResponse> {
+        const body: IRenameTransactionAttachment = { fileName };
+        const response = await this.client.patch<ITransactionAttachmentResponse>(
+            `/transactions/${transactionId}/attachments/${attachmentId}`,
+            body,
         );
         return response.data;
     }
