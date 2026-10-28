@@ -21,7 +21,7 @@ NestJS 11 REST API under the global prefix `/api/v1` (Swagger at `/api/docs`). P
 
 ## Attachment storage (`transactions/attachments`)
 
-- Attachment bytes live in a private S3-compatible bucket, never in the database. The API is the only reader; the bucket is never exposed.
+- Attachment bytes live in a private S3-compatible bucket, never in the database. The bucket has no public ACL. The browser reads objects only through short-lived presigned GET URLs the API signs, so the bucket endpoint (or `ATTACHMENTS_S3_PUBLIC_ENDPOINT`) must be reachable from users' browsers.
 - Configured by `ATTACHMENTS_S3_*` (parsed in `attachment-storage.config.ts`, same rules as the deploy webhook). Unless the endpoint, bucket and both keys are set, uploads return 503 and `/config` reports `attachmentsEnabled: false`.
 - Always path-style addressing; checksums only when a request requires them, for S3-compatible services that reject the SDK defaults.
 - Keys are `attachments/<userId>/<uuid>`, thumbnails `<key>-thumb`. The user's file name is only a display name on the row and never reaches a key.
