@@ -7,9 +7,12 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../../prisma/prisma.service";
+import { generateAttachmentThumbnail } from "./attachment-thumbnail";
 import { AttachmentStorageService } from "./attachment-storage.service";
 import { TransactionAttachmentsService } from "./transaction-attachments.service";
 import type { UploadedAttachmentFile } from "./uploaded-attachment-file";
+
+jest.mock("./attachment-thumbnail");
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00]);
 const PDF = Buffer.from("%PDF-1.7\n%\xe2\xe3\xcf\xd3\n", "latin1");
@@ -62,9 +65,75 @@ describe("TransactionAttachmentsService", () => {
             }),
         );
         mockPrisma.$queryRaw.mockResolvedValue([{ id: "transaction-id" }]);
+        jest.mocked(generateAttachmentThumbnail).mockResolvedValue(null);
     });
 
     describe("upload", () => {
+        it("stores a WebP thumbnail beside an image and records its key", async () => {
+            const thumbnail = Buffer.from("webp-bytes");
+            jest.mocked(generateAttachmentThumbnail).mockResolvedValue(thumbnail);
+
+            await service.upload("user-1", "transaction-id", upload("receipt.jpg", JPEG));
+
+            const key: string = storage.putObject.mock.calls[0][0];
+            expect(generateAttachmentThumbnail).toHaveBeenCalledWith(JPEG);
+            expect(storage.putObject).toHaveBeenCalledTimes(2);
+            expect(storage.putObject).toHaveBeenNthCalledWith(2, `${key}-thumb`, thumbnail, "image/webp");
+            expect(mockPrisma.transactionAttachment.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ storageKey: key, thumbnailKey: `${key}-thumb` }),
+            });
+            expect(storage.deleteObjects).not.toHaveBeenCalled();
+        });
+
+        it("stores only the original and records a null thumbnail key when no thumbnail can be made", async () => {
+            jest.mocked(generateAttachmentThumbnail).mockResolvedValue(null);
+
+            const result = await service.upload("user-1", "transaction-id", upload("receipt.jpg", JPEG));
+
+            expect(storage.putObject).toHaveBeenCalledTimes(1);
+            expect(mockPrisma.transactionAttachment.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ thumbnailKey: null }),
+            });
+            expect(result).toMatchObject({ id: "attachment-id", mimeType: "image/jpeg" });
+        });
+
+        it("still succeeds without a thumbnail when storing it fails, and removes the partial object", async () => {
+            jest.mocked(generateAttachmentThumbnail).mockResolvedValue(Buffer.from("webp-bytes"));
+            storage.putObject.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("s3 unavailable"));
+
+            const result = await service.upload("user-1", "transaction-id", upload("receipt.jpg", JPEG));
+
+            const key: string = storage.putObject.mock.calls[0][0];
+            expect(result).toMatchObject({ id: "attachment-id", mimeType: "image/jpeg" });
+            expect(mockPrisma.transactionAttachment.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ storageKey: key, thumbnailKey: null }),
+            });
+            expect(storage.deleteObjects).toHaveBeenCalledWith([`${key}-thumb`]);
+        });
+
+        it("never tries to make a thumbnail of a PDF", async () => {
+            const result = await service.upload("user-1", "transaction-id", upload("statement.pdf", PDF));
+
+            expect(generateAttachmentThumbnail).not.toHaveBeenCalled();
+            expect(storage.putObject).toHaveBeenCalledTimes(1);
+            expect(mockPrisma.transactionAttachment.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({ thumbnailKey: null }),
+            });
+            expect(result.mimeType).toBe("application/pdf");
+        });
+
+        it("deletes both the original and the thumbnail when the row cannot be created", async () => {
+            jest.mocked(generateAttachmentThumbnail).mockResolvedValue(Buffer.from("webp-bytes"));
+            mockPrisma.transactionAttachment.create.mockRejectedValue(new Error("connection lost"));
+
+            await expect(service.upload("user-1", "transaction-id", upload("receipt.jpg", JPEG))).rejects.toThrow(
+                "connection lost",
+            );
+
+            const key: string = storage.putObject.mock.calls[0][0];
+            expect(storage.deleteObjects).toHaveBeenCalledWith([key, `${key}-thumb`]);
+        });
+
         it("stores the file under a random user-scoped key and returns no storage keys", async () => {
             const result = await service.upload("user-1", "transaction-id", upload("receipt.jpg", JPEG));
 

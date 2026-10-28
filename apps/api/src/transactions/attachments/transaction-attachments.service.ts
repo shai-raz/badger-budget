@@ -2,6 +2,7 @@ import {
     BadRequestException,
     ConflictException,
     Injectable,
+    Logger,
     NotFoundException,
     UnsupportedMediaTypeException,
 } from "@nestjs/common";
@@ -11,7 +12,8 @@ import { sanitizeAttachmentFileName } from "@badger/utils";
 import { PrismaService } from "../../prisma/prisma.service";
 import { TransactionAttachmentResponseDto } from "../dto/transaction-attachment-response.dto";
 import { AttachmentStorageService } from "./attachment-storage.service";
-import { newAttachmentObjectKey } from "./attachment-keys";
+import { newAttachmentObjectKey, thumbnailKeyFor } from "./attachment-keys";
+import { generateAttachmentThumbnail } from "./attachment-thumbnail";
 import { detectAttachmentType } from "./detect-file-type";
 import type { UploadedAttachmentFile } from "./uploaded-attachment-file";
 
@@ -34,6 +36,8 @@ function decodeMultipartFileName(raw: string): string {
 /** Uploads and removes transaction attachment files. Object keys stay server-side and are never returned. */
 @Injectable()
 export class TransactionAttachmentsService {
+    private readonly logger = new Logger(TransactionAttachmentsService.name);
+
     constructor(
         private readonly prisma: PrismaService,
         private readonly storage: AttachmentStorageService,
@@ -79,8 +83,25 @@ export class TransactionAttachmentsService {
         const key = newAttachmentObjectKey(userId);
         // Recorded before the put so that a put which fails after writing the object is still cleaned up.
         const written: string[] = [key];
+        let thumbnailKey: string | null = null;
         try {
             await this.storage.putObject(key, file.buffer, detected.mime);
+
+            if (detected.mime.startsWith("image/")) {
+                const thumbnail = await generateAttachmentThumbnail(file.buffer);
+                if (thumbnail !== null) {
+                    const thumbKey = thumbnailKeyFor(key);
+                    try {
+                        await this.storage.putObject(thumbKey, thumbnail, "image/webp");
+                        written.push(thumbKey);
+                        thumbnailKey = thumbKey;
+                    } catch {
+                        // The attachment is still usable without its thumbnail, so the upload carries on.
+                        this.logger.warn("Could not store an attachment thumbnail; uploading without one");
+                        await this.storage.deleteObjects([thumbKey]);
+                    }
+                }
+            }
 
             // The row lock serializes concurrent uploads and a concurrent delete of the transaction. If the delete
             // committed first, the lock finds no live row and this returns 404. Otherwise the delete waits for this
@@ -109,7 +130,7 @@ export class TransactionAttachmentsService {
                         mimeType: detected.mime,
                         sizeBytes: file.buffer.length,
                         storageKey: key,
-                        thumbnailKey: null,
+                        thumbnailKey,
                     },
                 });
                 return this.toResponse(row);
