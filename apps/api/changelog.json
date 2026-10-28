@@ -1,6 +1,19 @@
 {
     "releases": [
         {
+            "version": "0.7.1",
+            "date": "2026-10-28",
+            "items": [
+                {
+                    "type": "fix",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "name the browser tab \"Badger\", \"Badger (Local)\" in dev",
+                    "pr": 73
+                }
+            ]
+        },
+        {
             "version": "0.7.0",
             "date": "2026-10-27",
             "items": [
