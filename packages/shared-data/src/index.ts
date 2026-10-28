@@ -6,3 +6,5 @@ export * from "./sync-passkeys";
 export * from "./transactions";
 export * from "./avatar-icons";
 export * from "./account-types";
+export * from "./attachments";
+export * from "./demo";

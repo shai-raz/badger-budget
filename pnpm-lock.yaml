@@ -411,6 +411,10 @@ importers:
   packages/typescript-config: {}
 
   packages/utils:
+    dependencies:
+      '@badger/shared-data':
+        specifier: workspace:*
+        version: link:../shared-data
     devDependencies:
       '@repo/eslint-config':
         specifier: workspace:*
