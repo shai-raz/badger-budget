@@ -20,6 +20,17 @@ type AttachmentRowFields = Pick<
     "id" | "transactionId" | "fileName" | "mimeType" | "sizeBytes" | "createdAt" | "updatedAt"
 >;
 
+/**
+ * busboy decodes multipart file names as latin1, which garbles non-ASCII (Hebrew) names sent as UTF-8 bytes. Re-decode
+ * only when the name is pure latin1 and its bytes are valid UTF-8. A name busboy already decoded (RFC 5987 filename*,
+ * or any character above U+00FF) is returned as is.
+ */
+function decodeMultipartFileName(raw: string): string {
+    if (Buffer.from(raw, "latin1").toString("latin1") !== raw) return raw;
+    const decoded = Buffer.from(raw, "latin1").toString("utf8");
+    return decoded.includes("�") ? raw : decoded;
+}
+
 /** Uploads and removes transaction attachment files. Object keys stay server-side and are never returned. */
 @Injectable()
 export class TransactionAttachmentsService {
@@ -63,10 +74,7 @@ export class TransactionAttachmentsService {
             throw new UnsupportedMediaTypeException("Only JPEG, PNG, WebP or PDF files are allowed");
         }
 
-        // busboy decodes multipart file names as latin1, which garbles non-ASCII (Hebrew) names. The raw bytes are
-        // UTF-8, so re-decode them before sanitizing.
-        const decodedName = Buffer.from(file.originalname, "latin1").toString("utf8");
-        const fileName = sanitizeAttachmentFileName(decodedName, detected.ext);
+        const fileName = sanitizeAttachmentFileName(decodeMultipartFileName(file.originalname), detected.ext);
 
         const key = newAttachmentObjectKey(userId);
         // Recorded before the put so that a put which fails after writing the object is still cleaned up.
@@ -74,8 +82,9 @@ export class TransactionAttachmentsService {
         try {
             await this.storage.putObject(key, file.buffer, detected.mime);
 
-            // The row lock serializes concurrent uploads to the same transaction. remove() takes no lock, but a
-            // concurrent delete can only lower the count, so the recount under the lock stays correct.
+            // The row lock serializes concurrent uploads and a concurrent delete of the transaction. If the delete
+            // committed first, the lock finds no live row and this returns 404. Otherwise the delete waits for this
+            // commit and soft-deletes the new row along with the transaction.
             return await this.prisma.$transaction(async (tx) => {
                 const locked = await tx.$queryRaw<{ id: string }[]>`
                     SELECT id FROM transactions
