@@ -56,7 +56,7 @@ const attachmentCount = computed(() => attachments.value.length);
 const remainingSlots = computed(() => remainingAttachmentSlots(attachmentCount.value));
 const uploadingCount = computed(() => uploads.value.filter((upload) => upload.status === "uploading").length);
 const headerCount = computed(() =>
-    isUploading.value
+    uploadingCount.value > 0
         ? uploadingHeader(uploadingCount.value)
         : `${attachmentCount.value} of ${ATTACHMENT_MAX_PER_TRANSACTION}`,
 );
@@ -68,8 +68,11 @@ const addTooltip = computed(() =>
         : "",
 );
 
+// Keyed by URL, not id: a refetch brings a fresh presigned URL, which gets its own try.
 const failedThumbnails = reactive(new Set<string>());
-const markThumbnailFailed = (attachmentId: string) => failedThumbnails.add(attachmentId);
+const markThumbnailFailed = (url: string | null) => {
+    if (url) failedThumbnails.add(url);
+};
 
 const handlePick = async (files: File[]) => {
     const { accepted, rejected } = validateAttachmentPick(files, attachmentCount.value);
@@ -145,6 +148,8 @@ const openPreview = async (attachment: ITransactionAttachmentResponse): Promise<
 
     // PDF. The tab opens synchronously, before any await: Safari and iOS block window.open after one.
     const win = window.open("", "_blank");
+    // noopener would make open() return null, so cut the link by hand before the tab navigates to user-uploaded content.
+    if (win) win.opener = null;
     try {
         const { url } = await getAttachmentUrl(props.transaction.id, attachment.id, "inline");
         if (win) win.location.href = url;
@@ -371,12 +376,12 @@ const percent = (progress: number) => Math.round(progress * 100);
                         >
                             <span class="flex h-20 items-center justify-center overflow-hidden">
                                 <img
-                                    v-if="attachment.thumbnailUrl && !failedThumbnails.has(attachment.id)"
+                                    v-if="attachment.thumbnailUrl && !failedThumbnails.has(attachment.thumbnailUrl)"
                                     :src="attachment.thumbnailUrl"
                                     alt=""
                                     loading="lazy"
                                     class="h-full w-full object-cover"
-                                    @error="markThumbnailFailed(attachment.id)"
+                                    @error="markThumbnailFailed(attachment.thumbnailUrl)"
                                 />
                                 <span
                                     v-else
@@ -446,7 +451,18 @@ const percent = (progress: number) => Math.round(progress * 100);
             ref="actionsMenu"
             :model="menuItems"
             popup
-        />
+        >
+            <!-- PrimeVue's default item ignores MenuItem.title, so the expiry hint is set on the link here. -->
+            <template #item="{ item, props: itemProps }">
+                <a
+                    v-bind="itemProps.action"
+                    :title="item.title"
+                >
+                    <span v-bind="itemProps.icon" />
+                    <span v-bind="itemProps.label">{{ item.label }}</span>
+                </a>
+            </template>
+        </Menu>
 
         <Dialog
             v-model:visible="lightboxOpen"

@@ -98,6 +98,22 @@ describe("AttachmentsCard preview", () => {
         expect(previewItem).toContain("openPreview(attachment)");
         expect(source.match(/openPreview\(/g)?.length).toBeGreaterThanOrEqual(2);
     });
+
+    it("clears window.opener on the PDF tab before it navigates to the attachment", () => {
+        const pdfBranch = openPreviewBody.slice(openPreviewBody.indexOf("// PDF")).replace(/\/\/.*$/gm, "");
+        const openTab = pdfBranch.indexOf('window.open("", "_blank")');
+        const clearOpener = pdfBranch.indexOf("win.opener = null");
+        expect(clearOpener).toBeGreaterThan(openTab);
+        expect(clearOpener).toBeLessThan(pdfBranch.indexOf("win.location.href = url"));
+    });
+});
+
+describe("AttachmentsCard thumbnails", () => {
+    it("keys failed thumbnails by URL so a refetched presigned URL gets a fresh try", () => {
+        expect(template).toContain("failedThumbnails.has(attachment.thumbnailUrl)");
+        expect(template).toContain('@error="markThumbnailFailed(attachment.thumbnailUrl)"');
+        expect(source).not.toContain("failedThumbnails.has(attachment.id)");
+    });
 });
 
 describe("AttachmentsCard actions", () => {
@@ -115,6 +131,14 @@ describe("AttachmentsCard actions", () => {
         expect(source).toContain('"attachment"');
         expect(source).toContain("window.location.assign(url)");
         expect(source).not.toMatch(/\bfetch\(/);
+    });
+
+    it("shows the expiry hint on the Preview item by rendering the item's title in the Menu #item slot", () => {
+        // PrimeVue's default item drops MenuItem.title, so the model property alone never reaches the DOM.
+        const menu = template.slice(template.indexOf("<Menu"), template.indexOf("</Menu>") + "</Menu>".length);
+        expect(menu).toContain('<template #item="{ item, props: itemProps }">');
+        expect(menu).toContain('v-bind="itemProps.action"');
+        expect(menu).toContain(':title="item.title"');
     });
 
     it("renames through the shared form dialog with the extension shown read-only", () => {
