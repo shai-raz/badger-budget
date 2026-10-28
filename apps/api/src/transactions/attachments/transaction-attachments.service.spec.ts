@@ -23,9 +23,31 @@ function upload(originalname: string, buffer: Buffer, mimetype = "image/jpeg"): 
     return { buffer, originalname, size: buffer.length, mimetype };
 }
 
+function attachmentRow(overrides: { thumbnailKey: string | null }) {
+    return {
+        id: "a",
+        transactionId: "transaction-id",
+        userId: "user-1",
+        fileName: "a.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 10,
+        storageKey: "attachments/user-1/a",
+        createdAt: new Date("2026-10-01"),
+        updatedAt: new Date("2026-10-01"),
+        deletedAt: null,
+        ...overrides,
+    };
+}
+
 describe("TransactionAttachmentsService", () => {
     let service: TransactionAttachmentsService;
-    let storage: { assertEnabled: jest.Mock; putObject: jest.Mock; deleteObjects: jest.Mock };
+    let storage: {
+        enabled: boolean;
+        assertEnabled: jest.Mock;
+        putObject: jest.Mock;
+        deleteObjects: jest.Mock;
+        presignGetUrl: jest.Mock;
+    };
 
     const mockPrisma = {
         transaction: { findFirst: jest.fn() },
@@ -44,9 +66,11 @@ describe("TransactionAttachmentsService", () => {
     beforeEach(() => {
         jest.clearAllMocks();
         storage = {
+            enabled: true,
             assertEnabled: jest.fn(),
             putObject: jest.fn().mockResolvedValue(undefined),
             deleteObjects: jest.fn().mockResolvedValue(undefined),
+            presignGetUrl: jest.fn().mockResolvedValue("https://files.example.com/signed"),
         };
         service = new TransactionAttachmentsService(
             mockPrisma as unknown as PrismaService,
@@ -109,6 +133,26 @@ describe("TransactionAttachmentsService", () => {
                 data: expect.objectContaining({ storageKey: key, thumbnailKey: null }),
             });
             expect(storage.deleteObjects).toHaveBeenCalledWith([`${key}-thumb`]);
+        });
+
+        it("returns a presigned inline thumbnailUrl when a thumbnail was stored", async () => {
+            jest.mocked(generateAttachmentThumbnail).mockResolvedValue(Buffer.from("webp-bytes"));
+
+            const result = await service.upload("user-1", "transaction-id", upload("receipt.jpg", JPEG));
+
+            const key: string = storage.putObject.mock.calls[0][0];
+            expect(storage.presignGetUrl).toHaveBeenCalledWith(`${key}-thumb`, {
+                contentType: "image/webp",
+                contentDisposition: "inline",
+            });
+            expect(result.thumbnailUrl).toBe("https://files.example.com/signed");
+        });
+
+        it("returns a null thumbnailUrl and presigns nothing when no thumbnail was stored", async () => {
+            const result = await service.upload("user-1", "transaction-id", upload("receipt.jpg", JPEG));
+
+            expect(result.thumbnailUrl).toBeNull();
+            expect(storage.presignGetUrl).not.toHaveBeenCalled();
         });
 
         it("never tries to make a thumbnail of a PDF", async () => {
@@ -347,10 +391,105 @@ describe("TransactionAttachmentsService", () => {
                     fileName: "a.pdf",
                     mimeType: "application/pdf",
                     sizeBytes: 10,
+                    thumbnailUrl: null,
                     createdAt: new Date("2026-10-01"),
                     updatedAt: new Date("2026-10-01"),
                 },
             ]);
+        });
+
+        it("sets thumbnailUrl to a presigned inline WebP URL when the row has a thumbnail", async () => {
+            mockPrisma.transactionAttachment.findMany.mockResolvedValue([
+                attachmentRow({ thumbnailKey: "attachments/user-1/a-thumb" }),
+            ]);
+
+            const [result] = await service.listForTransaction("transaction-id");
+
+            expect(storage.presignGetUrl).toHaveBeenCalledWith("attachments/user-1/a-thumb", {
+                contentType: "image/webp",
+                contentDisposition: "inline",
+            });
+            expect(result.thumbnailUrl).toBe("https://files.example.com/signed");
+        });
+
+        it("sets thumbnailUrl to null without presigning when storage is disabled", async () => {
+            storage.enabled = false;
+            mockPrisma.transactionAttachment.findMany.mockResolvedValue([
+                attachmentRow({ thumbnailKey: "attachments/user-1/a-thumb" }),
+            ]);
+
+            const [result] = await service.listForTransaction("transaction-id");
+
+            expect(result.thumbnailUrl).toBeNull();
+            expect(storage.presignGetUrl).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("getUrl", () => {
+        const KEY = "attachments/user-1/abc";
+
+        beforeEach(() => {
+            mockPrisma.transactionAttachment.findFirst.mockResolvedValue({
+                storageKey: KEY,
+                mimeType: "application/pdf",
+                fileName: "statement.pdf",
+            });
+        });
+
+        afterEach(() => {
+            jest.useRealTimers();
+        });
+
+        it("presigns the stored key with the stored type and an inline disposition", async () => {
+            await service.getUrl("user-1", "transaction-id", "attachment-id", "inline");
+
+            expect(mockPrisma.transactionAttachment.findFirst).toHaveBeenCalledWith({
+                where: { id: "attachment-id", transactionId: "transaction-id", userId: "user-1", deletedAt: null },
+                select: { storageKey: true, mimeType: true, fileName: true },
+            });
+            expect(storage.presignGetUrl).toHaveBeenCalledWith(KEY, {
+                contentType: "application/pdf",
+                contentDisposition: "inline",
+            });
+        });
+
+        it("uses an attachment disposition with the display name when downloading", async () => {
+            await service.getUrl("user-1", "transaction-id", "attachment-id", "attachment");
+
+            expect(storage.presignGetUrl).toHaveBeenCalledWith(KEY, {
+                contentType: "application/pdf",
+                contentDisposition: `attachment; filename="statement.pdf"; filename*=UTF-8''statement.pdf`,
+            });
+        });
+
+        it("returns the signed URL and an expiry one hour from now", async () => {
+            jest.useFakeTimers().setSystemTime(new Date("2026-10-28T10:00:00.000Z"));
+
+            const result = await service.getUrl("user-1", "transaction-id", "attachment-id", "inline");
+
+            expect(result).toEqual({
+                url: "https://files.example.com/signed",
+                expiresAt: "2026-10-28T11:00:00.000Z",
+            });
+        });
+
+        it("returns 404 for another user's attachment and signs nothing", async () => {
+            mockPrisma.transactionAttachment.findFirst.mockResolvedValue(null);
+
+            await expect(service.getUrl("other-user", "transaction-id", "attachment-id", "inline")).rejects.toThrow(
+                new NotFoundException("Attachment with ID attachment-id not found"),
+            );
+            expect(storage.presignGetUrl).not.toHaveBeenCalled();
+        });
+
+        it("fails with 503 and reads nothing when storage is disabled", async () => {
+            const disabled = new AttachmentStorageService({ get: () => undefined } as unknown as ConfigService);
+            const disabledService = new TransactionAttachmentsService(mockPrisma as unknown as PrismaService, disabled);
+
+            await expect(disabledService.getUrl("user-1", "transaction-id", "attachment-id", "inline")).rejects.toThrow(
+                ServiceUnavailableException,
+            );
+            expect(mockPrisma.transactionAttachment.findFirst).not.toHaveBeenCalled();
         });
     });
 

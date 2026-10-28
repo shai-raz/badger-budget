@@ -7,19 +7,26 @@ import {
     UnsupportedMediaTypeException,
 } from "@nestjs/common";
 import type { TransactionAttachment } from "@prisma/client";
-import { ATTACHMENT_MAX_PER_TRANSACTION, isAttachmentMimeType } from "@badger/shared-data";
+import {
+    ATTACHMENT_MAX_PER_TRANSACTION,
+    ATTACHMENT_URL_TTL_SECONDS,
+    type AttachmentDisposition,
+    isAttachmentMimeType,
+} from "@badger/shared-data";
 import { sanitizeAttachmentFileName } from "@badger/utils";
 import { PrismaService } from "../../prisma/prisma.service";
+import { AttachmentUrlResponseDto } from "../dto/attachment-url-response.dto";
 import { TransactionAttachmentResponseDto } from "../dto/transaction-attachment-response.dto";
 import { AttachmentStorageService } from "./attachment-storage.service";
 import { newAttachmentObjectKey, thumbnailKeyFor } from "./attachment-keys";
+import { contentDispositionFor } from "./content-disposition";
 import { generateAttachmentThumbnail } from "./attachment-thumbnail";
 import { detectAttachmentType } from "./detect-file-type";
 import type { UploadedAttachmentFile } from "./uploaded-attachment-file";
 
 type AttachmentRowFields = Pick<
     TransactionAttachment,
-    "id" | "transactionId" | "fileName" | "mimeType" | "sizeBytes" | "createdAt" | "updatedAt"
+    "id" | "transactionId" | "fileName" | "mimeType" | "sizeBytes" | "thumbnailKey" | "createdAt" | "updatedAt"
 >;
 
 /**
@@ -157,12 +164,40 @@ export class TransactionAttachmentsService {
         await this.deleteObjectsForRows([row]);
     }
 
+    /** Presigned URL for the attachment's bytes, served with the stored type and the requested disposition. */
+    async getUrl(
+        userId: string,
+        transactionId: string,
+        attachmentId: string,
+        disposition: AttachmentDisposition,
+    ): Promise<AttachmentUrlResponseDto> {
+        this.storage.assertEnabled();
+
+        const row = await this.prisma.transactionAttachment.findFirst({
+            where: { id: attachmentId, transactionId, userId, deletedAt: null },
+            select: { storageKey: true, mimeType: true, fileName: true },
+        });
+        if (!row) {
+            throw new NotFoundException(`Attachment with ID ${attachmentId} not found`);
+        }
+
+        const url = await this.storage.presignGetUrl(row.storageKey, {
+            contentType: row.mimeType,
+            contentDisposition: contentDispositionFor(disposition, row.fileName),
+        });
+        return {
+            url,
+            expiresAt: new Date(Date.now() + ATTACHMENT_URL_TTL_SECONDS * 1000).toISOString(),
+        };
+    }
+
+    /** Detail only: list endpoints never call this, so they make no presign calls. */
     async listForTransaction(transactionId: string): Promise<TransactionAttachmentResponseDto[]> {
         const rows = await this.prisma.transactionAttachment.findMany({
             where: { transactionId, deletedAt: null },
             orderBy: { createdAt: "asc" },
         });
-        return rows.map((row) => this.toResponse(row));
+        return Promise.all(rows.map((row) => this.toResponse(row)));
     }
 
     /** Best effort: deletes each row's file and thumbnail objects. Storage failures are logged, never thrown. */
@@ -173,16 +208,24 @@ export class TransactionAttachmentsService {
         await this.storage.deleteObjects(keys);
     }
 
-    private toResponse(row: AttachmentRowFields): TransactionAttachmentResponseDto {
+    private async toResponse(row: AttachmentRowFields): Promise<TransactionAttachmentResponseDto> {
         if (!isAttachmentMimeType(row.mimeType)) {
             throw new Error(`Attachment ${row.id} has an unexpected MIME type`);
         }
+        const thumbnailUrl =
+            this.storage.enabled && row.thumbnailKey !== null
+                ? await this.storage.presignGetUrl(row.thumbnailKey, {
+                      contentType: "image/webp",
+                      contentDisposition: "inline",
+                  })
+                : null;
         return {
             id: row.id,
             transactionId: row.transactionId,
             fileName: row.fileName,
             mimeType: row.mimeType,
             sizeBytes: row.sizeBytes,
+            thumbnailUrl,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
         };

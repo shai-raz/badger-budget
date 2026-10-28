@@ -1,4 +1,4 @@
-import { INestApplication } from "@nestjs/common";
+import { INestApplication, ValidationPipe } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { ThrottlerModule } from "@nestjs/throttler";
 import request from "supertest";
@@ -16,7 +16,7 @@ describe("TransactionAttachmentsController", () => {
     let app: INestApplication;
     let currentUser: { id: string; email: string };
     let storage: { enabled: boolean };
-    let service: { upload: jest.Mock; remove: jest.Mock };
+    let service: { upload: jest.Mock; remove: jest.Mock; getUrl: jest.Mock };
 
     beforeEach(async () => {
         currentUser = { id: "user-1", email: "user@example.com" };
@@ -32,6 +32,10 @@ describe("TransactionAttachmentsController", () => {
                 updatedAt: new Date(),
             })),
             remove: jest.fn().mockResolvedValue(undefined),
+            getUrl: jest.fn().mockResolvedValue({
+                url: "https://files.example.com/signed",
+                expiresAt: "2026-10-28T11:00:00.000Z",
+            }),
         };
 
         const moduleRef = await Test.createTestingModule({
@@ -52,6 +56,15 @@ describe("TransactionAttachmentsController", () => {
             .compile();
 
         app = moduleRef.createNestApplication();
+        // Same validation as app.setup.ts, so query DTOs are checked here as they are in production.
+        app.useGlobalPipes(
+            new ValidationPipe({
+                whitelist: true,
+                forbidNonWhitelisted: true,
+                transform: true,
+                transformOptions: { enableImplicitConversion: true },
+            }),
+        );
         await app.init();
     });
 
@@ -124,6 +137,50 @@ describe("TransactionAttachmentsController", () => {
 
         expect(response.status).toBe(204);
         expect(service.remove).toHaveBeenCalledWith("user-1", TRANSACTION_ID, ATTACHMENT_ID);
+    });
+
+    describe("GET attachment URL", () => {
+        const urlPath = `${uploadPath}/${ATTACHMENT_ID}/url`;
+
+        it("returns the presigned URL for the signed-in user, attachment and disposition", async () => {
+            const response = await request(app.getHttpServer()).get(urlPath).query({ disposition: "inline" });
+
+            expect(response.status).toBe(200);
+            expect(response.body).toEqual({
+                url: "https://files.example.com/signed",
+                expiresAt: "2026-10-28T11:00:00.000Z",
+            });
+            expect(service.getUrl).toHaveBeenCalledWith("user-1", TRANSACTION_ID, ATTACHMENT_ID, "inline");
+        });
+
+        it("passes the attachment disposition through", async () => {
+            await request(app.getHttpServer()).get(urlPath).query({ disposition: "attachment" });
+
+            expect(service.getUrl).toHaveBeenCalledWith("user-1", TRANSACTION_ID, ATTACHMENT_ID, "attachment");
+        });
+
+        it("returns 400 for a disposition that is not inline or attachment, without calling the service", async () => {
+            const response = await request(app.getHttpServer()).get(urlPath).query({ disposition: "script" });
+
+            expect(response.status).toBe(400);
+            expect(service.getUrl).not.toHaveBeenCalled();
+        });
+
+        it("returns 400 when the disposition is missing", async () => {
+            const response = await request(app.getHttpServer()).get(urlPath);
+
+            expect(response.status).toBe(400);
+            expect(service.getUrl).not.toHaveBeenCalled();
+        });
+
+        it("returns 400 for an attachment id that is not a uuid", async () => {
+            const response = await request(app.getHttpServer())
+                .get(`${uploadPath}/not-a-uuid/url`)
+                .query({ disposition: "inline" });
+
+            expect(response.status).toBe(400);
+            expect(service.getUrl).not.toHaveBeenCalled();
+        });
     });
 
     it("returns 400 for an attachment id that is not a uuid on delete", async () => {

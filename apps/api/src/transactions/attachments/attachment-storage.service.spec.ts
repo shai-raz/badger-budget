@@ -1,12 +1,15 @@
 import { Logger, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { AttachmentStorageService } from "./attachment-storage.service";
 
 jest.mock("@aws-sdk/client-s3", () => {
     const actual = jest.requireActual<typeof import("@aws-sdk/client-s3")>("@aws-sdk/client-s3");
     return { ...actual, S3Client: jest.fn() };
 });
+
+jest.mock("@aws-sdk/s3-request-presigner", () => ({ getSignedUrl: jest.fn() }));
 
 const SETTINGS = {
     ATTACHMENTS_S3_ENDPOINT: "https://s3.example.com",
@@ -30,6 +33,7 @@ describe("AttachmentStorageService", () => {
         send = jest.fn().mockResolvedValue({});
         jest.mocked(S3Client).mockReset();
         jest.mocked(S3Client).mockImplementation(() => ({ send }) as unknown as S3Client);
+        jest.mocked(getSignedUrl).mockReset();
         warn = jest.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
     });
 
@@ -53,6 +57,43 @@ describe("AttachmentStorageService", () => {
 
         it("is enabled", () => {
             expect(createService(SETTINGS).enabled).toBe(true);
+        });
+
+        it("builds a second client for signing against the public endpoint", () => {
+            createService({ ...SETTINGS, ATTACHMENTS_S3_PUBLIC_ENDPOINT: "https://files.example.com" });
+
+            expect(S3Client).toHaveBeenCalledTimes(2);
+            expect(jest.mocked(S3Client).mock.calls[1][0]).toEqual(
+                expect.objectContaining({
+                    endpoint: "https://files.example.com",
+                    forcePathStyle: true,
+                    requestChecksumCalculation: "WHEN_REQUIRED",
+                }),
+            );
+        });
+
+        it("presignGetUrl signs a GET with the response headers and the one-hour TTL, without a network call", async () => {
+            jest.mocked(getSignedUrl).mockResolvedValue("https://files.example.com/signed");
+            const service = createService({ ...SETTINGS, ATTACHMENTS_S3_PUBLIC_ENDPOINT: "https://files.example.com" });
+
+            const url = await service.presignGetUrl("attachments/user-1/abc", {
+                contentType: "image/png",
+                contentDisposition: "inline",
+            });
+
+            expect(url).toBe("https://files.example.com/signed");
+            expect(getSignedUrl).toHaveBeenCalledTimes(1);
+            const [client, command, options] = jest.mocked(getSignedUrl).mock.calls[0];
+            expect(client).toBe(jest.mocked(S3Client).mock.results[1].value);
+            expect(command).toBeInstanceOf(GetObjectCommand);
+            expect((command as GetObjectCommand).input).toEqual({
+                Bucket: "receipts",
+                Key: "attachments/user-1/abc",
+                ResponseContentType: "image/png",
+                ResponseContentDisposition: "inline",
+            });
+            expect(options).toEqual({ expiresIn: 3600 });
+            expect(send).not.toHaveBeenCalled();
         });
 
         it("putObject sends the bucket, key, body and content type", async () => {
@@ -142,6 +183,16 @@ describe("AttachmentStorageService", () => {
 
         it("assertEnabled throws ServiceUnavailableException", () => {
             expect(() => createService({}).assertEnabled()).toThrow(NOT_CONFIGURED_MESSAGE);
+        });
+
+        it("presignGetUrl throws ServiceUnavailableException and signs nothing", async () => {
+            await expect(
+                createService({}).presignGetUrl("attachments/user-1/abc", {
+                    contentType: "image/png",
+                    contentDisposition: "inline",
+                }),
+            ).rejects.toThrow(NOT_CONFIGURED_MESSAGE);
+            expect(getSignedUrl).not.toHaveBeenCalled();
         });
 
         it("deleteObjects does nothing", async () => {
