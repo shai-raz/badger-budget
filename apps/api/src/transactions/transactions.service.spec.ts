@@ -2208,6 +2208,21 @@ describe("TransactionsService", () => {
             );
         });
 
+        it("locks the source row before reading or soft-deleting its attachments", async () => {
+            mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction);
+            mockPrismaService.transaction.update.mockResolvedValue({ ...mockTransaction, deletedAt: new Date() });
+
+            await service.remove("transaction-id", "test-user");
+
+            const lockOrder = mockPrismaService.transaction.update.mock.invocationCallOrder[0];
+            expect(mockPrismaService.transactionAttachment.findMany.mock.invocationCallOrder[0]).toBeGreaterThan(
+                lockOrder,
+            );
+            expect(mockPrismaService.transactionAttachment.updateMany.mock.invocationCallOrder[0]).toBeGreaterThan(
+                lockOrder,
+            );
+        });
+
         it("soft-deletes the source's attachments with the same timestamp as the transaction", async () => {
             mockPrismaService.transaction.findFirst.mockResolvedValue(mockTransaction);
             mockPrismaService.transaction.update.mockResolvedValue({ ...mockTransaction, deletedAt: new Date() });

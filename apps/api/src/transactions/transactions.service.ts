@@ -1021,10 +1021,13 @@ export class TransactionsService {
         // concurrent link from inserting an allocation on this row after the cleanup has run.
         // Attachments on the source are soft-deleted with it. Attachment rows on the mirror are dropped by the
         // cascade, so their storage keys are collected here too, before the mirror is deleted.
+        // The source row is updated first: that takes the row lock an in-flight upload holds while it inserts, so
+        // the attachment reads below see the upload's row and it is deleted with the transaction.
         const now = new Date();
         let attachmentRows: { storageKey: string; thumbnailKey: string | null }[] = [];
         const deleted = await this.prisma.$transaction(async (tx) => {
             await lockReimbursements(tx, userId);
+            const deletedRow = await tx.transaction.update({ where: { id }, data: { deletedAt: now } });
             attachmentRows = await tx.transactionAttachment.findMany({
                 where: { deletedAt: null, OR: [{ transactionId: id }, { transaction: { counterpartOfId: id } }] },
                 select: { storageKey: true, thumbnailKey: true },
@@ -1033,7 +1036,6 @@ export class TransactionsService {
                 where: { transactionId: id, deletedAt: null },
                 data: { deletedAt: now },
             });
-            const deletedRow = await tx.transaction.update({ where: { id }, data: { deletedAt: now } });
             await tx.transaction.deleteMany({ where: { counterpartOfId: id } });
             await tx.reimbursementAllocation.deleteMany({
                 where: { OR: [{ incomeId: id }, { expenseId: id }] },
