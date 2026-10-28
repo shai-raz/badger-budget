@@ -8,7 +8,6 @@ const authStore = useAuthStore();
 const config = useInstanceConfig();
 const { mutate } = useGoogleSheet();
 
-// Tells a dev server tab apart from the deployed one. Production keeps the title from nuxt.config app.head.
 if (import.meta.dev) useHead({ title: "Badger (Local)" });
 
 // Sync once per session, as soon as the user is signed in and Sheets is configured on this instance.

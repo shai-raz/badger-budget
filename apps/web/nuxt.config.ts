@@ -98,7 +98,6 @@ export default defineNuxtConfig({
 
     app: {
         head: {
-            // Baked into index.html, so the tab has a name before the JS bundle runs. The dev override is in app.vue.
             title: "Badger",
             link: [{ rel: "apple-touch-icon", href: "/apple-touch-icon-180x180.png" }],
             meta: [
