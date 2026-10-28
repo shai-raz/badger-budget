@@ -49,7 +49,14 @@ const categoryOptions = computed(() => {
 // Real categories + the Uncategorized entry, used for the "N of M categories" chip.
 const totalCategoryCount = computed(() => categoryOptions.value.length);
 
-// Single source of filter state (period from the URL, show hidden from the store).
+// Ids the URL's category filter is checked against. Undefined until the list has loaded, so a shared link is not
+// pruned before the categories are known.
+const knownCategoryIds = () =>
+    isCategoriesPending.value || !categoriesData.value
+        ? undefined
+        : categoryOptions.value.map((option) => option.value);
+
+// Single source of filter state: everything but the search input text lives in the URL (see useTransactionFilters).
 const {
     searchQuery,
     typeFilter,
@@ -63,16 +70,28 @@ const {
     activeChips,
     hasActiveFilters,
     clearAllFilters,
-} = useTransactionFilters({ totalCategoryCount: () => totalCategoryCount.value });
-
-// Inline filters panel (desktop) / bottom-sheet (mobile) visibility. One shared
-// flag drives both presentations; the compact header's filter icon and the
-// desktop Filters button toggle the same state.
-const filtersOpen = ref(false);
+} = useTransactionFilters({
+    totalCategoryCount: () => totalCategoryCount.value,
+    knownCategoryIds,
+});
 
 // Below md the page switches to the compact mobile experience: compact header,
 // collapsible summary, bottom-sheet filters, and tap-to-navigate rows.
 const isDesktop = useIsDesktop();
+
+// Inline filters panel (desktop) / bottom-sheet (mobile) visibility. The desktop
+// panel's state is kept in app state so it is still open when returning from a
+// transaction; the mobile sheet always starts closed. The compact header's filter
+// icon and the desktop Filters button toggle the same flag.
+const desktopFiltersOpen = useState("transactions-filters-open", () => false);
+const mobileFiltersOpen = ref(false);
+const filtersOpen = computed({
+    get: () => (isDesktop.value ? desktopFiltersOpen.value : mobileFiltersOpen.value),
+    set: (open: boolean) => {
+        if (isDesktop.value) desktopFiltersOpen.value = open;
+        else mobileFiltersOpen.value = open;
+    },
+});
 
 // Server-driven, paginated list.
 const { data, error, isLoading, isFetching, isFetchingNextPage, hasNextPage, fetchNextPage } =

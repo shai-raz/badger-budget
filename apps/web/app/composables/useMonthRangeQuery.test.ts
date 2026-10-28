@@ -9,6 +9,9 @@ const route = reactive<{ query: Record<string, unknown> }>({ query: {} });
 const replace = vi.fn((location: { query: Record<string, unknown> }) => {
     route.query = location.query;
 });
+const push = vi.fn((location: { query: Record<string, unknown> }) => {
+    route.query = location.query;
+});
 
 let scopes: EffectScope[] = [];
 
@@ -22,8 +25,9 @@ const mountRange = (allowAll: boolean) => {
 beforeEach(() => {
     route.query = {};
     replace.mockClear();
+    push.mockClear();
     vi.stubGlobal("useRoute", () => route);
-    vi.stubGlobal("useRouter", () => ({ replace }));
+    vi.stubGlobal("useRouter", () => ({ replace, push }));
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 9, 26));
 });
@@ -98,5 +102,20 @@ describe("useMonthRangeQuery", () => {
         await nextTick();
 
         expect(selection.value).toEqual({ kind: "range", from: "2026-01", to: "2026-03" });
+    });
+
+    it("writes with push, keeping unrelated query keys, when historyMode is push", () => {
+        route.query = { create: "expense", sort: "oldest" };
+        const scope = effectScope();
+        scopes.push(scope);
+        const { selection } = scope.run(() => useMonthRangeQuery({ allowAll: true, historyMode: "push" }))!;
+
+        selection.value = { kind: "range", from: "2026-08", to: "2026-09" };
+
+        expect(push).toHaveBeenCalledTimes(1);
+        expect(push).toHaveBeenCalledWith({
+            query: { create: "expense", sort: "oldest", from: "2026-08", to: "2026-09" },
+        });
+        expect(replace).not.toHaveBeenCalled();
     });
 });
