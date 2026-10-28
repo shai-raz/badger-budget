@@ -44,9 +44,16 @@ describe("AttachmentQueueField drop zone", () => {
         expect(template).toContain("isOverDropZone");
     });
 
-    it("is inert when disabled and hidden once the queue is full", () => {
-        expect(template).toContain(':inert="disabled"');
+    it("hides the zone once the queue is full, and never makes it inert", () => {
         expect(template).toContain('v-if="remainingSlots() > 0"');
+        // Inert nodes drop hit-testing, so a file dropped on them would fall through to the browser tab.
+        expect(template).not.toContain(":inert");
+    });
+
+    it("attaches the drop listeners to the always-rendered field root, not the zone", () => {
+        expect(source).toContain("useDropZone(rootRef");
+        expect(template).toContain('ref="rootRef"');
+        expect(template).not.toContain('ref="dropZoneRef"');
     });
 });
 
@@ -61,5 +68,11 @@ describe("AttachmentQueueField remove", () => {
     it("disables the remove button with the field", () => {
         expect(removeButton).not.toBe("");
         expect(removeButton).toContain(':disabled="disabled"');
+    });
+
+    it("shows a check instead of the remove button once a file is done", () => {
+        expect(template).toContain('v-else-if="isDone(file)"');
+        expect(template).toContain('aria-label="Uploaded"');
+        expect(template).toContain('v-if="!isUploading(file) && !isDone(file)"');
     });
 });

@@ -71,6 +71,7 @@ const uploadFor = (file: File): AttachmentUploadState | undefined =>
 
 const isUploading = (file: File) => uploadFor(file)?.status === "uploading";
 const hasFailed = (file: File) => uploadFor(file)?.status === "failed";
+const isDone = (file: File) => uploadFor(file)?.status === "done";
 const percent = (progress: number) => Math.round(progress * 100);
 
 const countLabel = () =>
@@ -95,9 +96,10 @@ const removeFile = (file: File) => {
     );
 };
 
-// A refused drop is still swallowed by the zone, so a dropped file never opens in the browser tab.
-const dropZoneRef = ref<HTMLElement | null>(null);
-const { isOverDropZone } = useDropZone(dropZoneRef, {
+// Attached to the always-rendered field root: a refused drop (disabled, queue full, or on the queued-file list) is
+// still swallowed, so a dropped file never opens in the browser tab.
+const rootRef = ref<HTMLElement | null>(null);
+const { isOverDropZone } = useDropZone(rootRef, {
     checkValidity: () => !props.disabled && remainingSlots() > 0,
     multiple: true,
     preventDefaultForUnhandled: true,
@@ -119,6 +121,7 @@ const onFileInputChange = (event: Event) => {
 
 <template>
     <div
+        ref="rootRef"
         class="flex flex-col gap-1"
         role="group"
         :aria-labelledby="labelId"
@@ -179,9 +182,15 @@ const onFileInputChange = (event: Event) => {
                     role="img"
                     aria-label="Upload failed"
                 />
+                <span
+                    v-else-if="isDone(file)"
+                    class="pi pi-check-circle text-green-500"
+                    role="img"
+                    aria-label="Uploaded"
+                />
 
                 <Button
-                    v-if="!isUploading(file)"
+                    v-if="!isUploading(file) && !isDone(file)"
                     icon="pi pi-times"
                     text
                     rounded
@@ -195,10 +204,8 @@ const onFileInputChange = (event: Event) => {
 
         <div
             v-if="remainingSlots() > 0"
-            ref="dropZoneRef"
             class="flex flex-col items-center gap-1 rounded-lg border border-dashed border-surface-300 px-4 py-4 text-center transition-colors dark:border-surface-600"
             :class="isOverDropZone ? 'border-primary bg-surface-100 dark:bg-surface-800' : ''"
-            :inert="disabled"
         >
             <span class="flex items-center gap-1.5 text-sm text-surface-700 dark:text-surface-200">
                 <i
