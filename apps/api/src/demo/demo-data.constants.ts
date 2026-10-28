@@ -2,6 +2,7 @@
 // app and from prisma/seed-demo.ts, which runs under plain ts-node without tsconfig-paths — so
 // only relative imports and @prisma/client / @faker-js/faker are allowed here.
 
+// Keep in sync with DEMO_EMAIL in @badger/shared-data (checked by demo-data.constants.spec.ts).
 export const DEMO_EMAIL = "demo@demo.demo";
 export const DEMO_BANK_ACCOUNT_NAME = "Bank Account";
 export const DEMO_CARD_ACCOUNT_NAME = "Credit Card";
