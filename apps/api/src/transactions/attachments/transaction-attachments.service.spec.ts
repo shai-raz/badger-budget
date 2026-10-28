@@ -187,6 +187,20 @@ describe("TransactionAttachmentsService", () => {
             );
         });
 
+        it("keeps a name busboy already decoded when it has characters above U+00FF", async () => {
+            const result = await service.upload("user-1", "transaction-id", upload("receipt €.jpg", JPEG));
+
+            expect(result.fileName).toBe("receipt €.jpg");
+        });
+
+        it("keeps a pure-latin1 name whose bytes are not valid UTF-8", async () => {
+            // "é" as one latin1 byte (0xE9) is not a valid UTF-8 sequence on its own.
+            const result = await service.upload("user-1", "transaction-id", upload("café.jpg", JPEG));
+
+            expect(result.fileName).toBe("café.jpg");
+            expect(result.fileName).not.toContain("�");
+        });
+
         it("fails with 503 and touches nothing when storage is disabled", async () => {
             const disabled = new AttachmentStorageService({ get: () => undefined } as unknown as ConfigService);
             const disabledService = new TransactionAttachmentsService(mockPrisma as unknown as PrismaService, disabled);
