@@ -82,9 +82,10 @@ describe("writeQuery", () => {
         expect(env.router.push).toHaveBeenCalledTimes(3);
     });
 
-    it("ends a run on Back or Forward, so the next edit pushes again", () => {
+    it("ends a run when endEditRun is called, as the Back and Forward handler does", () => {
         writeQuery(env.router, { q: "r" }, { kind: "edit", control: "search" });
-        // A popstate lands on another entry; the browser fires it, which the module listens for.
+        // The popstate listener calls endEditRun. It is called directly here: the listener is only registered when the
+        // module loads in a browser window, which this suite does not have at import time.
         endEditRun();
         writeQuery(env.router, { q: "re" }, { kind: "edit", control: "search" });
 
