@@ -260,7 +260,8 @@ model TransactionAttachment {
   fileName      String    @map("file_name") @db.VarChar(255)
   mimeType      String    @map("mime_type") @db.VarChar(100)
   sizeBytes     Int       @map("size_bytes")
-  storageKey    String?   @map("storage_key") @db.VarChar(512) // set once files are actually uploaded to object storage
+  storageKey    String    @map("storage_key") @db.VarChar(512) // object-storage key of the file; never sent to clients
+  thumbnailKey  String?   @map("thumbnail_key") @db.VarChar(512) // object-storage key of the thumbnail; null until one is generated
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
   deletedAt     DateTime? @map("deleted_at") @db.Timestamp(6)
