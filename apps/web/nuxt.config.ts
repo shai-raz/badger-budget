@@ -98,6 +98,7 @@ export default defineNuxtConfig({
 
     app: {
         head: {
+            title: "Badger",
             link: [{ rel: "apple-touch-icon", href: "/apple-touch-icon-180x180.png" }],
             meta: [
                 // Replaced at runtime by plugins/theme.client.ts (useHead) and the init script below.
