@@ -58,6 +58,7 @@ Visual rules are in [DESIGN.md](DESIGN.md#dialogs-and-forms).
 ## Cross-cutting rules
 
 - Transaction edit locks (synced rows, transfer mirrors) live in `utils/transactionForm.ts` and mirror the API's rules (`apps/api/src/transactions/AGENTS.md`); change both together.
+- Transaction attachments: validation and the parallel uploader live in `utils/attachments.ts` and `utils/attachmentUploads.ts`; gates go through `utils/appConfig.ts`; presigned URLs are fetched on demand (`useAttachmentUrl`) and never cached in vue-query.
 - Ledger accounts (cash, savings; `isLedgerAccountType`): the client never computes a balance difference. It posts the new amount to `POST /accounts/:id/balance` and the API records the adjustment.
 - Reimbursement mutations (`composables/transactions/useReimbursements.ts`) and card-payoff retags (`invalidateReimbursementAffected`) must invalidate transactions, budgets, reports and accounts.
 - OAuth consent (`pages/oauth/consent.vue`) is reachable by client-side navigation from any route, so the API frame-blocks every response. Allow stays disabled until the page has been visible for ~1s and a trusted input arrived (`utils/consentGate.ts`, clickjacking guard). Redirect paths go through `sanitizeRedirectPath` (same-origin relative only).

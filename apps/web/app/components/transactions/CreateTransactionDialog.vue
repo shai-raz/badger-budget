@@ -7,6 +7,11 @@ import { getApiErrorMessage } from "../../utils/apiError";
 import { saveWithPendingCategory } from "../../utils/pendingCategory";
 import { cashFollowupFor, type TransactionFormPrefill } from "../../utils/transactionForm";
 import { showCashFollowupToast } from "../../utils/cashFollowupToast";
+import { useInstanceConfig } from "../../composables/useInstanceConfig";
+import { useUploadTransactionAttachments } from "../../composables/transactions/useTransactionAttachments";
+import { useAuthStore } from "../../stores/auth";
+import { canUseAttachmentStorage, isDemoUser } from "../../utils/appConfig";
+import { failedUploadsDetail } from "../../utils/attachments";
 
 defineProps<{
     visible: boolean;
@@ -19,12 +24,20 @@ const emit = defineEmits<{
 
 const toast = useToast();
 const router = useRouter();
+const authStore = useAuthStore();
+const instanceConfig = useInstanceConfig();
+const { uploads, uploadFiles } = useUploadTransactionAttachments();
+const showAttachments = computed(
+    () => canUseAttachmentStorage(instanceConfig.data.value) && !isDemoUser(authStore.user),
+);
 
 const { data: accounts, isLoading: accountsLoading } = useGetAccounts();
 const { data: currencies, isLoading: currenciesLoading } = useGetCurrencies();
 const { mutateAsync, isPending } = useCreateTransaction();
 const { mutateAsync: createCategory, isPending: creatingCategory } = useCreateCategoryMutation();
-const busy = computed(() => isPending.value || creatingCategory.value);
+// Set from the first click until the create and every upload settle, so the dialog stays locked throughout.
+const saving = ref(false);
+const busy = computed(() => saving.value || isPending.value || creatingCategory.value);
 
 const formRef = ref<InstanceType<typeof TransactionForm> | null>(null);
 const apiError = ref<string | null>(null);
@@ -37,8 +50,12 @@ const ready = computed(() => !!accounts.value && !!currencies.value && accounts.
 const close = () => emit("update:visible", false);
 
 const handleSave = async () => {
+    if (saving.value) return; // double click / Enter can't submit twice
     const payload = formRef.value?.submit();
     if (!payload) return;
+    // Read before the create: a failed create leaves them queued in the form, so Save can be retried.
+    const files = formRef.value!.queuedAttachments();
+    saving.value = true;
     apiError.value = null;
     try {
         const created = await saveWithPendingCategory({
@@ -47,13 +64,26 @@ const handleSave = async () => {
             onCategoryCreated: (id) => formRef.value?.adoptCategory(id),
             save: (catId) => mutateAsync(catId ? { ...payload, categoryId: catId } : payload),
         });
+        // The transaction exists now. Uploads run in parallel and the dialog stays locked until they settle.
+        let failed: File[] = [];
+        if (files.length) ({ failed } = await uploadFiles(created.id, files));
         close();
         const followup = cashFollowupFor(created);
         if (followup) showCashFollowupToast(toast, followup, currencies.value);
         else toast.add({ severity: "success", summary: "Transaction saved", life: 3000 });
+        if (failed.length) {
+            toast.add({
+                severity: "warn",
+                summary: "Some files weren't uploaded",
+                detail: failedUploadsDetail(failed.map((file) => file.name)),
+                life: 6000,
+            });
+        }
         await router.push(`/transactions/${created.id}`);
     } catch (e) {
         apiError.value = getApiErrorMessage(e, "Could not save the transaction");
+    } finally {
+        saving.value = false;
     }
 };
 </script>
@@ -65,6 +95,7 @@ const handleSave = async () => {
         :busy="busy"
         :api-error="apiError"
         initial-focus="field"
+        :save-label="busy ? 'Saving…' : 'Save'"
         :cancel-label="ready ? 'Cancel' : 'Close'"
         :show-save="ready"
         :suspend-escape="customiseOpen"
@@ -106,6 +137,8 @@ const handleSave = async () => {
             :currencies="currencies!"
             :disabled="busy"
             :prefill="prefill"
+            :show-attachments="showAttachments"
+            :attachment-uploads="uploads"
             @customise-open-change="customiseOpen = $event"
         />
 
