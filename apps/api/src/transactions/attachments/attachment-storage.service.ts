@@ -10,7 +10,8 @@ interface Storage {
 
 /**
  * Writes and deletes attachment objects in a private S3-compatible bucket. Disabled (every write throws 503) unless
- * the ATTACHMENTS_S3_* variables are set. Object bytes are only ever read by the API, never through a public URL.
+ * the ATTACHMENTS_S3_* variables are set. The bucket is private (no public ACL); browsers read objects only through
+ * short-lived presigned GET URLs the API signs.
  */
 @Injectable()
 export class AttachmentStorageService {
