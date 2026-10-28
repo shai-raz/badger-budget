@@ -1,5 +1,5 @@
 import type { MaybeRefOrGetter, Ref } from "vue";
-import { computed, toValue } from "vue";
+import { computed, nextTick, toValue } from "vue";
 
 interface CategoryOptionLike {
     value: string;
@@ -35,6 +35,16 @@ export function useCategoryToggle(
 ) {
     const allValues = computed(() => toValue(categoryOptions).map((option) => option.value));
 
+    /**
+     * The last selection this composable wrote. The parent's model only catches up on its next render, so within the
+     * same task a second toggle would read a stale selection and drop the first one. The shadow is the base for those
+     * toggles until the next tick, by which point the render has run and the model is current.
+     */
+    let shadow: string[] | null = null;
+
+    /** The selection the next change builds on. */
+    const currentSelection = (): string[] => shadow ?? selectedCategoryIds.value;
+
     /** True when no explicit selection is active, i.e. the list spans every category. */
     const isAllActive = computed(() => selectedCategoryIds.value.length === 0);
 
@@ -47,7 +57,16 @@ export function useCategoryToggle(
     );
 
     function isSelected(value: string): boolean {
-        return selectedCategoryIds.value.includes(value);
+        return currentSelection().includes(value);
+    }
+
+    /** Writes `next` as the selection and shadows it until the next tick. */
+    function write(next: string[]): void {
+        shadow = next;
+        selectedCategoryIds.value = next;
+        void nextTick(() => {
+            shadow = null;
+        });
     }
 
     /**
@@ -61,19 +80,17 @@ export function useCategoryToggle(
     function setSelection(next: string[]): void {
         const pruned = allValues.value.filter((value) => next.includes(value));
 
-        selectedCategoryIds.value = pruned.length === allValues.value.length ? [] : pruned;
+        write(pruned.length === allValues.value.length ? [] : pruned);
     }
 
     function toggle(value: string): void {
         setSelection(
-            isSelected(value)
-                ? selectedCategoryIds.value.filter((id) => id !== value)
-                : [...selectedCategoryIds.value, value],
+            isSelected(value) ? currentSelection().filter((id) => id !== value) : [...currentSelection(), value],
         );
     }
 
     function selectAll(): void {
-        selectedCategoryIds.value = [];
+        write([]);
     }
 
     /**

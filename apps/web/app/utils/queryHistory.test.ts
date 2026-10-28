@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RouteLocationAsRelativeGeneric } from "vue-router";
-import { endEditRun, writeQuery } from "./queryHistory";
+import { endEditRun, latestQuery, writeQuery } from "./queryHistory";
 
 /**
  * A stand-in for the router and the browser history. `push` starts a new entry whose state is the one passed in;
@@ -108,5 +108,65 @@ describe("writeQuery", () => {
         writeQuery(env.router, { q: "re" }, { kind: "edit", control: "search" });
 
         expect(env.window.history.state?.filterRun).toBe(marker);
+    });
+});
+
+describe("latestQuery", () => {
+    /** Lets the follow-up callbacks of settled navigations run. */
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    it("reads the route query when no write is pending", () => {
+        expect(latestQuery(env.router, { sort: "newest" })).toEqual({ sort: "newest" });
+    });
+
+    it("reads the query a write asked for until its navigation settles", async () => {
+        let finish: () => void = () => undefined;
+        env.router.push.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    finish = () => resolve(undefined);
+                }),
+        );
+
+        writeQuery(env.router, { sort: "oldest" }, { kind: "push" });
+
+        expect(latestQuery(env.router, { sort: "newest" })).toEqual({ sort: "oldest" });
+
+        finish();
+        await settle();
+
+        expect(latestQuery(env.router, { sort: "newest" })).toEqual({ sort: "newest" });
+    });
+
+    it("keeps the newest pending query when an older navigation settles first", async () => {
+        const finishers: Array<() => void> = [];
+        env.router.push.mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    finishers.push(() => resolve(undefined));
+                }),
+        );
+
+        writeQuery(env.router, { sort: "oldest" }, { kind: "push" });
+        writeQuery(env.router, { sort: "oldest", hidden: "1" }, { kind: "push" });
+
+        finishers[0]?.();
+        await settle();
+
+        expect(latestQuery(env.router, {})).toEqual({ sort: "oldest", hidden: "1" });
+
+        finishers[1]?.();
+        await settle();
+
+        expect(latestQuery(env.router, {})).toEqual({});
+    });
+
+    it("keeps the pending query per router", () => {
+        const other = { push: () => new Promise(() => undefined), replace: () => new Promise(() => undefined) };
+        env.router.push.mockImplementationOnce(() => new Promise(() => undefined));
+
+        writeQuery(env.router, { sort: "oldest" }, { kind: "push" });
+
+        expect(latestQuery(other, {})).toEqual({});
     });
 });

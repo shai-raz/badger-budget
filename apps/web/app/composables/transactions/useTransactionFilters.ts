@@ -10,7 +10,7 @@ import {
     type TransactionSortOption,
     type TransactionTypeFilter,
 } from "../../utils/transactionFilterQuery";
-import { writeQuery, type QueryWrite } from "../../utils/queryHistory";
+import { latestQuery, writeQuery, type QueryWrite } from "../../utils/queryHistory";
 
 export type { TransactionSortOption, TransactionTypeFilter } from "../../utils/transactionFilterQuery";
 
@@ -65,16 +65,17 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
     const router = useRouter();
 
     // URL state ----------------------------------------------------------------
-    const urlFilters = computed(() => parseTransactionFilters(route.query));
+    const urlFilters = computed(() => parseTransactionFilters(latestQuery(router, route.query)));
 
     // Period lives in the URL (?from/?to); a bare page load reads as the current month. Changes push history.
     const { selection: period } = useMonthRangeQuery({ allowAll: true, historyMode: "push" });
 
-    // Writes one filter change, keeping every other query key. Unchanged state writes nothing.
+    // Writes one filter change, keeping every other query key. Unchanged state writes nothing. The state is built from
+    // the latest query, including a write still in flight, so one control's change does not undo another's.
     function writeFilters(next: Partial<TransactionFilterState>, write: QueryWrite) {
         const state: TransactionFilterState = { ...urlFilters.value, ...next };
         if (sameTransactionFilters(state, urlFilters.value)) return;
-        writeQuery(router, withTransactionFilters(route.query, state), write);
+        writeQuery(router, withTransactionFilters(latestQuery(router, route.query), state), write);
     }
 
     // Search -------------------------------------------------------------------

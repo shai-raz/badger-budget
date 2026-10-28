@@ -3,7 +3,8 @@ import { computed, effectScope, nextTick, reactive, ref, toValue, watch, type Ef
 import { refDebounced } from "@vueuse/core";
 
 import { useTransactionFilters, type UseTransactionFiltersOptions } from "./useTransactionFilters";
-import { writeQuery } from "../../utils/queryHistory";
+import { useCategoryToggle } from "./useCategoryToggle";
+import { endEditRun, writeQuery } from "../../utils/queryHistory";
 
 // Spy on the real writer, so each test can assert which QueryWrite kind a control chose.
 vi.mock("../../utils/queryHistory", async (importOriginal) => {
@@ -158,12 +159,16 @@ describe("useTransactionFilters search", () => {
         const { searchQuery } = mountFilters();
         // The router applies this write later, as a real navigation does, so the echo arrives after more typing.
         let deliver: () => void = () => undefined;
-        push.mockImplementationOnce((location: { query: Record<string, unknown> }) => {
-            deliver = () => {
-                route.query = location.query;
-            };
-            return Promise.resolve(undefined);
-        });
+        // As with the real router, the write's navigation settles only once the route has taken its query.
+        push.mockImplementationOnce(
+            (location: { query: Record<string, unknown> }) =>
+                new Promise((resolve) => {
+                    deliver = () => {
+                        route.query = location.query;
+                        resolve(undefined);
+                    };
+                }),
+        );
 
         searchQuery.value = "rent";
         await passDebounce();
@@ -274,5 +279,150 @@ describe("useTransactionFilters filter writes", () => {
             { kind: "push" },
         );
         expect(route.query).toEqual({ q: "rent", sort: "oldest", create: "expense", from: "2026-08" });
+    });
+});
+
+/**
+ * A router whose navigations finish later, as vue-router's do. A navigation changes the route and the browser history
+ * only when `flush()` finishes it. A new navigation cancels the one still waiting, as vue-router does, so only the last
+ * one reaches history: a push adds an entry and a replace swaps the current one.
+ */
+function deferredRouter() {
+    const browser = { history: { state: null as Record<string, unknown> | null } };
+    const counts = { pushes: 0, replaces: 0 };
+    let waiting: {
+        query: Record<string, unknown>;
+        kind: "push" | "replace";
+        state?: Record<string, unknown>;
+        done: () => void;
+    } | null = null;
+
+    const navigate =
+        (kind: "push" | "replace") => (location: { query: Record<string, unknown>; state?: Record<string, unknown> }) =>
+            new Promise<void>((resolve) => {
+                waiting?.done();
+                waiting = { query: location.query, kind, state: location.state, done: resolve };
+            });
+
+    function flush() {
+        const nav = waiting;
+        if (!nav) return;
+        waiting = null;
+        route.query = nav.query;
+        if (nav.kind === "push") {
+            counts.pushes += 1;
+            browser.history.state = { ...nav.state };
+        } else {
+            counts.replaces += 1;
+            browser.history.state = { ...browser.history.state, ...nav.state };
+        }
+        nav.done();
+    }
+
+    return { router: { push: navigate("push"), replace: navigate("replace") }, browser, counts, flush };
+}
+
+describe("useTransactionFilters writes made in the same task", () => {
+    const CATEGORY_IDS = ["a", "b", "c", "d", "e"];
+    const CATEGORY_OPTIONS = CATEGORY_IDS.map((value) => ({ value }));
+    let nav: ReturnType<typeof deferredRouter>;
+
+    /**
+     * A category panel bound the way a parent binds it: the panel's model writes the page's selection, and it reads the
+     * selection the parent last rendered, which only catches up on render.
+     */
+    function mountPanel(filters: ReturnType<typeof useTransactionFilters>) {
+        const rendered = ref<string[]>(filters.selectedCategoryIds.value);
+        const model = computed<string[]>({
+            get: () => rendered.value,
+            set: (ids) => {
+                filters.selectedCategoryIds.value = ids;
+            },
+        });
+        const toggles = useCategoryToggle(model, CATEGORY_OPTIONS);
+        const render = () => {
+            rendered.value = filters.selectedCategoryIds.value;
+        };
+        return { toggles, render };
+    }
+
+    beforeEach(() => {
+        nav = deferredRouter();
+        vi.stubGlobal("useRouter", () => nav.router);
+        vi.stubGlobal("window", nav.browser);
+        endEditRun();
+    });
+
+    it("applies three category selects in one task as one URL and one history entry", async () => {
+        const filters = mountFilters({ knownCategoryIds: CATEGORY_IDS });
+        const panel = mountPanel(filters);
+
+        panel.toggles.toggle("a");
+        panel.toggles.toggle("b");
+        panel.toggles.toggle("c");
+        nav.flush();
+        panel.render();
+        await nextTick();
+
+        expect(route.query).toEqual({ categories: "a,b,c" });
+        expect(nav.counts).toEqual({ pushes: 1, replaces: 0 });
+        expect(panel.toggles.isSelected("c")).toBe(true);
+    });
+
+    it("applies three category deselects in one task", async () => {
+        route.query = { categories: "a,b,c,d" };
+        const filters = mountFilters({ knownCategoryIds: CATEGORY_IDS });
+        const panel = mountPanel(filters);
+
+        panel.toggles.toggle("a");
+        panel.toggles.toggle("b");
+        panel.toggles.toggle("c");
+        nav.flush();
+        panel.render();
+        await nextTick();
+
+        expect(route.query).toEqual({ categories: "d" });
+        expect(nav.counts).toEqual({ pushes: 1, replaces: 0 });
+    });
+
+    it("keeps a category toggle, a sort change and a period change made in one task", async () => {
+        route.query = { create: "expense" };
+        const filters = mountFilters({ knownCategoryIds: CATEGORY_IDS });
+        const panel = mountPanel(filters);
+
+        panel.toggles.toggle("a");
+        filters.sortOption.value = "oldest";
+        panel.toggles.toggle("b");
+        filters.period.value = { kind: "range", from: "2026-08", to: "2026-08" };
+        nav.flush();
+        panel.render();
+        await nextTick();
+
+        expect(route.query).toEqual({
+            create: "expense",
+            categories: "a,b",
+            sort: "oldest",
+            from: "2026-08",
+            to: "2026-08",
+        });
+        expect(nav.counts).toEqual({ pushes: 1, replaces: 0 });
+    });
+
+    it("keeps one history entry for a category run whose toggles land in separate tasks", async () => {
+        const filters = mountFilters({ knownCategoryIds: CATEGORY_IDS });
+        const panel = mountPanel(filters);
+
+        panel.toggles.toggle("a");
+        nav.flush();
+        panel.render();
+        await nextTick();
+
+        panel.toggles.toggle("b");
+        nav.flush();
+        panel.render();
+        await nextTick();
+
+        expect(route.query).toEqual({ categories: "a,b" });
+        expect(nav.counts).toEqual({ pushes: 1, replaces: 1 });
     });
 });
