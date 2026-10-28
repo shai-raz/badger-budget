@@ -1,6 +1,19 @@
 {
     "releases": [
         {
+            "version": "0.8.0",
+            "date": "2026-10-28",
+            "items": [
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "persist all transactions filters and sort in the URL",
+                    "pr": 74
+                }
+            ]
+        },
+        {
             "version": "0.7.1",
             "date": "2026-10-28",
             "items": [
