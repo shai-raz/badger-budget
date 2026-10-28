@@ -38,7 +38,7 @@ docker build -t badger-budget .   # Production image: API + bundled SPA on one p
 
 ## Environment Setup
 
-- API: `apps/api/.env.example` lists every variable; nearly all are optional. Generated secrets go in `DATA_DIR/secrets`.
+- API: `apps/api/.env.example` lists every variable; nearly all are optional. Generated secrets go in `DATA_DIR/secrets`. Transaction attachments use `ATTACHMENTS_S3_*`, off until configured.
 - Web: no `.env.example`. `NUXT_PUBLIC_API_BASE_URL` is the only variable, a build-time override of the same-origin `/api/v1`.
 - Self-hosting: `docker-compose.yml` (production, see README), `deploy/` (the same stack per hosting platform, each folder with a README) and `docker-compose.dev.yml` (dev Postgres).
 
