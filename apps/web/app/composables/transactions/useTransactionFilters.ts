@@ -1,11 +1,18 @@
-import type { ComputedRef, MaybeRefOrGetter, Ref } from "vue";
+import type { ComputedRef, MaybeRefOrGetter, Ref, WritableComputedRef } from "vue";
 import type { ITransactionListParams, ITransactionSummaryParams } from "@badger/types";
-import { useTransactionsStore } from "../../stores/transactions";
 import { useMonthRangeQuery } from "../useMonthRangeQuery";
 import { selectionToDateBounds } from "../../utils/monthRange";
+import {
+    parseTransactionFilters,
+    sameTransactionFilters,
+    withTransactionFilters,
+    type TransactionFilterState,
+    type TransactionSortOption,
+    type TransactionTypeFilter,
+} from "../../utils/transactionFilterQuery";
+import { writeQuery, type QueryWrite } from "../../utils/queryHistory";
 
-export type TransactionTypeFilter = "all" | "income" | "expense" | "transfer";
-export type TransactionSortOption = "newest" | "oldest" | "amount-desc" | "amount-asc" | "name";
+export type { TransactionSortOption, TransactionTypeFilter } from "../../utils/transactionFilterQuery";
 
 export interface ActiveFilterChip {
     key: string;
@@ -22,6 +29,11 @@ export interface UseTransactionFiltersOptions {
      * the chip falls back to "N categories".
      */
     totalCategoryCount?: MaybeRefOrGetter<number | undefined>;
+    /**
+     * Ids of the categories the user has, including the Uncategorized pseudo-id. Undefined while they load: no id is
+     * dropped then, so the URL is not rewritten before the list is known.
+     */
+    knownCategoryIds?: MaybeRefOrGetter<string[] | undefined>;
 }
 
 const TYPE_CHIP_LABELS: Record<Exclude<TransactionTypeFilter, "all">, string> = {
@@ -42,41 +54,91 @@ const SORT_MAP: Record<
 };
 
 /**
- * Page-scoped filter state for the transactions page. Owns the local filter refs
- * (search/type/categories/sort). The period comes from the URL (`?from`/`?to`, via
- * `useMonthRangeQuery`), and `showHidden` comes from the Pinia transactions store
- * (read/write, never duplicated). Exposes `listParams`/`summaryParams` ready for
- * `useInfiniteTransactions`/`useTransactionsSummary`, plus chip/count helpers.
+ * Page-scoped filter state for the transactions page. The URL query is the single source: search, type, categories,
+ * sort and show-hidden are read from `route.query` (see `utils/transactionFilterQuery.ts`), and every control writes
+ * back to it. The period is in the URL too (`?from`/`?to`, via `useMonthRangeQuery`). The search input text is local
+ * so typing stays responsive; the URL takes its trimmed value after the debounce. Exposes `listParams`/`summaryParams`
+ * ready for `useInfiniteTransactions`/`useTransactionsSummary`, plus chip/count helpers.
  */
 export function useTransactionFilters(options: UseTransactionFiltersOptions = {}) {
-    const store = useTransactionsStore();
+    const route = useRoute();
+    const router = useRouter();
 
-    // Local state ------------------------------------------------------------
-    const searchQuery = ref("");
+    // URL state ----------------------------------------------------------------
+    const urlFilters = computed(() => parseTransactionFilters(route.query));
+
+    // Period lives in the URL (?from/?to); a bare page load reads as the current month. Changes push history.
+    const { selection: period } = useMonthRangeQuery({ allowAll: true, historyMode: "push" });
+
+    // Writes one filter change, keeping every other query key. Unchanged state writes nothing.
+    function writeFilters(next: Partial<TransactionFilterState>, write: QueryWrite) {
+        const state: TransactionFilterState = { ...urlFilters.value, ...next };
+        if (sameTransactionFilters(state, urlFilters.value)) return;
+        writeQuery(router, withTransactionFilters(route.query, state), write);
+    }
+
+    // Search -------------------------------------------------------------------
+    // The input is local so typing never waits on the router. `syncedSearch` is the search text the URL holds as far as
+    // this page knows: our own writes and their echoes match it, so only an external change (Back, a pasted link)
+    // rewrites the input. The live input can be ahead of the URL while the debounce runs.
+    const searchQuery = ref(urlFilters.value.search);
     const debouncedSearch = refDebounced(searchQuery, 300);
-    const typeFilter = ref<TransactionTypeFilter>("all");
-    // Empty array === all categories (no filter param sent).
-    const selectedCategoryIds = ref<string[]>([]);
-    const sortOption = ref<TransactionSortOption>("newest");
+    let syncedSearch = urlFilters.value.search;
 
-    // Period lives in the URL (?from/?to); a bare page load reads as the current month.
-    const { selection: period } = useMonthRangeQuery({ allowAll: true });
+    watch(
+        () => urlFilters.value.search,
+        (urlSearch) => {
+            if (urlSearch === syncedSearch) return;
+            syncedSearch = urlSearch;
+            searchQuery.value = urlSearch;
+        },
+    );
 
-    // Store bridge (do NOT duplicate — read/write the store) ------------------
-    const showHidden = computed({
-        get: () => store.showHidden,
-        set: (value) => store.setShowHidden(value),
+    function commitSearch(text: string, write: QueryWrite) {
+        const value = text.trim();
+        if (value === syncedSearch) return;
+        syncedSearch = value;
+        writeFilters({ search: value }, write);
+    }
+
+    watch(debouncedSearch, (text) => commitSearch(text, { kind: "edit", control: "search" }));
+
+    // Filters ------------------------------------------------------------------
+    const typeFilter = computed<TransactionTypeFilter>({
+        get: () => urlFilters.value.type,
+        set: (type) => writeFilters({ type }, { kind: "push" }),
     });
 
-    const trimmedSearch = computed(() => debouncedSearch.value.trim());
+    const sortOption = computed<TransactionSortOption>({
+        get: () => urlFilters.value.sort,
+        set: (sort) => writeFilters({ sort }, { kind: "push" }),
+    });
 
-    // Params -----------------------------------------------------------------
+    const showHidden = computed<boolean>({
+        get: () => urlFilters.value.showHidden,
+        set: (value) => writeFilters({ showHidden: value }, { kind: "push" }),
+    });
+
+    // Empty array === all categories (no filter param sent). Ids the user no longer has are ignored once the list has
+    // loaded, and a selection of every category reads as none (the same collapse useCategoryToggle writes).
+    const selectedCategoryIds: WritableComputedRef<string[]> = computed({
+        get: () => {
+            const requested = urlFilters.value.categoryIds;
+            const known = toValue(options.knownCategoryIds);
+            if (!known) return requested;
+            const valid = known.filter((id) => requested.includes(id));
+            return valid.length === known.length ? [] : valid;
+        },
+        set: (ids) => writeFilters({ categoryIds: ids }, { kind: "edit", control: "categories" }),
+    });
+
+    // Params -------------------------------------------------------------------
     const listParams: ComputedRef<ITransactionListParams> = computed(() => {
         const { startDate, endDate } = selectionToDateBounds(period.value);
         const { sortBy, sortOrder } = SORT_MAP[sortOption.value];
 
         const params: ITransactionListParams = {
-            includeHidden: store.showHidden,
+            includeHidden: showHidden.value,
             sortBy,
             sortOrder,
             limit: 50,
@@ -84,7 +146,7 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
 
         if (startDate) params.startDate = startDate;
         if (endDate) params.endDate = endDate;
-        if (trimmedSearch.value) params.search = trimmedSearch.value;
+        if (urlFilters.value.search) params.search = urlFilters.value.search;
         if (typeFilter.value !== "all") params.type = typeFilter.value;
         if (selectedCategoryIds.value.length > 0) params.categoryIds = [...selectedCategoryIds.value];
 
@@ -98,7 +160,7 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
 
         if (startDate) params.startDate = startDate;
         if (endDate) params.endDate = endDate;
-        if (trimmedSearch.value) params.search = trimmedSearch.value;
+        if (urlFilters.value.search) params.search = urlFilters.value.search;
         if (typeFilter.value !== "all") params.type = typeFilter.value;
         if (selectedCategoryIds.value.length > 0) params.categoryIds = [...selectedCategoryIds.value];
 
@@ -111,7 +173,7 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
         () =>
             (typeFilter.value !== "all" ? 1 : 0) +
             (selectedCategoryIds.value.length > 0 ? 1 : 0) +
-            (store.showHidden ? 1 : 0),
+            (showHidden.value ? 1 : 0),
     );
 
     const activeChips: ComputedRef<ActiveFilterChip[]> = computed(() => {
@@ -122,9 +184,7 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
                 key: "type",
                 icon: "pi-filter",
                 label: TYPE_CHIP_LABELS[typeFilter.value],
-                clear: () => {
-                    typeFilter.value = "all";
-                },
+                clear: () => writeFilters({ type: "all" }, { kind: "push" }),
             });
         }
 
@@ -136,28 +196,27 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
                 key: "categories",
                 icon: "pi-tag",
                 label,
-                clear: () => {
-                    selectedCategoryIds.value = [];
-                },
+                clear: () => writeFilters({ categoryIds: [] }, { kind: "push" }),
             });
         }
 
-        if (store.showHidden) {
+        if (showHidden.value) {
             chips.push({
                 key: "hidden",
                 icon: "pi-eye",
                 label: "Showing hidden",
-                clear: () => store.setShowHidden(false),
+                clear: () => writeFilters({ showHidden: false }, { kind: "push" }),
             });
         }
 
-        if (trimmedSearch.value) {
+        if (urlFilters.value.search) {
             chips.push({
                 key: "search",
                 icon: "pi-search",
-                label: `"${trimmedSearch.value}"`,
+                label: `"${urlFilters.value.search}"`,
                 clear: () => {
                     searchQuery.value = "";
+                    commitSearch("", { kind: "push" });
                 },
             });
         }
@@ -170,9 +229,7 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
     // Actions ----------------------------------------------------------------
     // Resets filters ONLY — not search, timeframe or sort (product decision).
     function clearAllFilters() {
-        typeFilter.value = "all";
-        selectedCategoryIds.value = [];
-        store.setShowHidden(false);
+        writeFilters({ type: "all", categoryIds: [], showHidden: false }, { kind: "push" });
     }
 
     return {
@@ -183,7 +240,7 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
         selectedCategoryIds,
         sortOption,
 
-        // URL-backed period and store-bridged show-hidden
+        // URL-backed period and show-hidden
         period,
         showHidden,
 

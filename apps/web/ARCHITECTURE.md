@@ -3,7 +3,7 @@
 Nuxt 4 SPA (`ssr: false`; Vite 8 / Rolldown, Lightning CSS minification). `nuxt` is pinned `~4.5.2` because 4.6.x needs Node ^22.22.3, above `.node-version`; the Docker image pins its own Node (`NODE_VERSION` in the `Dockerfile`).
 
 - **UI**: PrimeVue 4 (Aura with a custom near-black primary ramp, `app/theme/preset.ts`) + Tailwind CSS 3 + PrimeIcons. Visual rules: [DESIGN.md](DESIGN.md).
-- **State**: Pinia (`app/stores/`) for client state, TanStack Query (`@peterbud/nuxt-query`) for server state. Components call composables, never the API client directly. A page's month range lives in the URL, not Pinia: `useMonthRangeQuery` reads and writes `?from=YYYY-MM&to=YYYY-MM` (`?from=all` for all time).
+- **State**: Pinia (`app/stores/`) for client state, TanStack Query (`@peterbud/nuxt-query`) for server state. Components call composables, never the API client directly. A page's month range lives in the URL, not Pinia: `useMonthRangeQuery` reads and writes `?from=YYYY-MM&to=YYYY-MM` (`?from=all` for all time). The transactions list's other filters live there too (`utils/transactionFilterQuery.ts`).
 - **API base URL** is the same-origin `/api/v1`. `NUXT_PUBLIC_API_BASE_URL` overrides it at build time only. In `pnpm dev:web`, `nitro.devProxy` forwards `/api` and `/.well-known` to port 3000.
 - **Instance flags**: `useInstanceConfig()` wraps the public `GET /config`. Gate UI through the helpers in `utils/appConfig.ts`; unknown (loading or failed) config hides or skips, never guesses.
 - **Bank sync**: `useBankSyncFlow()` is provided by the `app` layout, so sync controls only work inside it. The passkey unlock (`useSyncUnlock`, `utils/syncPasskey*`) never persists the PIN client-side.
