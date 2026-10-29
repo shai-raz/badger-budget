@@ -5,12 +5,12 @@ import {
     ATTACHMENT_EXPIRY_HINT,
     ATTACHMENT_HELPER_TEXT,
     attachmentRejectMessage,
-    failedUploadsDetail,
     fileIcon,
     fileIconClass,
     fileKind,
     formatFileSize,
     remainingAttachmentSlots,
+    uploadFailureMessage,
     uploadingHeader,
     validateAttachmentPick,
     type PickedFile,
@@ -101,6 +101,52 @@ describe("attachmentRejectMessage", () => {
         expect(attachmentRejectMessage("a.pdf", "empty").detail).toContain("a.pdf");
         expect(attachmentRejectMessage("a.pdf", "limit").summary).toBe("Attachment limit reached");
     });
+
+    it("words an unsupported type the same way the server's 415 does", () => {
+        expect(attachmentRejectMessage("a.gif", "type")).toEqual({
+            summary: "Unsupported file type",
+            detail: "a.gif isn't a JPEG, PNG, WebP or PDF file.",
+        });
+    });
+});
+
+describe("uploadFailureMessage", () => {
+    const failure = (status: number) => ({ response: { status } });
+
+    it("maps the server's 415, 413 and 409 to the client-side wording and severity", () => {
+        expect(uploadFailureMessage("a.gif", failure(415), "transaction")).toEqual({
+            severity: "error",
+            summary: "Unsupported file type",
+            detail: "a.gif isn't a JPEG, PNG, WebP or PDF file.",
+        });
+        expect(uploadFailureMessage("a.pdf", failure(413), "transaction")).toEqual({
+            severity: "warn",
+            summary: "File too large",
+            detail: "a.pdf is larger than 10 MB.",
+        });
+        expect(uploadFailureMessage("a.pdf", failure(409), "create")).toEqual({
+            severity: "warn",
+            summary: "Attachment limit reached",
+            detail: "A transaction can have up to 10 attachments. a.pdf wasn't added.",
+        });
+    });
+
+    it("gives the card a plain retry for network and server failures", () => {
+        expect(uploadFailureMessage("a.pdf", new Error("Network Error"), "transaction")).toEqual({
+            severity: "error",
+            summary: "Upload failed",
+            detail: "Couldn't upload a.pdf. Try again.",
+        });
+        expect(uploadFailureMessage("a.pdf", failure(500), "transaction").detail).toBe(
+            "Couldn't upload a.pdf. Try again.",
+        );
+    });
+
+    it("points the create dialog's generic failure back to the transaction page", () => {
+        expect(uploadFailureMessage("a.pdf", failure(503), "create").detail).toBe(
+            "Couldn't upload a.pdf. Try again from the transaction page.",
+        );
+    });
 });
 
 describe("copy helpers", () => {
@@ -118,19 +164,14 @@ describe("copy helpers", () => {
         expect(uploadingHeader(2)).toBe("Uploading 2 files");
     });
 
-    it("lists the failed names in the retry message", () => {
-        expect(failedUploadsDetail(["a.pdf", "b.jpg"])).toBe(
-            "Couldn't upload a.pdf, b.jpg. Try again from the transaction page.",
-        );
-    });
-
     it("maps MIME types to icon, icon colour and kind", () => {
         expect(fileIcon("image/png")).toBe("pi pi-image");
         expect(fileIcon("application/pdf")).toBe("pi pi-file-pdf");
         expect(fileIcon("text/plain")).toBe("pi pi-file");
         expect(fileIconClass("image/png")).toBe("text-teal-500");
         expect(fileIconClass("application/pdf")).toBe("text-rose-500");
-        expect(fileKind("image/webp")).toBe("Photo");
+        expect(fileKind("image/webp")).toBe("WEBP");
+        expect(fileKind("image/jpeg")).toBe("JPEG");
         expect(fileKind("application/pdf")).toBe("PDF");
     });
 

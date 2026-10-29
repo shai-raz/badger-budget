@@ -13,7 +13,8 @@ export function useUploadTransactionAttachments(): {
     uploads: Ref<AttachmentUploadState[]>;
     /** True from a batch's start until its detail refetch lands, so adds stay off while the count is stale. */
     isUploading: ComputedRef<boolean>;
-    uploadFiles: (transactionId: string, files: File[]) => Promise<{ failed: File[] }>;
+    /** `error` is the upload's failure, kept so each file's toast can say why it failed. */
+    uploadFiles: (transactionId: string, files: File[]) => Promise<{ failed: { file: File; error: unknown }[] }>;
 } {
     const apiClient = useApiClient();
     const queryClient = useQueryClient();
@@ -44,7 +45,7 @@ export function useUploadTransactionAttachments(): {
         // Widened to the root key so the infinite list and summary refresh too. Not awaited: the card doesn't wait on them.
         queryClient.invalidateQueries({ queryKey: transactionKeys.all });
 
-        return { failed: failed.map((entry) => entry.file) };
+        return { failed };
     };
 
     return { uploads, isUploading, uploadFiles };

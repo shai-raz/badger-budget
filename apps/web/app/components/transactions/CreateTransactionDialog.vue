@@ -11,7 +11,7 @@ import { useInstanceConfig } from "../../composables/useInstanceConfig";
 import { useUploadTransactionAttachments } from "../../composables/transactions/useTransactionAttachments";
 import { useAuthStore } from "../../stores/auth";
 import { canUseAttachmentStorage, isDemoUser } from "../../utils/appConfig";
-import { failedUploadsDetail } from "../../utils/attachments";
+import { uploadFailureMessage } from "../../utils/attachments";
 
 defineProps<{
     visible: boolean;
@@ -65,19 +65,15 @@ const handleSave = async () => {
             save: (catId) => mutateAsync(catId ? { ...payload, categoryId: catId } : payload),
         });
         // The transaction exists now. Uploads run in parallel and the dialog stays locked until they settle.
-        let failed: File[] = [];
+        let failed: { file: File; error: unknown }[] = [];
         if (files.length) ({ failed } = await uploadFiles(created.id, files));
         close();
         const followup = cashFollowupFor(created);
         if (followup) showCashFollowupToast(toast, followup, currencies.value);
         else toast.add({ severity: "success", summary: "Transaction saved", life: 3000 });
-        if (failed.length) {
-            toast.add({
-                severity: "warn",
-                summary: "Some files weren't uploaded",
-                detail: failedUploadsDetail(failed.map((file) => file.name)),
-                life: 6000,
-            });
+        for (const { file, error } of failed) {
+            const message = uploadFailureMessage(file.name, error, "create");
+            toast.add({ severity: message.severity, summary: message.summary, detail: message.detail, life: 6000 });
         }
         await router.push(`/transactions/${created.id}`);
     } catch (e) {
