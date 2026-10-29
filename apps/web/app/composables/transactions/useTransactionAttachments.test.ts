@@ -47,7 +47,9 @@ describe("useUploadTransactionAttachments", () => {
 
         const result = await uploadFiles("tx-1", [file("ok.pdf"), bad]);
 
-        expect(result).toEqual({ failed: [bad] });
+        expect(result.failed).toHaveLength(1);
+        expect(result.failed[0]).toMatchObject({ file: bad });
+        expect(result.failed[0]?.error).toBeInstanceOf(Error);
         expect(invalidateQueries).toHaveBeenCalledTimes(2);
     });
 

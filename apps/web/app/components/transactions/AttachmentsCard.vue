@@ -3,11 +3,11 @@ import { computed, reactive, ref } from "vue";
 import type { ITransactionAttachmentResponse, ITransactionResponse } from "@badger/types";
 import { ATTACHMENT_MAX_PER_TRANSACTION, ATTACHMENT_NAME_MAX_LENGTH } from "@badger/shared-data";
 import { splitAttachmentFileName } from "@badger/utils";
-import { useDropZone } from "@vueuse/core";
 import type { MenuItem } from "primevue/menuitem";
 import { useConfirm } from "primevue/useconfirm";
 import { useToast } from "primevue/usetoast";
 import { useInstanceConfig } from "~/composables/useInstanceConfig";
+import { useAttachmentDropZone } from "~/composables/transactions/useAttachmentDropZone";
 import {
     useAttachmentUrl,
     useRemoveTransactionAttachment,
@@ -20,16 +20,17 @@ import { ATTACHMENT_BLOCK_NOTE, attachmentUploadBlock, canUseAttachmentStorage }
 import {
     ATTACHMENT_ACCEPT,
     ATTACHMENT_EXPIRY_HINT,
+    ATTACHMENT_HELPER_TEXT,
     attachmentRejectMessage,
-    failedUploadsDetail,
     fileIcon,
-    fileIconClass,
     fileKind,
     formatFileSize,
     remainingAttachmentSlots,
+    uploadFailureMessage,
     uploadingHeader,
     validateAttachmentPick,
 } from "~/utils/attachments";
+import AttachmentDropOverlay from "./AttachmentDropOverlay.vue";
 
 interface Props {
     transaction: ITransactionResponse;
@@ -61,11 +62,33 @@ const headerCount = computed(() =>
         : `${attachmentCount.value} of ${ATTACHMENT_MAX_PER_TRANSACTION}`,
 );
 
-const canAdd = computed(() => block.value === null && !isUploading.value && remainingSlots.value > 0);
+// Why the card can't take files right now, or null when it can. Drives both the Add button and the drop overlay.
+const refusal = computed<{ title: string; note: string } | null>(() => {
+    const blocked = block.value;
+    if (blocked) return { title: "Can't add files here", note: ATTACHMENT_BLOCK_NOTE[blocked] };
+    if (remainingSlots.value === 0) {
+        return {
+            title: "This transaction is full",
+            note: `It already has ${ATTACHMENT_MAX_PER_TRANSACTION} attachments. Remove one to add more.`,
+        };
+    }
+    if (isUploading.value) return { title: "Uploads in progress", note: "Wait for the current uploads to finish." };
+    return null;
+});
+const canAdd = computed(() => refusal.value === null);
 const addTooltip = computed(() =>
     block.value === null && remainingSlots.value === 0
         ? `A transaction can have up to ${ATTACHMENT_MAX_PER_TRANSACTION} attachments.`
         : "",
+);
+const dropOverlay = computed(() =>
+    refusal.value
+        ? { tone: "refuse" as const, ...refusal.value }
+        : {
+              tone: "accept" as const,
+              title: "Drop files to upload",
+              note: `Room for ${remainingSlots.value} more. ${ATTACHMENT_HELPER_TEXT}.`,
+          },
 );
 
 // Keyed by URL, not id: a refetch brings a fresh presigned URL, which gets its own try.
@@ -83,26 +106,17 @@ const handlePick = async (files: File[]) => {
     if (accepted.length === 0) return;
 
     const { failed } = await uploadFiles(props.transaction.id, accepted);
-    if (failed.length > 0) {
-        toast.add({
-            severity: "error",
-            summary: "Error",
-            detail: failedUploadsDetail(failed.map((file) => file.name)),
-            life: 5000,
-        });
+    for (const { file, error } of failed) {
+        const message = uploadFailureMessage(file.name, error, "transaction");
+        toast.add({ severity: message.severity, summary: message.summary, detail: message.detail, life: 5000 });
     }
 };
 
-// Drops are refused (no highlight, no upload) while the card can't take files. The default is kept for refused
-// drops too, so a file dropped on a blocked card never opens in the browser tab.
+// The overlay shows for any file drag over the card, including a refused one; refused drops are not uploaded.
 const rootRef = ref<HTMLElement | null>(null);
-const { isOverDropZone } = useDropZone(rootRef, {
-    checkValidity: () => canAdd.value,
-    multiple: true,
-    preventDefaultForUnhandled: true,
-    onDrop: (files) => {
-        if (files) void handlePick(files);
-    },
+const { isDragging } = useAttachmentDropZone(rootRef, {
+    canAccept: () => canAdd.value,
+    onDrop: (files) => void handlePick(files),
 });
 
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -116,6 +130,7 @@ const onFileInputChange = (event: Event) => {
 };
 
 const isImage = (attachment: ITransactionAttachmentResponse) => attachment.mimeType.startsWith("image/");
+const isPdf = (attachment: ITransactionAttachmentResponse) => attachment.mimeType === "application/pdf";
 
 const lightbox = ref<{ attachment: ITransactionAttachmentResponse; url: string } | null>(null);
 const lightboxOpen = computed({
@@ -185,6 +200,9 @@ const renameExt = computed(() => (renameTarget.value ? splitAttachmentFileName(r
 const renameMaxLength = computed(() => ATTACHMENT_NAME_MAX_LENGTH - renameExt.value.length - 1);
 const renameVisible = computed(() => renameTarget.value !== null);
 const renamePending = computed(() => renameMutation.isPending.value);
+// Over-long names are blocked visibly (red counter, Save off), never cut silently.
+const renameTooLong = computed(() => renameBase.value.length > renameMaxLength.value);
+const renameSaveDisabled = computed(() => renameBase.value.trim() === "" || renameTooLong.value);
 
 const openRename = (attachment: ITransactionAttachmentResponse) => {
     renameTarget.value = attachment;
@@ -203,7 +221,7 @@ const onRenameVisibleChange = (open: boolean) => {
 const submitRename = async () => {
     const target = renameTarget.value;
     const base = renameBase.value.trim();
-    if (!target || !base) return;
+    if (!target || !base || renameTooLong.value) return;
 
     const fileName = renameExt.value ? `${base}.${renameExt.value}` : base;
     renameError.value = null;
@@ -283,11 +301,15 @@ const percent = (progress: number) => Math.round(progress * 100);
 <template>
     <div
         ref="rootRef"
-        class="rounded-xl transition-shadow"
-        :class="
-            isOverDropZone ? 'ring-2 ring-primary ring-offset-2 ring-offset-surface-0 dark:ring-offset-surface-900' : ''
-        "
+        class="relative rounded-xl"
     >
+        <AttachmentDropOverlay
+            v-if="isDragging"
+            :tone="dropOverlay.tone"
+            :title="dropOverlay.title"
+            :note="dropOverlay.note"
+        />
+
         <SharedSectionBand
             title="Attachments"
             :empty="attachments.length === 0 && uploads.length === 0"
@@ -321,60 +343,71 @@ const percent = (progress: number) => Math.round(progress * 100);
                     {{ blockNote }}
                 </p>
 
-                <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <!-- Every tile has the same frame: a 4:3 preview and a fixed-height caption, so names never change its size. -->
+                <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                     <div
                         v-for="upload in uploads"
                         :key="upload.id"
-                        class="flex flex-col gap-2 overflow-hidden rounded-lg border border-surface-200 bg-surface-50 p-3 dark:border-surface-700 dark:bg-surface-800"
+                        class="flex flex-col overflow-hidden rounded-lg border border-surface-200 bg-surface-0 dark:border-surface-700 dark:bg-surface-900"
                     >
-                        <div class="flex min-h-12 items-center gap-2">
+                        <div
+                            class="relative flex aspect-[4/3] items-center justify-center bg-surface-100 dark:bg-surface-800"
+                        >
                             <span
-                                :class="[fileIcon(upload.file.type), fileIconClass(upload.file.type)]"
-                                class="text-2xl"
+                                :class="fileIcon(upload.file.type)"
+                                class="text-[34px] text-muted-color"
                                 aria-hidden="true"
                             />
-                            <div class="min-w-0 flex-1">
-                                <div class="truncate text-xs font-semibold">{{ upload.file.name }}</div>
-                                <div class="text-xs text-muted-color">
-                                    {{ fileKind(upload.file.type) }} &middot; {{ formatFileSize(upload.file.size) }}
-                                </div>
+                            <div
+                                class="absolute inset-x-2.5 bottom-2.5 h-1 overflow-hidden rounded-full bg-surface-200 dark:bg-surface-700"
+                                role="progressbar"
+                                aria-valuemin="0"
+                                aria-valuemax="100"
+                                :aria-valuenow="percent(upload.progress)"
+                                :aria-label="`Uploading ${upload.file.name}`"
+                            >
+                                <div
+                                    class="h-full rounded-full bg-primary transition-[width]"
+                                    :style="{ width: `${percent(upload.progress)}%` }"
+                                />
                             </div>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <ProgressBar
-                                :value="percent(upload.progress)"
-                                :show-value="false"
-                                class="h-1.5 flex-1"
-                            />
-                            <span class="text-xs tabular-nums text-muted-color">{{ percent(upload.progress) }}%</span>
+                        <div
+                            class="flex h-11 flex-col justify-center border-t border-surface-200 px-2.5 py-1.5 dark:border-surface-700"
+                        >
+                            <span
+                                dir="auto"
+                                class="block truncate text-xs leading-4 font-semibold"
+                                >{{ upload.file.name }}</span
+                            >
+                            <span class="block truncate text-xs leading-4 text-muted-color">
+                                Uploading &middot; {{ percent(upload.progress) }}%
+                            </span>
                         </div>
                     </div>
 
                     <div
                         v-for="attachment in attachments"
                         :key="attachment.id"
-                        class="relative overflow-hidden rounded-lg border border-surface-200 bg-surface-50 dark:border-surface-700 dark:bg-surface-800"
+                        class="relative flex flex-col overflow-hidden rounded-lg border border-surface-200 bg-surface-0 dark:border-surface-700 dark:bg-surface-900"
                     >
-                        <component
-                            :is="storageEnabled ? 'button' : 'div'"
-                            v-bind="
-                                storageEnabled
-                                    ? {
-                                          type: 'button',
-                                          'aria-label': `Preview ${attachment.fileName}`,
-                                          title: ATTACHMENT_EXPIRY_HINT,
-                                      }
-                                    : {}
-                            "
-                            class="block w-full text-left"
+                        <!-- Native element on purpose: a dynamic component named 'button' resolves to the global PrimeVue Button. -->
+                        <button
+                            type="button"
+                            :disabled="!storageEnabled"
+                            :aria-label="storageEnabled ? `Preview ${attachment.fileName}` : undefined"
+                            :title="storageEnabled ? ATTACHMENT_EXPIRY_HINT : undefined"
+                            class="flex flex-1 flex-col text-left"
                             :class="
                                 storageEnabled
-                                    ? 'cursor-pointer outline-none hover:bg-surface-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary dark:hover:bg-surface-700'
-                                    : ''
+                                    ? 'cursor-pointer outline-none hover:bg-surface-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary dark:hover:bg-surface-800'
+                                    : 'cursor-default'
                             "
-                            @click="storageEnabled && openPreview(attachment)"
+                            @click="openPreview(attachment)"
                         >
-                            <span class="flex h-20 items-center justify-center overflow-hidden">
+                            <span
+                                class="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-surface-100 dark:bg-surface-800"
+                            >
                                 <img
                                     v-if="attachment.thumbnailUrl && !failedThumbnails.has(attachment.thumbnailUrl)"
                                     :src="attachment.thumbnailUrl"
@@ -384,20 +417,35 @@ const percent = (progress: number) => Math.round(progress * 100);
                                     @error="markThumbnailFailed(attachment.thumbnailUrl)"
                                 />
                                 <span
+                                    v-else-if="isPdf(attachment)"
+                                    class="flex flex-col items-center gap-1 text-rose-600 dark:text-rose-400"
+                                >
+                                    <span
+                                        :class="fileIcon(attachment.mimeType)"
+                                        class="text-[34px]"
+                                        aria-hidden="true"
+                                    />
+                                    <span class="text-[10px] font-semibold tracking-wider">PDF</span>
+                                </span>
+                                <span
                                     v-else
-                                    :class="[fileIcon(attachment.mimeType), fileIconClass(attachment.mimeType)]"
-                                    class="text-2xl"
+                                    :class="fileIcon(attachment.mimeType)"
+                                    class="text-[34px] text-muted-color"
                                     aria-hidden="true"
                                 />
                             </span>
-                            <span class="block border-t border-surface-200 px-2 py-1.5 dark:border-surface-700">
-                                <span class="block truncate text-xs font-semibold">{{ attachment.fileName }}</span>
-                                <span class="block text-xs text-muted-color">
+                            <span class="block h-11 border-t border-surface-200 px-2.5 py-1.5 dark:border-surface-700">
+                                <span
+                                    dir="auto"
+                                    class="block truncate text-xs leading-4 font-semibold"
+                                    >{{ attachment.fileName }}</span
+                                >
+                                <span class="block truncate text-xs leading-4 text-muted-color">
                                     {{ fileKind(attachment.mimeType) }} &middot;
                                     {{ formatFileSize(attachment.sizeBytes) }}
                                 </span>
                             </span>
-                        </component>
+                        </button>
                         <Button
                             icon="pi pi-ellipsis-v"
                             text
@@ -406,7 +454,7 @@ const percent = (progress: number) => Math.round(progress * 100);
                             severity="secondary"
                             aria-label="Attachment actions"
                             aria-haspopup="true"
-                            class="!absolute top-1 right-1 !h-7 !w-7 !bg-surface-0 dark:!bg-surface-900"
+                            class="!absolute top-1.5 right-1.5 !h-7 !w-7 !rounded-full !border !border-surface-200 !bg-surface-0 !text-muted-color dark:!border-surface-700 dark:!bg-surface-900"
                             @click="openMenu($event, attachment)"
                         />
                     </div>
@@ -501,19 +549,31 @@ const percent = (progress: number) => Math.round(progress * 100);
             initial-focus="dialog"
             :busy="renamePending"
             :api-error="renameError"
-            :save-disabled="renameBase.trim() === ''"
+            :save-disabled="renameSaveDisabled"
             @update:visible="onRenameVisibleChange"
             @save="submitRename"
         >
-            <div class="flex items-center gap-1">
-                <InputText
-                    v-model="renameBase"
-                    class="min-w-0 flex-1"
-                    :maxlength="renameMaxLength"
-                    aria-label="Attachment name"
-                    @keydown.enter.prevent="submitRename"
-                />
-                <span class="shrink-0 text-muted-color">.{{ renameExt }}</span>
+            <div class="flex flex-col gap-1">
+                <div class="flex items-center gap-1">
+                    <InputText
+                        v-model="renameBase"
+                        class="min-w-0 flex-1"
+                        :invalid="renameTooLong"
+                        aria-label="Attachment name"
+                        @keydown.enter.prevent="submitRename"
+                    />
+                    <span class="shrink-0 text-muted-color">.{{ renameExt }}</span>
+                </div>
+                <div class="flex items-center justify-end gap-2 text-xs tabular-nums">
+                    <span
+                        v-if="renameTooLong"
+                        class="mr-auto text-rose-700 dark:text-rose-400"
+                        >Name is too long</span
+                    >
+                    <span :class="renameTooLong ? 'text-rose-700 dark:text-rose-400' : 'text-muted-color'">
+                        {{ renameBase.length }} / {{ renameMaxLength }}
+                    </span>
+                </div>
             </div>
         </SharedFormDialog>
     </div>

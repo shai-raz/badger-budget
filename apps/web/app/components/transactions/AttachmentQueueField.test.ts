@@ -39,9 +39,12 @@ describe("AttachmentQueueField picker", () => {
 });
 
 describe("AttachmentQueueField drop zone", () => {
-    it("uses a drop zone with a highlight while a file is over it", () => {
-        expect(source).toContain("useDropZone(");
-        expect(template).toContain("isOverDropZone");
+    it("shows the overlay for any file over the field, with the reason a refused drop is refused", () => {
+        expect(source).toContain("useAttachmentDropZone(");
+        expect(template).toContain('v-if="isDragging"');
+        expect(source).toContain('title: "Uploads in progress"');
+        expect(source).toContain('title: "This transaction is full"');
+        expect(source).toContain('title: "Drop files to upload"');
     });
 
     it("hides the zone once the queue is full, and never makes it inert", () => {
@@ -51,7 +54,7 @@ describe("AttachmentQueueField drop zone", () => {
     });
 
     it("attaches the drop listeners to the always-rendered field root, not the zone", () => {
-        expect(source).toContain("useDropZone(rootRef");
+        expect(source).toContain("useAttachmentDropZone(rootRef");
         expect(template).toContain('ref="rootRef"');
         expect(template).not.toContain('ref="dropZoneRef"');
     });

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, shallowReactive, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowReactive, watch } from "vue";
 import { ATTACHMENT_MAX_PER_TRANSACTION } from "@badger/shared-data";
-import { useDropZone } from "@vueuse/core";
 import { useToast } from "primevue/usetoast";
+import { useAttachmentDropZone } from "../../composables/transactions/useAttachmentDropZone";
 import {
     ATTACHMENT_ACCEPT,
     ATTACHMENT_HELPER_TEXT,
@@ -16,6 +16,7 @@ import {
     validateAttachmentPick,
 } from "../../utils/attachments";
 import type { AttachmentUploadState } from "../../utils/attachmentUploads";
+import AttachmentDropOverlay from "./AttachmentDropOverlay.vue";
 
 const props = defineProps<{
     modelValue: File[];
@@ -96,16 +97,35 @@ const removeFile = (file: File) => {
     );
 };
 
-// Attached to the always-rendered field root: a refused drop (disabled, queue full, or on the queued-file list) is
-// still swallowed, so a dropped file never opens in the browser tab.
+// Attached to the always-rendered field root: a refused drop (disabled or queue full) is still swallowed, so a dropped
+// file never opens in the browser tab. The overlay says why the drop is refused.
+const canAccept = () => !props.disabled && remainingSlots() > 0;
 const rootRef = ref<HTMLElement | null>(null);
-const { isOverDropZone } = useDropZone(rootRef, {
-    checkValidity: () => !props.disabled && remainingSlots() > 0,
-    multiple: true,
-    preventDefaultForUnhandled: true,
-    onDrop: (files) => {
-        if (files) addFiles(files);
-    },
+const { isDragging } = useAttachmentDropZone(rootRef, {
+    canAccept,
+    onDrop: addFiles,
+});
+
+const dropOverlay = computed(() => {
+    if (props.disabled) {
+        return {
+            tone: "refuse" as const,
+            title: "Uploads in progress",
+            note: "Wait for the current uploads to finish.",
+        };
+    }
+    if (!canAccept()) {
+        return {
+            tone: "refuse" as const,
+            title: "This transaction is full",
+            note: `It already has ${ATTACHMENT_MAX_PER_TRANSACTION} attachments. Remove one to add more.`,
+        };
+    }
+    return {
+        tone: "accept" as const,
+        title: "Drop files to upload",
+        note: `Room for ${remainingSlots()} more. ${ATTACHMENT_HELPER_TEXT}.`,
+    };
 });
 
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -122,10 +142,17 @@ const onFileInputChange = (event: Event) => {
 <template>
     <div
         ref="rootRef"
-        class="flex flex-col gap-1"
+        class="relative flex flex-col gap-1"
         role="group"
         :aria-labelledby="labelId"
     >
+        <AttachmentDropOverlay
+            v-if="isDragging"
+            :tone="dropOverlay.tone"
+            :title="dropOverlay.title"
+            :note="dropOverlay.note"
+        />
+
         <div class="flex items-center justify-between gap-2">
             <span
                 :id="labelId"
@@ -204,8 +231,7 @@ const onFileInputChange = (event: Event) => {
 
         <div
             v-if="remainingSlots() > 0"
-            class="flex flex-col items-center gap-1 rounded-lg border border-dashed border-surface-300 px-4 py-4 text-center transition-colors dark:border-surface-600"
-            :class="isOverDropZone ? 'border-primary bg-surface-100 dark:bg-surface-800' : ''"
+            class="flex flex-col items-center gap-1 rounded-lg border border-dashed border-surface-300 px-4 py-4 text-center dark:border-surface-600"
         >
             <span class="flex items-center gap-1.5 text-sm text-surface-700 dark:text-surface-200">
                 <i
