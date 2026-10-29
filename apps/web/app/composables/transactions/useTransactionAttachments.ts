@@ -1,4 +1,4 @@
-import { computed, ref, type ComputedRef, type Ref } from "vue";
+import { ref, type Ref } from "vue";
 import { useMutation, useQueryClient } from "@tanstack/vue-query";
 import type { AttachmentDisposition } from "@badger/shared-data";
 import { useApiClient } from "../useApiClient";
@@ -11,15 +11,12 @@ import { uploadAttachmentsInParallel, type AttachmentUploadState } from "../../u
  */
 export function useUploadTransactionAttachments(): {
     uploads: Ref<AttachmentUploadState[]>;
-    /** True from a batch's start until its detail refetch lands, so adds stay off while the count is stale. */
-    isUploading: ComputedRef<boolean>;
     /** `error` is the upload's failure, kept so each file's toast can say why it failed. */
     uploadFiles: (transactionId: string, files: File[]) => Promise<{ failed: { file: File; error: unknown }[] }>;
 } {
     const apiClient = useApiClient();
     const queryClient = useQueryClient();
     const uploads = ref<AttachmentUploadState[]>([]);
-    const isUploading = computed(() => uploads.value.length > 0);
 
     const uploadFiles = async (transactionId: string, files: File[]) => {
         const batchIds = new Set<string>();
@@ -48,7 +45,7 @@ export function useUploadTransactionAttachments(): {
         return { failed };
     };
 
-    return { uploads, isUploading, uploadFiles };
+    return { uploads, uploadFiles };
 }
 
 export function useRemoveTransactionAttachment() {

@@ -44,7 +44,7 @@ const confirm = useConfirm();
 const toast = useToast();
 const authStore = useAuthStore();
 const instanceConfig = useInstanceConfig();
-const { uploads, isUploading, uploadFiles } = useUploadTransactionAttachments();
+const { uploads, uploadFiles } = useUploadTransactionAttachments();
 const removeMutation = useRemoveTransactionAttachment();
 const renameMutation = useRenameTransactionAttachment();
 const getAttachmentUrl = useAttachmentUrl();
@@ -55,8 +55,11 @@ const blockNote = computed(() => (block.value ? ATTACHMENT_BLOCK_NOTE[block.valu
 
 const attachments = computed(() => props.transaction.attachments ?? []);
 const attachmentCount = computed(() => attachments.value.length);
-const remainingSlots = computed(() => remainingAttachmentSlots(attachmentCount.value));
 const uploadingCount = computed(() => uploads.value.filter((upload) => upload.status === "uploading").length);
+// Saved attachments plus uploads still in flight. The server enforces the limit under a lock, so a pick made while
+// uploads run is still checked there (409); this count only keeps the client from offering slots it can't use.
+const occupiedSlots = computed(() => attachmentCount.value + uploadingCount.value);
+const remainingSlots = computed(() => remainingAttachmentSlots(occupiedSlots.value));
 const headerCount = computed(() =>
     uploadingCount.value > 0
         ? uploadingHeader(uploadingCount.value)
@@ -73,7 +76,6 @@ const refusal = computed<{ title: string; note: string } | null>(() => {
             note: `It already has ${ATTACHMENT_MAX_PER_TRANSACTION} attachments. Remove one to add more.`,
         };
     }
-    if (isUploading.value) return { title: "Uploads in progress", note: "Wait for the current uploads to finish." };
     return null;
 });
 const canAdd = computed(() => refusal.value === null);
@@ -99,10 +101,10 @@ const markThumbnailFailed = (url: string | null) => {
 };
 
 const handlePick = async (files: File[]) => {
-    const { accepted, rejected } = validateAttachmentPick(files, attachmentCount.value);
+    const { accepted, rejected } = validateAttachmentPick(files, occupiedSlots.value);
     for (const { file, reason } of rejected) {
         const message = attachmentRejectMessage(file.name, reason);
-        toast.add({ severity: "warn", summary: message.summary, detail: message.detail, life: 3000 });
+        toast.add({ severity: message.severity, summary: message.summary, detail: message.detail, life: 3000 });
     }
     if (accepted.length === 0) return;
 
@@ -449,6 +451,7 @@ const percent = (progress: number) => Math.round(progress * 100);
                                 </span>
                             </span>
                         </button>
+                        <!-- No ! on the background or border: in dev, dark: variants sit outside the layers, so a layered !important beats them. -->
                         <Button
                             icon="pi pi-ellipsis-v"
                             text
@@ -457,7 +460,7 @@ const percent = (progress: number) => Math.round(progress * 100);
                             severity="secondary"
                             aria-label="Attachment actions"
                             aria-haspopup="true"
-                            class="!absolute top-1.5 right-1.5 !h-7 !w-7 !rounded-full !border !border-surface-200 !bg-surface-0 !text-muted-color dark:!border-surface-700 dark:!bg-surface-900"
+                            class="!absolute top-1.5 right-1.5 !h-7 !w-7 !rounded-full border border-surface-200 bg-surface-0 !text-muted-color dark:border-surface-700 dark:bg-surface-900"
                             @click="openMenu($event, attachment)"
                         />
                     </div>

@@ -29,7 +29,7 @@ describe("AttachmentQueueField picker", () => {
 
     it("validates each pick and toasts each rejection as a warning", () => {
         expect(source).toContain("validateAttachmentPick(picked, props.modelValue.length)");
-        expect(source).toContain('severity: "warn"');
+        expect(source).toContain("severity: message.severity");
         expect(source).toContain("attachmentRejectMessage(file.name, reason)");
     });
 
