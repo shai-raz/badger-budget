@@ -1,10 +1,35 @@
 import { Injectable, Logger, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { ATTACHMENT_STORAGE_ENV_KEYS, parseAttachmentStorageConfig } from "./attachment-storage.config";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { ATTACHMENT_URL_TTL_SECONDS } from "@badger/shared-data";
+import {
+    ATTACHMENT_STORAGE_ENV_KEYS,
+    type AttachmentStorageConfig,
+    parseAttachmentStorageConfig,
+} from "./attachment-storage.config";
+
+function createClient(settings: AttachmentStorageConfig, endpoint: string): S3Client {
+    return new S3Client({
+        region: settings.region,
+        endpoint,
+        credentials: {
+            accessKeyId: settings.accessKeyId,
+            secretAccessKey: settings.secretAccessKey,
+        },
+        // Path-style addressing: most S3-compatible services (MinIO, B2, R2) expect it.
+        forcePathStyle: true,
+        // Send and check CRC checksums only when a request requires them, for compatibility with
+        // S3-compatible services that reject the SDK's default checksum headers.
+        requestChecksumCalculation: "WHEN_REQUIRED",
+        responseChecksumValidation: "WHEN_REQUIRED",
+    });
+}
 
 interface Storage {
     client: S3Client;
+    /** Signs presigned URLs against the public endpoint, the host the browser calls. Signing makes no network call. */
+    signer: S3Client;
     bucket: string;
 }
 
@@ -28,20 +53,8 @@ export class AttachmentStorageService {
         const settings = result.config;
         this.storage = settings
             ? {
-                  client: new S3Client({
-                      region: settings.region,
-                      endpoint: settings.endpoint,
-                      credentials: {
-                          accessKeyId: settings.accessKeyId,
-                          secretAccessKey: settings.secretAccessKey,
-                      },
-                      // Path-style addressing: most S3-compatible services (MinIO, B2, R2) expect it.
-                      forcePathStyle: true,
-                      // Send and check CRC checksums only when a request requires them, for compatibility with
-                      // S3-compatible services that reject the SDK's default checksum headers.
-                      requestChecksumCalculation: "WHEN_REQUIRED",
-                      responseChecksumValidation: "WHEN_REQUIRED",
-                  }),
+                  client: createClient(settings, settings.endpoint),
+                  signer: createClient(settings, settings.publicEndpoint),
                   bucket: settings.bucket,
               }
             : null;
@@ -54,6 +67,24 @@ export class AttachmentStorageService {
     /** Throws ServiceUnavailableException("File storage isn't configured on this server") when disabled. */
     assertEnabled(): void {
         this.requireStorage();
+    }
+
+    /**
+     * Presigned GET, valid for ATTACHMENT_URL_TTL_SECONDS. The response headers are signed too, so the browser gets the
+     * given Content-Type and Content-Disposition whatever metadata the object was stored with.
+     */
+    async presignGetUrl(key: string, options: { contentType: string; contentDisposition: string }): Promise<string> {
+        const { signer, bucket } = this.requireStorage();
+        return getSignedUrl(
+            signer,
+            new GetObjectCommand({
+                Bucket: bucket,
+                Key: key,
+                ResponseContentType: options.contentType,
+                ResponseContentDisposition: options.contentDisposition,
+            }),
+            { expiresIn: ATTACHMENT_URL_TTL_SECONDS },
+        );
     }
 
     async putObject(key: string, body: Buffer, contentType: string): Promise<void> {

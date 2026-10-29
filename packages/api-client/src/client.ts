@@ -8,6 +8,8 @@ import type {
     ITransactionsSummaryResponse,
     PaginatedResponse,
     ITransactionAttachmentResponse,
+    IAttachmentUrlResponse,
+    IRenameTransactionAttachment,
     CreateCategoryMappingRuleDto,
     ICategoryMappingRule,
     DeleteCategoryOptions,
@@ -47,7 +49,7 @@ import type {
     IAuthResponse,
     IAuthUser,
 } from "@badger/types";
-import type { AccountType, AvatarIconName } from "@badger/shared-data";
+import type { AccountType, AttachmentDisposition, AvatarIconName } from "@badger/shared-data";
 
 export interface ApiClientConfig {
     baseURL: string;
@@ -506,8 +508,33 @@ export class ApiClient {
         return response.data;
     }
 
+    async renameTransactionAttachment(
+        transactionId: string,
+        attachmentId: string,
+        fileName: string,
+    ): Promise<ITransactionAttachmentResponse> {
+        const body: IRenameTransactionAttachment = { fileName };
+        const response = await this.client.patch<ITransactionAttachmentResponse>(
+            `/transactions/${transactionId}/attachments/${attachmentId}`,
+            body,
+        );
+        return response.data;
+    }
+
     async deleteTransactionAttachment(transactionId: string, attachmentId: string) {
         await this.client.delete(`/transactions/${transactionId}/attachments/${attachmentId}`);
+    }
+
+    async getTransactionAttachmentUrl(
+        transactionId: string,
+        attachmentId: string,
+        disposition: AttachmentDisposition,
+    ): Promise<IAttachmentUrlResponse> {
+        const response = await this.client.get<IAttachmentUrlResponse>(
+            `/transactions/${transactionId}/attachments/${attachmentId}/url`,
+            { params: { disposition } },
+        );
+        return response.data;
     }
 
     // Cash Withdrawal Patterns
