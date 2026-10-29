@@ -103,25 +103,32 @@ export function validateAttachmentPick<F extends PickedFile>(
     return { accepted, rejected };
 }
 
+/**
+ * The toast for a rejected file. One severity per reason, whoever caught it: the browser before upload or the server
+ * after a 415/413/409. A refused type is an error; a size, count or empty file is a warning.
+ */
 export function attachmentRejectMessage(
     fileName: string,
     reason: AttachmentRejectReason,
-): { summary: string; detail: string } {
+): { severity: "warn" | "error"; summary: string; detail: string } {
     switch (reason) {
         case "type":
             return {
+                severity: "error",
                 summary: "Unsupported file type",
                 detail: `${fileName} isn't a JPEG, PNG, WebP or PDF file.`,
             };
         case "size":
             return {
+                severity: "warn",
                 summary: "File too large",
                 detail: `${fileName} is larger than ${ATTACHMENT_MAX_BYTES / BYTES_PER_MB} MB.`,
             };
         case "empty":
-            return { summary: "Empty file", detail: `${fileName} has no content.` };
+            return { severity: "warn", summary: "Empty file", detail: `${fileName} has no content.` };
         case "limit":
             return {
+                severity: "warn",
                 summary: "Attachment limit reached",
                 detail: `A transaction can have up to ${ATTACHMENT_MAX_PER_TRANSACTION} attachments. ${fileName} wasn't added.`,
             };
@@ -145,9 +152,9 @@ export function uploadFailureMessage(
     context: UploadFailureContext,
 ): { severity: "warn" | "error"; summary: string; detail: string } {
     const status = (error as { response?: { status?: unknown } } | null)?.response?.status;
-    if (status === 415) return { severity: "error", ...attachmentRejectMessage(fileName, "type") };
-    if (status === 413) return { severity: "warn", ...attachmentRejectMessage(fileName, "size") };
-    if (status === 409) return { severity: "warn", ...attachmentRejectMessage(fileName, "limit") };
+    if (status === 415) return attachmentRejectMessage(fileName, "type");
+    if (status === 413) return attachmentRejectMessage(fileName, "size");
+    if (status === 409) return attachmentRejectMessage(fileName, "limit");
     const retry = context === "create" ? "Try again from the transaction page." : "Try again.";
     return { severity: "error", summary: "Upload failed", detail: `Couldn't upload ${fileName}. ${retry}` };
 }

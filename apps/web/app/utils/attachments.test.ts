@@ -102,8 +102,16 @@ describe("attachmentRejectMessage", () => {
         expect(attachmentRejectMessage("a.pdf", "limit").summary).toBe("Attachment limit reached");
     });
 
+    it("gives each reason one severity, whoever caught it", () => {
+        expect(attachmentRejectMessage("a.gif", "type").severity).toBe("error");
+        expect(attachmentRejectMessage("a.pdf", "size").severity).toBe("warn");
+        expect(attachmentRejectMessage("a.pdf", "limit").severity).toBe("warn");
+        expect(attachmentRejectMessage("a.pdf", "empty").severity).toBe("warn");
+    });
+
     it("words an unsupported type the same way the server's 415 does", () => {
         expect(attachmentRejectMessage("a.gif", "type")).toEqual({
+            severity: "error",
             summary: "Unsupported file type",
             detail: "a.gif isn't a JPEG, PNG, WebP or PDF file.",
         });

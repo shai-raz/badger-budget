@@ -19,8 +19,9 @@ tailwind-base  <  primevue  <  tailwind-utilities
 ```
 
 - Both halves are required; changing one without the other reintroduces the dev/prod mismatch.
+- In dev, Tailwind emits `dark:` variants outside the layers (prod keeps them inside), so a layered `!important` base class beats `dark:!…` there. Keep `!` off any property a `dark:` variant changes.
 - Tailwind utilities (including global `pt` classes) override PrimeVue styles. Unlayered CSS beats all layers, so SFC `<style>` blocks win over utilities: keep them on bespoke class names.
-- Verify changes here with a production build (`pnpm build`, then `node .output/server/index.mjs`); dev won't show this class of bug. Lightning CSS drops the `@layer a, b, c;` statement and keeps first-appearance order, which still gives the same result; if a prod-only mismatch appears, check the built CSS before renaming layers.
+- Verify changes here with a production build (`pnpm build`, then `node .output/server/index.mjs`); dev and prod can disagree (see the `dark:` note above), so check both. Lightning CSS drops the `@layer a, b, c;` statement and keeps first-appearance order, which still gives the same result; if a prod-only mismatch appears, check the built CSS before renaming layers.
 
 ## Theme
 

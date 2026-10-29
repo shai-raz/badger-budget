@@ -38,11 +38,26 @@ describe("AttachmentsCard upload", () => {
         expect(source).toContain("const canAdd = computed(() => refusal.value === null)");
     });
 
-    it("explains each refusal in the overlay: blocked, full, or uploading", () => {
+    it("explains each refusal in the overlay: blocked or full", () => {
         expect(source).toContain('title: "Can\'t add files here"');
         expect(source).toContain('title: "This transaction is full"');
-        expect(source).toContain('title: "Uploads in progress"');
         expect(source).toContain("ATTACHMENT_BLOCK_NOTE[blocked]");
+    });
+
+    it("keeps Add files and drops open while uploads are in flight", () => {
+        expect(source).not.toContain("Uploads in progress");
+        expect(source).not.toContain("isUploading");
+    });
+
+    it("counts in-flight uploads against the slots, so a pick never overshoots the limit", () => {
+        expect(source).toContain("const occupiedSlots = computed(() => attachmentCount.value + uploadingCount.value)");
+        expect(source).toContain("remainingAttachmentSlots(occupiedSlots.value)");
+        expect(source).toContain("validateAttachmentPick(files, occupiedSlots.value)");
+    });
+
+    it("toasts each rejection with the severity its message carries, whoever caught it", () => {
+        expect(source).toContain("severity: message.severity");
+        expect(source).not.toContain('severity: "warn"');
     });
 
     it("sizes every tile identically: a 4:3 preview and a fixed-height caption", () => {
@@ -74,8 +89,7 @@ describe("AttachmentsCard upload", () => {
         expect(source).toContain("ATTACHMENT_EXPIRY_HINT");
     });
 
-    it("disables the add action during upload and when the transaction is full", () => {
-        expect(source).toContain("if (isUploading.value) return");
+    it("disables the add action only when the transaction is full", () => {
         expect(source).toContain("if (remainingSlots.value === 0)");
         expect(source).toContain("A transaction can have up to ${ATTACHMENT_MAX_PER_TRANSACTION} attachments.");
     });
@@ -152,6 +166,17 @@ describe("AttachmentsCard actions", () => {
     it("has the always-visible ⋮ trigger with its accessible name", () => {
         expect(template).toContain('aria-label="Attachment actions"');
         expect(template).toContain('icon="pi pi-ellipsis-v"');
+    });
+
+    it("paints the ⋮ trigger's surface and border with normal-priority dark: variants", () => {
+        // In dev, dark: variants sit outside the layers, so an !important surface class on the base beats them.
+        const label = template.indexOf('aria-label="Attachment actions"');
+        const trigger = template.slice(template.lastIndexOf("<Button", label), template.indexOf("/>", label));
+        expect(trigger).toContain("bg-surface-0 ");
+        expect(trigger).toContain("dark:bg-surface-900");
+        expect(trigger).toContain("border-surface-200 ");
+        expect(trigger).toContain("dark:border-surface-700");
+        expect(trigger).not.toMatch(/!bg-|!border-/);
     });
 
     it("places the ⋮ trigger as a sibling of the preview area, never inside it", () => {

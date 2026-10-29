@@ -84,7 +84,7 @@ const addFiles = (picked: File[]) => {
     const { accepted, rejected } = validateAttachmentPick(picked, props.modelValue.length);
     for (const { file, reason } of rejected) {
         const message = attachmentRejectMessage(file.name, reason);
-        toast.add({ severity: "warn", summary: message.summary, detail: message.detail, life: 3000 });
+        toast.add({ severity: message.severity, summary: message.summary, detail: message.detail, life: 3000 });
     }
     if (accepted.length > 0) emit("update:modelValue", [...props.modelValue, ...accepted]);
 };
