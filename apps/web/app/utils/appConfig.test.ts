@@ -2,8 +2,18 @@ import { describe, expect, it } from "vitest";
 import type { IAppConfigResponse } from "@badger/types";
 import { canShowRegister, shouldLeaveRegisterPage, shouldSyncGoogleSheet } from "./appConfig";
 
-const open: IAppConfigResponse = { registrationOpen: true, googleSheetsEnabled: true, fxEnabled: false };
-const closed: IAppConfigResponse = { registrationOpen: false, googleSheetsEnabled: false, fxEnabled: false };
+const open: IAppConfigResponse = {
+    registrationOpen: true,
+    googleSheetsEnabled: true,
+    fxEnabled: false,
+    attachmentsEnabled: false,
+};
+const closed: IAppConfigResponse = {
+    registrationOpen: false,
+    googleSheetsEnabled: false,
+    fxEnabled: false,
+    attachmentsEnabled: false,
+};
 
 describe("canShowRegister", () => {
     it("hides the register link while the config is unknown", () => {

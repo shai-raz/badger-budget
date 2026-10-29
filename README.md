@@ -49,6 +49,7 @@ Use only URL-safe characters in these three values (letters, digits, `-`, `_`, `
 | `BROWSERLESS_URL`                                                                                     | A remote Browserless service for bank sync. By default the image uses its bundled Chromium.                                                                                                                                                                                                 |
 | `CAL_PROXY_URL`                                                                                       | An HTTP proxy in Israel for Visa Cal scrapes. Cal blocks datacenter IPs. See [Bank sync](#bank-sync).                                                                                                                                                                                       |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PRESIGN_TTL`            | Uploading scraper debug artifacts (screenshots, page snapshots) to Cloudflare R2. Without R2, nothing is uploaded.                                                                                                                                                                          |
+| `ATTACHMENTS_S3_ENDPOINT`, `_BUCKET`, `_ACCESS_KEY_ID`, `_SECRET_ACCESS_KEY`                          | Transaction attachments (receipts) in an S3-compatible bucket: R2, AWS S3, MinIO or Backblaze B2. Keep the bucket private. Attachments stay off until all four are set. `_REGION` and `_PUBLIC_ENDPOINT` are optional.                                                                      |
 | `STORE_SCRAPER_DEBUG_LOCALLY`                                                                         | Troubleshooting only. Writes scraper debug artifacts to `/data/debug-artifacts`. These contain bank-page content, so delete them when you are done.                                                                                                                                         |
 | `SEED_DEMO`                                                                                           | Creates the public demo account `demo@demo.demo` on startup. Its password is published in the repository, so leave this off on any instance that other people can reach.                                                                                                                    |
 | `UPDATE_CHECK`                                                                                        | Once a day the server asks api.github.com for the latest release, to show the running version and a new-release banner. `false` disables it and makes no outbound request.                                                                                                                  |
@@ -123,6 +124,8 @@ backups/
 ```
 
 The dumps hold your financial data, so store them as carefully as the live database.
+
+Attachments (receipts) live in the S3 bucket, not in the database or `/data`, so these backups don't include them. Back up the bucket separately.
 
 ### Turning the database backups off
 

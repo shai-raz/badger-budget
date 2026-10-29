@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { ITransactionAttachmentResponse, ITransactionResponse } from "@badger/types";
+import { ATTACHMENT_MAX_BYTES, ATTACHMENT_MIME_TYPES } from "@badger/shared-data";
 import type { FileUploadUploaderEvent } from "primevue/fileupload";
 import { useConfirm } from "primevue/useconfirm";
 import { useToast } from "primevue/usetoast";
 import {
-    useAddTransactionAttachment,
     useRemoveTransactionAttachment,
+    useUploadTransactionAttachment,
 } from "~/composables/transactions/useTransactionAttachments";
 
 interface Props {
@@ -16,13 +17,14 @@ const props = defineProps<Props>();
 
 const confirm = useConfirm();
 const toast = useToast();
-const addMutation = useAddTransactionAttachment();
+const uploadMutation = useUploadTransactionAttachment();
 const removeMutation = useRemoveTransactionAttachment();
 
 const attachments = computed(() => props.transaction.attachments ?? []);
 const countLabel = computed(() => (attachments.value.length === 1 ? "1 file" : `${attachments.value.length} files`));
 
 const fileUpload = ref();
+const acceptedTypes = ATTACHMENT_MIME_TYPES.join(",");
 
 const handleUpload = async (event: FileUploadUploaderEvent) => {
     const file = Array.isArray(event.files) ? event.files[0] : event.files;
@@ -36,17 +38,15 @@ const handleUpload = async (event: FileUploadUploaderEvent) => {
     }
 
     try {
-        await addMutation.mutateAsync({
-            transactionId: props.transaction.id,
-            data: {
-                fileName: file.name,
-                mimeType: file.type || "application/octet-stream",
-                sizeBytes: file.size,
-            },
-        });
+        await uploadMutation.mutateAsync({ transactionId: props.transaction.id, file });
     } catch (error) {
-        console.error("Error adding attachment:", error);
-        toast.add({ severity: "error", summary: "Error", detail: "Failed to add attachment", life: 3000 });
+        console.error("Error uploading attachment:", error);
+        toast.add({
+            severity: "error",
+            summary: "Error",
+            detail: getApiErrorMessage(error, "Failed to add attachment"),
+            life: 3000,
+        });
     }
 };
 
@@ -109,7 +109,8 @@ const formatFileSize = (bytes: number) => {
                 mode="basic"
                 custom-upload
                 auto
-                accept="image/*,application/pdf"
+                :accept="acceptedTypes"
+                :max-file-size="ATTACHMENT_MAX_BYTES"
                 choose-icon="pi pi-plus"
                 choose-label="Add file"
                 :choose-button-props="{ severity: 'secondary', outlined: true, size: 'small' }"
@@ -148,18 +149,11 @@ const formatFileSize = (bytes: number) => {
             </div>
         </div>
 
-        <p class="px-4 pt-3 pb-4 text-center text-xs text-surface-500 dark:text-surface-400 md:px-0 md:pb-0">
-            Files aren't uploaded yet — only file details are saved for now.
-        </p>
-
         <template #empty>
             <SharedEmptyState
                 icon="pi-paperclip"
                 text="No attachments yet."
             />
-            <p class="px-4 pb-4 text-center text-xs text-surface-500 dark:text-surface-400 md:px-0 md:pb-0">
-                Files aren't uploaded yet — only file details are saved for now.
-            </p>
         </template>
     </SharedSectionBand>
 </template>

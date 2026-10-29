@@ -6,4 +6,6 @@ export interface IAppConfigResponse {
     googleSheetsEnabled: boolean;
     /** Whether a FREE_CURRENCY_API_KEY is configured for live FX rates. */
     fxEnabled: boolean;
+    /** Whether transaction attachments can be uploaded: the ATTACHMENTS_S3_* storage is configured. */
+    attachmentsEnabled: boolean;
 }
