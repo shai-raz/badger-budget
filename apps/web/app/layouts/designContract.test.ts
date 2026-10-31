@@ -219,6 +219,21 @@ describe("design contract: spending donut follows the theme store", () => {
     });
 });
 
+describe("design contract: status callouts use PrimeVue Message", () => {
+    // The bank-sync edit hint and PIN fallback are status callouts, so they render through Message (info stays blue).
+    const source = readFileSync(`${appDir}/components/bankSync/ScraperConnectionModal.vue`, "utf8");
+
+    it("renders the edit hint through an info Message, not a hand-rolled blue box", () => {
+        expect(source).toMatch(/<Message\s+v-if="isEditMode"\s+severity="info"/);
+        expect(source).not.toContain("bg-blue-50");
+    });
+
+    it("renders the PIN fallback reason through a warn Message, not orange text", () => {
+        expect(source).toMatch(/<Message\s+v-if="pinFallbackReason"\s+severity="warn"/);
+        expect(source).not.toContain("text-orange-600");
+    });
+});
+
 describe("design contract: budget progress bar", () => {
     it("renders budget progress only through components/budgets/BudgetProgressBar.vue", () => {
         const offenders = vueFiles(appDir).filter((rel) => {
