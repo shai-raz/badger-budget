@@ -154,3 +154,56 @@ describe("AttachmentsCard remove confirm", () => {
         expect(source).not.toContain('Remove "${attachment.fileName}"');
     });
 });
+
+describe("AttachmentsCard preview dialog", () => {
+    // The lightbox is the Dialog bound to lightboxOpen; slice it out so the assertions cannot match other markup.
+    const lightboxDialog = (() => {
+        const bind = template.indexOf('v-model:visible="lightboxOpen"');
+        const start = bind === -1 ? -1 : template.lastIndexOf("<Dialog", bind);
+        const end = start === -1 ? -1 : template.indexOf("</Dialog>", start);
+        return start === -1 || end === -1 ? "" : template.slice(start, end + "</Dialog>".length);
+    })();
+
+    it("is found in the template", () => {
+        expect(lightboxDialog).toContain("<Dialog");
+    });
+
+    it("puts the file name and Download in the header slot, not the :header prop", () => {
+        expect(lightboxDialog).toContain("<template #header>");
+        expect(lightboxDialog).not.toContain(":header=");
+    });
+
+    it("truncates the name to one line with dir=auto and the full name in title", () => {
+        expect(lightboxDialog).toContain("truncate");
+        expect(lightboxDialog).toContain('dir="auto"');
+        expect(lightboxDialog).toContain(':title="lightbox?.attachment.fileName"');
+    });
+
+    it("labels the dialog with the header name", () => {
+        expect(lightboxDialog).toContain('aria-labelledby="attachment-preview-title"');
+        expect(lightboxDialog).toContain('id="attachment-preview-title"');
+    });
+
+    it("renders Download as LayoutHeaderButton, labelled on desktop and icon-only below md", () => {
+        expect(lightboxDialog).toContain("<LayoutHeaderButton");
+        expect(lightboxDialog).toContain('label="Download"');
+        expect(lightboxDialog).toContain('icon="pi pi-download"');
+        expect(lightboxDialog).not.toContain("<Button");
+    });
+
+    it("bounds the body so no scrollbar appears, and lets the image shrink to fit", () => {
+        expect(lightboxDialog).toContain("overflow-hidden");
+        expect(lightboxDialog).toContain("min-h-0");
+        expect(lightboxDialog).toContain("object-contain");
+        expect(lightboxDialog).not.toContain("max-h-[80vh]");
+    });
+
+    it("drops the old footer Download button and its size-small outlined styling", () => {
+        expect(lightboxDialog).not.toContain("outlined");
+        expect(lightboxDialog).not.toContain('size="small"');
+    });
+
+    it("keeps the expiry hint under the image", () => {
+        expect(lightboxDialog).toContain("{{ ATTACHMENT_EXPIRY_HINT }}");
+    });
+});

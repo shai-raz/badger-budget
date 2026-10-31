@@ -467,33 +467,41 @@ const percent = (progress: number) => Math.round(progress * 100);
 
         <Dialog
             v-model:visible="lightboxOpen"
-            :header="lightbox?.attachment.fileName"
             modal
             dismissable-mask
             :draggable="false"
+            aria-labelledby="attachment-preview-title"
             :style="{ width: 'min(92vw, 56rem)' }"
+            :pt="{ content: { class: 'flex min-h-0 flex-1 flex-col gap-3 overflow-hidden' } }"
         >
-            <div
-                v-if="lightbox"
-                class="flex flex-col gap-3"
-            >
-                <img
-                    :src="lightbox.url"
-                    :alt="lightbox.attachment.fileName"
-                    class="max-h-[80vh] w-full object-contain"
-                />
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <p class="text-xs text-muted-color">{{ ATTACHMENT_EXPIRY_HINT }}</p>
-                    <Button
+            <template #header>
+                <div class="flex min-w-0 flex-1 items-center gap-2">
+                    <span
+                        id="attachment-preview-title"
+                        class="p-dialog-title min-w-0 flex-1 truncate text-surface-900 dark:text-surface-0"
+                        dir="auto"
+                        :title="lightbox?.attachment.fileName"
+                        >{{ lightbox?.attachment.fileName }}</span
+                    >
+                    <LayoutHeaderButton
+                        v-if="lightbox"
                         label="Download"
                         icon="pi pi-download"
-                        severity="secondary"
-                        outlined
-                        size="small"
+                        aria-label="Download attachment"
+                        title="Download"
+                        class="shrink-0"
                         @click="downloadAttachment(lightbox.attachment)"
                     />
                 </div>
-            </div>
+            </template>
+            <template v-if="lightbox">
+                <img
+                    :src="lightbox.url"
+                    :alt="lightbox.attachment.fileName"
+                    class="mx-auto block min-h-0 max-w-full shrink object-contain max-md:flex-1"
+                />
+                <p class="shrink-0 text-center text-xs text-muted-color">{{ ATTACHMENT_EXPIRY_HINT }}</p>
+            </template>
         </Dialog>
 
         <SharedFormDialog
