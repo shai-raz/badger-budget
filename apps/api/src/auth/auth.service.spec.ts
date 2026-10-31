@@ -328,6 +328,8 @@ describe("AuthService", () => {
                 firstName: mockUser.firstName,
                 lastName: mockUser.lastName,
                 role: UserRole.USER,
+                colorTheme: null,
+                isDemo: false,
             });
         });
 
@@ -400,6 +402,7 @@ describe("AuthService", () => {
             expect(mockDemoService.topUpIfStale).toHaveBeenCalledWith(demoUser.id);
             expect(result).toHaveProperty("accessToken");
             expect(result).toHaveProperty("refreshToken");
+            expect(result.user.isDemo).toBe(true);
         });
 
         it("should not top up demo data for a non-demo user", async () => {

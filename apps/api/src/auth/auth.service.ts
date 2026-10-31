@@ -16,6 +16,7 @@ import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { JwtPayload } from "./interfaces/jwt-payload.interface";
 import { AuthResponse } from "./interfaces/auth-response.interface";
+import { AUTH_USER_SELECT, toAuthUser } from "./auth-user";
 import { isGoogleAuthConfigured } from "./google-auth.config";
 import { RegistrationPolicyService } from "./registration-policy.service";
 import { OAuth2Client } from "google-auth-library";
@@ -367,25 +368,13 @@ export class AuthService {
         // Get user details
         const user = await this.prisma.user.findUnique({
             where: { id: userId },
-            select: {
-                id: true,
-                email: true,
-                firstName: true,
-                lastName: true,
-                role: true,
-            },
+            select: AUTH_USER_SELECT,
         });
 
         return {
             accessToken,
             refreshToken,
-            user: {
-                id: user!.id,
-                email: user!.email,
-                firstName: user!.firstName,
-                lastName: user!.lastName,
-                role: user!.role,
-            },
+            user: toAuthUser(user!),
         };
     }
 }

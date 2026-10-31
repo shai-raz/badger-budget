@@ -1,13 +1,7 @@
-import type { UserRole } from "@prisma/client";
+import type { AuthUser } from "../auth-user";
 
 export interface AuthResponse {
     accessToken: string;
     refreshToken: string;
-    user: {
-        id: string;
-        email: string;
-        firstName: string;
-        lastName: string;
-        role: UserRole;
-    };
+    user: AuthUser;
 }
