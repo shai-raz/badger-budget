@@ -281,6 +281,7 @@ describe("design contract: fullBleed band pages", () => {
         "pages/categories.vue",
         "pages/settings/index.vue",
         "pages/settings/card-payoff-patterns.vue",
+        "pages/settings/appearance.vue",
         "pages/transactions/[id].vue",
     ];
 

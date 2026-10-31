@@ -96,3 +96,10 @@ const BOOT_SURFACES: Record<ColorThemeName, Record<ColorMode, string>> = Object.
 // would beat PrimeVue's stylesheet and later theme swaps would not repaint.
 // The theme-color meta is rendered after this script in <head>, so its update waits for DOMContentLoaded.
 export const THEME_INIT_SCRIPT: string = `(function(){try{var B=${JSON.stringify(BOOT_SURFACES)};var s=null;try{s=window.localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)})}catch(e){}var d=s==="dark"||(s!=="light"&&!!window.matchMedia&&window.matchMedia(${JSON.stringify(PREFERS_DARK_QUERY)}).matches);if(d)document.documentElement.classList.add("dark");var t=null;try{t=window.localStorage.getItem(${JSON.stringify(COLOR_THEME_STORAGE_KEY)})}catch(e){}var n=Object.prototype.hasOwnProperty.call(B,t)?t:${JSON.stringify(DEFAULT_COLOR_THEME)};var c=B[n][d?"dark":"light"];document.documentElement.style.setProperty("--boot-surface",c);var p=function(){var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",c)};if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",p);else p()}catch(e){}})()`;
+
+// The Mode control's options, shared by the Appearance page and the Settings row's subtitle.
+export const COLOR_MODE_OPTIONS: { label: string; value: ColorModePreference }[] = [
+    { label: "System", value: "system" },
+    { label: "Light", value: "light" },
+    { label: "Dark", value: "dark" },
+];
