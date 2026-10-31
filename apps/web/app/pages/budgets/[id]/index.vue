@@ -180,7 +180,7 @@ const overflowItems: MenuItem[] = [{ label: "Delete", icon: "pi pi-trash", comma
                                 </span>
                                 <span
                                     class="text-lg font-bold tabular-nums"
-                                    :class="analytics.isOverBudget ? 'text-rose-500' : 'text-teal-500'"
+                                    :class="analytics.isOverBudget ? 'text-expense' : 'text-income'"
                                 >
                                     {{ formatCurrency(Math.abs(analytics.remaining), analytics.currencyDisplay?.code) }}
                                 </span>

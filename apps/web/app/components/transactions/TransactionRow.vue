@@ -139,7 +139,7 @@ const handleMenuToggle = (event: Event) => {
             </div>
             <div
                 v-if="remainderLine"
-                class="text-[11.5px] font-medium text-teal-500"
+                class="text-[11.5px] font-medium text-income"
             >
                 {{ remainderLine }}
             </div>

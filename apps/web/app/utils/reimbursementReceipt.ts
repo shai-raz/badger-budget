@@ -18,7 +18,7 @@ export function reimbursementReceiptLines(tx: ReimbursementTx): ReimbursementRec
     if (tx.type === "expense") {
         return [
             { label: "Paid", value: formatCurrency(tx.amount, code), valueClass: "" },
-            { label: "Paid back", value: applied, valueClass: "text-teal-500" },
+            { label: "Paid back", value: applied, valueClass: "text-income" },
         ];
     }
 

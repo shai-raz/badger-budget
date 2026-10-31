@@ -160,6 +160,50 @@ describe("design contract: dark-mode text colours", () => {
     });
 });
 
+describe("design contract: amount colours come from theme tokens", () => {
+    // Amount and budget colours read the theme (text-income, text-income-strong, text-expense), so a theme can
+    // recolour them. Raw teal and rose steps are banned in components, pages, layouts and utils, except for the
+    // two allow-listed files below, whose colours are not amounts.
+    const RAW_AMOUNT_COLOUR = /text-teal-\d|text-rose-500/;
+    const ALLOW_LIST = [
+        // File-type icons: teal for images, rose for PDFs. A file kind, not an amount.
+        "components/transactions/AttachmentsCard.vue",
+        // The Delete menu item: a destructive status colour, not an amount.
+        "pages/accounts/index.vue",
+    ];
+    const sourceFiles = ["components", "pages", "layouts", "utils"].flatMap((dir) =>
+        readdirSync(`${appDir}/${dir}`, { recursive: true, encoding: "utf8" })
+            .map(toPosix)
+            .filter((rel) => /\.(vue|ts)$/.test(rel) && !rel.endsWith(".test.ts"))
+            .map((rel) => `${dir}/${rel}`),
+    );
+    const readSource = (rel: string) => readFileSync(`${appDir}/${rel}`, "utf8");
+
+    it("scans the amount-bearing components, pages and utils", () => {
+        expect(sourceFiles).toEqual(
+            expect.arrayContaining(["components/transactions/formatters.ts", "pages/transactions/[id].vue"]),
+        );
+    });
+
+    it("keeps raw teal and rose amount colours out of the scanned sources", () => {
+        const offenders = sourceFiles.filter(
+            (rel) => !ALLOW_LIST.includes(rel) && RAW_AMOUNT_COLOUR.test(readSource(rel)),
+        );
+        expect(offenders).toEqual([]);
+    });
+
+    it.each(ALLOW_LIST)("%s still uses a raw colour, so its allow-list entry is needed", (rel) => {
+        expect(RAW_AMOUNT_COLOUR.test(readSource(rel))).toBe(true);
+    });
+
+    it("matches a raw teal or rose class and not the theme tokens", () => {
+        expect(RAW_AMOUNT_COLOUR.test("text-teal-500")).toBe(true);
+        expect(RAW_AMOUNT_COLOUR.test("text-teal-600")).toBe(true);
+        expect(RAW_AMOUNT_COLOUR.test("text-rose-500")).toBe(true);
+        expect(RAW_AMOUNT_COLOUR.test("text-income text-income-strong text-expense")).toBe(false);
+    });
+});
+
 describe("design contract: spending donut follows the theme store", () => {
     // The theme store is the one source of dark mode; a DOM observer on <html>.class would drift from it.
     const source = readFileSync(`${appDir}/components/dashboard/SpendingDonut.vue`, "utf8");

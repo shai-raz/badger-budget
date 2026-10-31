@@ -39,8 +39,8 @@ Rules and tokens for the web UI. Read before any UI change. How the app is built
 ## Colour
 
 - Primary is a per-scheme token (near-black in light, near-white in dark; Noir-style mapping in `app/theme/preset.ts`). Use `text-primary`, `bg-primary` or PrimeVue severities for it, never a raw `text-primary-<n>` ramp step. Links use `text-primary`.
-- Amounts (`components/transactions/formatters.ts`): income `text-teal-500`, expense `text-rose-500`, transfer neutral `text-surface-600 dark:text-surface-300`.
-- Budget progress: one bar, fill from `BUDGET_LEVEL_COLOR` in `utils/budget.ts`. Green below 75%, amber from 75% (`warning`), red from 100% (`over`). Spent and used figures take `BUDGET_LEVEL_TEXT_CLASS`. Budget surfaces never use a raw PrimeVue `ProgressBar`.
+- Amounts (`components/transactions/formatters.ts`): income `text-income`, expense `text-expense` (`text-income-strong` for budget remaining), tokens per theme in `app/theme/themes.ts`; transfer stays neutral `text-surface-600 dark:text-surface-300`.
+- Budget progress: one bar, fill from `BUDGET_LEVEL_COLOR` in `utils/budget.ts` (`--p-budget-*` theme tokens). Green below 75%, amber from 75% (`warning`), red from 100% (`over`). Spent and used figures take `BUDGET_LEVEL_TEXT_CLASS`, and over-budget text is `text-expense`. Budget surfaces never use a raw PrimeVue `ProgressBar`.
 - Other bars: account credit utilisation uses PrimeVue's default primary bar (6px tall). Reports category bars use the category's own colour.
 - Tags (`SharedStatusTag`): tone `neutral` (PrimeVue `secondary`), `success`, `warn`, `danger` or `info`. Values are sentence case.
 

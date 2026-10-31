@@ -73,7 +73,7 @@ const stale = computed(() =>
                 <p
                     v-else
                     class="text-xl font-semibold tabular-nums"
-                    :class="display.tone === 'negative' ? 'text-rose-500' : ''"
+                    :class="display.tone === 'negative' ? 'text-expense' : ''"
                 >
                     {{ formatCurrency(display.amount, account.currency?.code) }}
                 </p>

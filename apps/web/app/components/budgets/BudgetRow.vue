@@ -35,7 +35,7 @@ const isOver = computed(() => props.budget.isOverBudget);
 const currency = computed(() => props.budget.currencyDisplay?.code);
 const percentLabel = computed(() => Math.round(props.budget.percentageUsed));
 const percentClass = computed(() => BUDGET_LEVEL_TEXT_CLASS[budgetProgressLevel(props.budget.percentageUsed)]);
-const amountClass = computed(() => (isOver.value ? "text-rose-500" : ""));
+const amountClass = computed(() => (isOver.value ? "text-expense" : ""));
 
 const meta = computed(() => {
     const daysLeft = props.isCurrent ? budgetDaysLeftLabel(props.budget.periodEnd) : "";
@@ -60,7 +60,7 @@ const handleMenu = (event: Event) => emit("menuToggle", { budget: props.budget, 
                     <span class="truncate font-medium">{{ budget.budgetName }}</span>
                     <i
                         v-if="isOver"
-                        class="pi pi-exclamation-circle text-rose-500"
+                        class="pi pi-exclamation-circle text-expense"
                     ></i>
                     <SharedStatusTag
                         v-if="showPeriodTag"
@@ -85,7 +85,7 @@ const handleMenu = (event: Event) => emit("menuToggle", { budget: props.budget, 
                         </template>
                         <span
                             v-if="isDetail && !isOver"
-                            class="block text-teal-600"
+                            class="block text-income-strong"
                         >
                             {{ formatCurrencyRounded(budget.remaining, currency) }} left
                         </span>
@@ -124,7 +124,7 @@ const handleMenu = (event: Event) => emit("menuToggle", { budget: props.budget, 
                 <span class="truncate font-medium">{{ budget.budgetName }}</span>
                 <i
                     v-if="isOver"
-                    class="pi pi-exclamation-circle text-rose-500"
+                    class="pi pi-exclamation-circle text-expense"
                 ></i>
                 <SharedStatusTag
                     v-if="showPeriodTag"
@@ -173,7 +173,7 @@ const handleMenu = (event: Event) => emit("menuToggle", { budget: props.budget, 
                 </template>
                 <span
                     v-if="isDetail && !isOver"
-                    class="block text-teal-600"
+                    class="block text-income-strong"
                 >
                     {{ formatCurrencyRounded(budget.remaining, currency) }} left
                 </span>
