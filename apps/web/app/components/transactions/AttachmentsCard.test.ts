@@ -149,9 +149,15 @@ describe("AttachmentsCard actions", () => {
 });
 
 describe("AttachmentsCard remove confirm", () => {
-    it("names the file in the remove confirm through middleTruncateFileName", () => {
+    it("names the file in the delete confirm through middleTruncateFileName", () => {
         expect(source).toContain("middleTruncateFileName(attachment.fileName)");
-        expect(source).not.toContain('Remove "${attachment.fileName}"');
+        expect(source).not.toContain('Delete "${attachment.fileName}"');
+    });
+
+    it("matches the ⋮ menu's Delete wording with Cancel / Delete buttons", () => {
+        expect(source).toContain('header: "Delete attachment"');
+        expect(source).toContain('rejectLabel: "Cancel"');
+        expect(source).toContain('acceptLabel: "Delete"');
     });
 });
 

@@ -222,9 +222,11 @@ const submitRename = async () => {
 
 const handleRemove = (attachment: ITransactionAttachmentResponse) => {
     confirm.require({
-        message: `Remove "${middleTruncateFileName(attachment.fileName)}"?`,
-        header: "Remove attachment",
+        message: `Delete "${middleTruncateFileName(attachment.fileName)}"?`,
+        header: "Delete attachment",
         icon: "pi pi-exclamation-triangle",
+        rejectLabel: "Cancel",
+        acceptLabel: "Delete",
         acceptClass: "p-button-danger",
         accept: async () => {
             try {
