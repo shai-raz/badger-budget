@@ -16,6 +16,7 @@ import { DEMO_EMAIL } from "../demo/demo-data.constants";
 import * as bcrypt from "bcrypt";
 import { isGoogleAuthConfigured } from "./google-auth.config";
 import { RegistrationPolicyService } from "./registration-policy.service";
+import { AUTH_USER_SELECT } from "./auth-user";
 
 jest.mock("bcrypt");
 jest.mock("./google-auth.config", () => ({ isGoogleAuthConfigured: jest.fn() }));
@@ -759,6 +760,66 @@ describe("AuthService", () => {
                 expect(error).not.toBeInstanceOf(UnauthorizedException);
                 expect(userCreate).not.toHaveBeenCalled();
             });
+        });
+    });
+
+    describe("updateMe", () => {
+        const authUser = {
+            id: "user-id",
+            email: "test@example.com",
+            firstName: "John",
+            lastName: "Doe",
+            role: UserRole.USER,
+            colorTheme: null,
+            isDemo: false,
+        };
+        const savedRow = (colorTheme: string | null) => ({
+            id: "user-id",
+            email: "test@example.com",
+            firstName: "John",
+            lastName: "Doe",
+            role: UserRole.USER,
+            colorTheme,
+        });
+
+        it("saves the chosen colour theme and returns the mapped user", async () => {
+            mockPrismaService.user.update.mockResolvedValue(savedRow("ocean"));
+
+            const result = await service.updateMe(authUser, { colorTheme: "ocean" });
+
+            expect(mockPrismaService.user.update).toHaveBeenCalledWith({
+                where: { id: "user-id" },
+                data: { colorTheme: "ocean" },
+                select: AUTH_USER_SELECT,
+            });
+            expect(result).toEqual({ ...authUser, colorTheme: "ocean" });
+        });
+
+        it("clears the colour theme when given null", async () => {
+            mockPrismaService.user.update.mockResolvedValue(savedRow(null));
+
+            const result = await service.updateMe({ ...authUser, colorTheme: "ocean" }, { colorTheme: null });
+
+            expect(mockPrismaService.user.update).toHaveBeenCalledWith(
+                expect.objectContaining({ data: { colorTheme: null } }),
+            );
+            expect(result.colorTheme).toBeNull();
+        });
+
+        it("leaves the shared demo account unchanged and saves nothing", async () => {
+            const demoUser = { ...authUser, email: DEMO_EMAIL, isDemo: true };
+
+            const result = await service.updateMe(demoUser, { colorTheme: "ocean" });
+
+            expect(mockPrismaService.user.update).not.toHaveBeenCalled();
+            expect(result).toBe(demoUser);
+        });
+
+        it("saves nothing when no colour theme is sent", async () => {
+            const result = await service.updateMe(authUser, {});
+
+            expect(mockPrismaService.user.update).not.toHaveBeenCalled();
+            expect(result).toBe(authUser);
         });
     });
 });

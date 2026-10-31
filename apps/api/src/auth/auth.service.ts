@@ -14,9 +14,10 @@ import { DEMO_EMAIL } from "../demo/demo-data.constants";
 import * as bcrypt from "bcrypt";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
+import { UpdateMeDto } from "./dto/update-me.dto";
 import { JwtPayload } from "./interfaces/jwt-payload.interface";
 import { AuthResponse } from "./interfaces/auth-response.interface";
-import { AUTH_USER_SELECT, toAuthUser } from "./auth-user";
+import { AUTH_USER_SELECT, toAuthUser, type AuthUser } from "./auth-user";
 import { isGoogleAuthConfigured } from "./google-auth.config";
 import { RegistrationPolicyService } from "./registration-policy.service";
 import { OAuth2Client } from "google-auth-library";
@@ -178,6 +179,19 @@ export class AuthService {
         } catch (error) {
             throw new UnauthorizedException("Invalid refresh token");
         }
+    }
+
+    /** The demo account is shared, so its preference is never saved: one visitor's theme would change it for everyone. */
+    async updateMe(user: AuthUser, dto: UpdateMeDto): Promise<AuthUser> {
+        if (user.isDemo || dto.colorTheme === undefined) {
+            return user;
+        }
+        const row = await this.prisma.user.update({
+            where: { id: user.id },
+            data: { colorTheme: dto.colorTheme },
+            select: AUTH_USER_SELECT,
+        });
+        return toAuthUser(row);
     }
 
     async logout(userId: string, refreshToken: string): Promise<void> {

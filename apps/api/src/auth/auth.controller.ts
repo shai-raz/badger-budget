@@ -1,13 +1,15 @@
-import { Controller, Post, Body, UseGuards, Get, Req, Res, HttpCode, HttpStatus } from "@nestjs/common";
+import { Controller, Post, Patch, Body, UseGuards, Get, Req, Res, HttpCode, HttpStatus } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from "@nestjs/swagger";
 import { AuthService } from "./auth.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
+import { UpdateMeDto } from "./dto/update-me.dto";
 import { LocalAuthGuard } from "./guards/local-auth.guard";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { GoogleAuthGuard } from "./guards/google-auth.guard";
 import { CurrentUser } from "./decorators/current-user.decorator";
+import type { AuthUser } from "./auth-user";
 import type { Response } from "express";
 
 @ApiTags("auth")
@@ -58,8 +60,19 @@ export class AuthController {
     @ApiOperation({ summary: "Get current user profile" })
     @ApiResponse({ status: 200, description: "User profile" })
     @ApiResponse({ status: 401, description: "Unauthorized" })
-    getProfile(@CurrentUser() user: any) {
+    getProfile(@CurrentUser() user: AuthUser) {
         return user;
+    }
+
+    @Patch("me")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: "Update the current user's preferences" })
+    @ApiResponse({ status: 200, description: "Updated user profile" })
+    @ApiResponse({ status: 400, description: "Unknown colour theme or unexpected field" })
+    @ApiResponse({ status: 401, description: "Unauthorized" })
+    updateMe(@CurrentUser() user: AuthUser, @Body() dto: UpdateMeDto) {
+        return this.authService.updateMe(user, dto);
     }
 
     @Get("google")

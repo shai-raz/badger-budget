@@ -12,3 +12,4 @@ JWT auth (register/login/refresh/logout) plus Google OAuth (currently unused in 
 - `JWT_SECRET` / `JWT_REFRESH_SECRET` are separate secrets — don't reuse one for the other. They come from env or `DATA_DIR/secrets` (generated on first boot, see `config/secrets.ts`); there is no fallback value, so `JwtModule` uses `getOrThrow`.
 - Google login exists only when `isGoogleAuthConfigured()` (`GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` both non-empty). `GoogleStrategy` is a factory provider that is `null` when unconfigured, `GoogleAuthGuard` and `exchangeGoogleCode` throw `NotFoundException` in that case.
 - `login()` tops up demo data for `DEMO_EMAIL` via `DemoService.topUpIfStale` after password verification; errors are logged, never thrown — a top-up failure never fails the login. See `demo/AGENTS.md`.
+- The demo account (`DEMO_EMAIL`) never persists preferences: `updateMe` returns it unchanged; `isDemo` on the auth user tells the web to keep them on the device.
