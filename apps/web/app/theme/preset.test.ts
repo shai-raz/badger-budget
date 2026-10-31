@@ -1,7 +1,6 @@
 import Aura from "@primeuix/themes/aura";
 import { describe, expect, it } from "vitest";
-import { buildPreset, customAuraPreset, surfacePalette } from "./preset";
-import { BUDGET_LEVEL_TOKENS, DEFAULT_AMOUNT, noirTheme } from "./themes";
+import { customAuraPreset, surfacePalette } from "./preset";
 
 const semantic = customAuraPreset.semantic;
 const lightScheme = semantic.colorScheme.light;
@@ -83,19 +82,25 @@ describe("customAuraPreset: components moved over losslessly", () => {
 });
 
 describe("customAuraPreset: amount and budget tokens", () => {
-    it("gives both schemes the amount tokens", () => {
-        expect(lightScheme.amount).toEqual(DEFAULT_AMOUNT);
-        expect(darkScheme.amount).toEqual(DEFAULT_AMOUNT);
+    // Literal values, not the constants the preset is built from: Noir must look exactly
+    // as it did before the tokens existed, so editing a constant should fail here.
+    it("keeps the Noir amount refs in both schemes", () => {
+        const noirAmount = {
+            income: "{teal.500}",
+            incomeStrong: "{teal.600}",
+            expense: "{rose.500}",
+        };
+        expect(lightScheme.amount).toEqual(noirAmount);
+        expect(darkScheme.amount).toEqual(noirAmount);
     });
 
-    it("gives both schemes the budget status tokens", () => {
-        expect(lightScheme.budget).toEqual(BUDGET_LEVEL_TOKENS);
-        expect(darkScheme.budget).toEqual(BUDGET_LEVEL_TOKENS);
-    });
-});
-
-describe("buildPreset", () => {
-    it("builds the Noir preset that customAuraPreset exports", () => {
-        expect(buildPreset(noirTheme)).toEqual(customAuraPreset);
+    it("keeps the budget status hexes in both schemes", () => {
+        const noirBudget = {
+            ok: "#10b981",
+            warning: "#f59e0b",
+            over: "#ef4444",
+        };
+        expect(lightScheme.budget).toEqual(noirBudget);
+        expect(darkScheme.budget).toEqual(noirBudget);
     });
 });
