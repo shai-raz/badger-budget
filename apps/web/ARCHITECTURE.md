@@ -20,8 +20,9 @@ tailwind-base  <  primevue  <  tailwind-utilities
 ```
 
 - Both halves are required; changing one without the other reintroduces the dev/prod mismatch.
+- In dev, Tailwind emits `dark:` variants outside the layers (prod keeps them inside), so a layered `!important` base class beats `dark:!…` there. Keep `!` off any property a `dark:` variant changes.
 - Tailwind utilities (including global `pt` classes) override PrimeVue styles. Unlayered CSS beats all layers, so SFC `<style>` blocks win over utilities: keep them on bespoke class names.
-- Verify changes here with a production build (`pnpm build`, then `node .output/server/index.mjs`); dev won't show this class of bug. Lightning CSS drops the `@layer a, b, c;` statement and keeps first-appearance order, which still gives the same result; if a prod-only mismatch appears, check the built CSS before renaming layers.
+- Verify changes here with a production build (`pnpm build`, then `node .output/server/index.mjs`); dev and prod can disagree (see the `dark:` note above), so check both. Lightning CSS drops the `@layer a, b, c;` statement and keeps first-appearance order, which still gives the same result; if a prod-only mismatch appears, check the built CSS before renaming layers.
 
 ## Theme
 
@@ -60,6 +61,7 @@ Visual rules are in [DESIGN.md](DESIGN.md#dialogs-and-forms).
 
 - Transaction edit locks (synced rows, transfer mirrors) live in `utils/transactionForm.ts` and mirror the API's rules (`apps/api/src/transactions/AGENTS.md`); change both together.
 - Reports' monthly strip (`useMonthlySpending`) fetches 24-month pages with a 30-minute `staleTime`, which bounds the FX provider calls; keep the page size and stale time together. Transaction create/update/delete must invalidate `reportKeys.all`, or the strip's cached bars disagree with the report beside them.
+- Transaction attachments: validation and the parallel uploader live in `utils/attachments.ts` and `utils/attachmentUploads.ts`; gates go through `utils/appConfig.ts`; presigned URLs are fetched on demand (`useAttachmentUrl`) and never cached in vue-query.
 - Ledger accounts (cash, savings; `isLedgerAccountType`): the client never computes a balance difference. It posts the new amount to `POST /accounts/:id/balance` and the API records the adjustment.
 - Reimbursement mutations (`composables/transactions/useReimbursements.ts`) and card-payoff retags (`invalidateReimbursementAffected`) must invalidate transactions, budgets, reports and accounts.
 - OAuth consent (`pages/oauth/consent.vue`) is reachable by client-side navigation from any route, so the API frame-blocks every response. Allow stays disabled until the page has been visible for ~1s and a trusted input arrived (`utils/consentGate.ts`, clickjacking guard). Redirect paths go through `sanitizeRedirectPath` (same-origin relative only).

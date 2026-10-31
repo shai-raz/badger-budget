@@ -41,10 +41,16 @@ export function fileIconClass(mimeType: string): string {
     return "text-surface-500 dark:text-surface-400";
 }
 
+const SHORT_TYPE_LABEL: Record<string, string> = {
+    "image/jpeg": "JPEG",
+    "image/png": "PNG",
+    "image/webp": "WEBP",
+    "application/pdf": "PDF",
+};
+
+/** Short type label for a tile's meta line, e.g. "PNG". */
 export function fileKind(mimeType: string): string {
-    if (mimeType.startsWith("image/")) return "Photo";
-    if (mimeType === "application/pdf") return "PDF";
-    return "File";
+    return SHORT_TYPE_LABEL[mimeType] ?? "File";
 }
 
 export function formatFileSize(bytes: number): string {
@@ -97,25 +103,32 @@ export function validateAttachmentPick<F extends PickedFile>(
     return { accepted, rejected };
 }
 
+/**
+ * The toast for a rejected file. One severity per reason, whoever caught it: the browser before upload or the server
+ * after a 415/413/409. A refused type is an error; a size, count or empty file is a warning.
+ */
 export function attachmentRejectMessage(
     fileName: string,
     reason: AttachmentRejectReason,
-): { summary: string; detail: string } {
+): { severity: "warn" | "error"; summary: string; detail: string } {
     switch (reason) {
         case "type":
             return {
-                summary: "Unsupported file",
+                severity: "error",
+                summary: "Unsupported file type",
                 detail: `${fileName} isn't a JPEG, PNG, WebP or PDF file.`,
             };
         case "size":
             return {
+                severity: "warn",
                 summary: "File too large",
                 detail: `${fileName} is larger than ${ATTACHMENT_MAX_BYTES / BYTES_PER_MB} MB.`,
             };
         case "empty":
-            return { summary: "Empty file", detail: `${fileName} has no content.` };
+            return { severity: "warn", summary: "Empty file", detail: `${fileName} has no content.` };
         case "limit":
             return {
+                severity: "warn",
                 summary: "Attachment limit reached",
                 detail: `A transaction can have up to ${ATTACHMENT_MAX_PER_TRANSACTION} attachments. ${fileName} wasn't added.`,
             };
@@ -126,6 +139,22 @@ export function uploadingHeader(count: number): string {
     return count === 1 ? "Uploading 1 file" : `Uploading ${count} files`;
 }
 
-export function failedUploadsDetail(names: string[]): string {
-    return `Couldn't upload ${names.join(", ")}. Try again from the transaction page.`;
+/** Where a failed upload is reported: the card on the transaction page, or the create dialog after it has closed. */
+export type UploadFailureContext = "transaction" | "create";
+
+/**
+ * The toast for one file whose upload failed. The server's status says why, and uses the same wording as the
+ * client-side rejections; anything else (network, 5xx) gets the generic line.
+ */
+export function uploadFailureMessage(
+    fileName: string,
+    error: unknown,
+    context: UploadFailureContext,
+): { severity: "warn" | "error"; summary: string; detail: string } {
+    const status = (error as { response?: { status?: unknown } } | null)?.response?.status;
+    if (status === 415) return attachmentRejectMessage(fileName, "type");
+    if (status === 413) return attachmentRejectMessage(fileName, "size");
+    if (status === 409) return attachmentRejectMessage(fileName, "limit");
+    const retry = context === "create" ? "Try again from the transaction page." : "Try again.";
+    return { severity: "error", summary: "Upload failed", detail: `Couldn't upload ${fileName}. ${retry}` };
 }

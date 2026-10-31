@@ -9,11 +9,11 @@ const source = readFileSync(fileURLToPath(new URL("./AttachmentsCard.vue", impor
 // The template's own text: everything after the first <template> tag, which the script block precedes.
 const template = source.slice(source.indexOf("\n<template>"));
 
-// The text between the preview area's opening <component and its closing </component>.
+// The text between the preview area's opening <button and its closing </button>.
 const previewArea = (() => {
-    const start = template.indexOf("<component");
-    const end = template.indexOf("</component>", start);
-    return start === -1 || end === -1 ? "" : template.slice(start, end + "</component>".length);
+    const start = template.indexOf("<button");
+    const end = template.indexOf("</button>", start);
+    return start === -1 || end === -1 ? "" : template.slice(start, end + "</button>".length);
 })();
 
 describe("AttachmentsCard upload", () => {
@@ -26,14 +26,56 @@ describe("AttachmentsCard upload", () => {
         expect(source).not.toContain("capture");
     });
 
-    it("uses a drop zone on the card", () => {
-        expect(source).toContain("useDropZone(");
-        expect(template).toContain("isOverDropZone");
+    it("tracks files over the card in every state, so a refused drop still shows its overlay", () => {
+        expect(source).toContain("useAttachmentDropZone(rootRef");
+        expect(source).not.toContain("useDropZone(");
+        expect(template).toContain("<AttachmentDropOverlay");
+        expect(template).toContain('v-if="isDragging"');
     });
 
     it("refuses drops while the card can't take files, and never lets a refused drop open the file", () => {
-        expect(source).toContain("checkValidity: () => canAdd.value");
-        expect(source).toContain("preventDefaultForUnhandled: true");
+        expect(source).toContain("canAccept: () => canAdd.value");
+        expect(source).toContain("const canAdd = computed(() => refusal.value === null)");
+    });
+
+    it("explains each refusal in the overlay: blocked or full", () => {
+        expect(source).toContain('title: "Can\'t add files here"');
+        expect(source).toContain('title: "This transaction is full"');
+        expect(source).toContain("ATTACHMENT_BLOCK_NOTE[blocked]");
+    });
+
+    it("keeps Add files and drops open while uploads are in flight", () => {
+        expect(source).not.toContain("Uploads in progress");
+        expect(source).not.toContain("isUploading");
+    });
+
+    it("counts in-flight uploads against the slots, so a pick never overshoots the limit", () => {
+        expect(source).toContain("const occupiedSlots = computed(() => attachmentCount.value + uploadingCount.value)");
+        expect(source).toContain("remainingAttachmentSlots(occupiedSlots.value)");
+        expect(source).toContain("validateAttachmentPick(files, occupiedSlots.value)");
+    });
+
+    it("toasts each rejection with the severity its message carries, whoever caught it", () => {
+        expect(source).toContain("severity: message.severity");
+        expect(source).not.toContain('severity: "warn"');
+    });
+
+    it("sizes every tile identically: a 4:3 preview and a fixed-height caption", () => {
+        expect(template).toContain("aspect-[4/3]");
+        expect(template).toContain("h-11");
+        expect(template).toContain('dir="auto"');
+        expect(template).toContain("gap-2.5");
+    });
+
+    it("keeps the uploading tile in the same frame, with its progress pinned to the preview", () => {
+        expect(template).toContain("Uploading &middot; {{ percent(upload.progress) }}%");
+        expect(template).toContain('role="progressbar"');
+    });
+
+    it("never sets a silent maxlength on the rename input", () => {
+        expect(template).not.toContain(":maxlength");
+        expect(template).toContain(':invalid="renameTooLong"');
+        expect(template).toContain("Name is too long");
     });
 
     it("drops the old FileUpload and never copies the Card or Panel chrome", () => {
@@ -47,9 +89,8 @@ describe("AttachmentsCard upload", () => {
         expect(source).toContain("ATTACHMENT_EXPIRY_HINT");
     });
 
-    it("disables the add action during upload and when the transaction is full", () => {
-        expect(source).toContain("!isUploading.value");
-        expect(source).toContain("remainingSlots.value > 0");
+    it("disables the add action only when the transaction is full", () => {
+        expect(source).toContain("if (remainingSlots.value === 0)");
         expect(source).toContain("A transaction can have up to ${ATTACHMENT_MAX_PER_TRANSACTION} attachments.");
     });
 });
@@ -80,13 +121,18 @@ describe("AttachmentsCard preview", () => {
         expect(openPreviewBody).not.toContain("thumbnailUrl");
     });
 
-    it("renders the preview area as a button when storage is enabled and a div otherwise", () => {
-        expect(template).toContain(":is=\"storageEnabled ? 'button' : 'div'\"");
+    it("renders the preview as a native button, never a dynamic component named 'button'", () => {
+        // `<component :is="'button'">` resolves to the globally registered PrimeVue Button, which paints the tile primary.
+        expect(template).not.toContain(":is=\"storageEnabled ? 'button' : 'div'\"");
+        expect(template).not.toContain("<component");
         expect(previewArea).not.toBe("");
     });
 
-    it("calls openPreview from the tile click, guarded by storageEnabled", () => {
-        expect(previewArea).toMatch(/@click="storageEnabled && openPreview\(/);
+    it("disables the preview button when storage is off and never gives it an action", () => {
+        expect(previewArea).toContain(':disabled="!storageEnabled"');
+        expect(previewArea).toContain('@click="openPreview(attachment)"');
+        // openPreview returns early when storage is off, so the disabled button can't reach the API.
+        expect(openPreviewBody).toMatch(/if \(!storageEnabled\.value\) return;/);
     });
 
     it("labels the tile preview button with its file name", () => {
@@ -120,6 +166,17 @@ describe("AttachmentsCard actions", () => {
     it("has the always-visible ⋮ trigger with its accessible name", () => {
         expect(template).toContain('aria-label="Attachment actions"');
         expect(template).toContain('icon="pi pi-ellipsis-v"');
+    });
+
+    it("paints the ⋮ trigger's surface and border with normal-priority dark: variants", () => {
+        // In dev, dark: variants sit outside the layers, so an !important surface class on the base beats them.
+        const label = template.indexOf('aria-label="Attachment actions"');
+        const trigger = template.slice(template.lastIndexOf("<Button", label), template.indexOf("/>", label));
+        expect(trigger).toContain("bg-surface-0 ");
+        expect(trigger).toContain("dark:bg-surface-900");
+        expect(trigger).toContain("border-surface-200 ");
+        expect(trigger).toContain("dark:border-surface-700");
+        expect(trigger).not.toMatch(/!bg-|!border-/);
     });
 
     it("places the ⋮ trigger as a sibling of the preview area, never inside it", () => {

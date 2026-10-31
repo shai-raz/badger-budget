@@ -17,6 +17,26 @@ services:
             timeout: 5s
             retries: 5
 
+    # Opt-in local S3 stand-in for transaction attachments. Start with `--profile attachments`. Dev credentials only.
+    s3proxy:
+        image: andrewgaul/s3proxy:4.1.1
+        container_name: badger-s3proxy
+        profiles: ["attachments"]
+        restart: unless-stopped
+        ports:
+            - "9000:9000"
+        environment:
+            S3PROXY_AUTHORIZATION: aws-v2-or-v4
+            S3PROXY_IDENTITY: badger-dev
+            S3PROXY_CREDENTIAL: badger-dev-secret
+            S3PROXY_ENDPOINT: http://0.0.0.0:9000
+            JCLOUDS_PROVIDER: filesystem
+            JCLOUDS_FILESYSTEM_BASEDIR: /data
+        volumes:
+            - s3proxy_data:/data
+
 volumes:
     postgres_data:
+        driver: local
+    s3proxy_data:
         driver: local

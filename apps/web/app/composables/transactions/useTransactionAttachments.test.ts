@@ -47,32 +47,27 @@ describe("useUploadTransactionAttachments", () => {
 
         const result = await uploadFiles("tx-1", [file("ok.pdf"), bad]);
 
-        expect(result).toEqual({ failed: [bad] });
+        expect(result.failed).toHaveLength(1);
+        expect(result.failed[0]).toMatchObject({ file: bad });
+        expect(result.failed[0]?.error).toBeInstanceOf(Error);
         expect(invalidateQueries).toHaveBeenCalledTimes(2);
     });
 
     it("tracks the batch in uploads while it runs, then clears it once it settles", async () => {
-        const { uploads, isUploading, uploadFiles } = useUploadTransactionAttachments();
-        const midFlight: { count: number; uploading: boolean }[] = [];
+        const { uploads, uploadFiles } = useUploadTransactionAttachments();
+        const midFlight: number[] = [];
         uploadTransactionAttachment.mockImplementation(async () => {
-            midFlight.push({
-                count: uploads.value.length,
-                uploading: isUploading.value,
-            });
+            midFlight.push(uploads.value.length);
             return { id: "att" };
         });
 
         await uploadFiles("tx-1", [file("a.pdf"), file("b.pdf")]);
 
-        expect(midFlight).toEqual([
-            { count: 2, uploading: true },
-            { count: 2, uploading: true },
-        ]);
+        expect(midFlight).toEqual([2, 2]);
         expect(uploads.value).toEqual([]);
-        expect(isUploading.value).toBe(false);
     });
 
-    it("keeps the batch's tiles and the add lock until the detail refetch lands", async () => {
+    it("keeps the batch's tiles until the detail refetch lands", async () => {
         let releaseRefetch: () => void = () => {};
         invalidateQueries.mockImplementationOnce(
             () =>
@@ -80,7 +75,7 @@ describe("useUploadTransactionAttachments", () => {
                     releaseRefetch = resolve;
                 }),
         );
-        const { uploads, isUploading, uploadFiles } = useUploadTransactionAttachments();
+        const { uploads, uploadFiles } = useUploadTransactionAttachments();
 
         const pending = uploadFiles("tx-1", [file("a.pdf"), file("b.pdf")]);
         await vi.waitFor(() =>
@@ -88,14 +83,12 @@ describe("useUploadTransactionAttachments", () => {
         );
 
         expect(uploads.value.map((upload) => upload.status)).toEqual(["done", "done"]);
-        expect(isUploading.value).toBe(true);
         expect(invalidateQueries).toHaveBeenCalledTimes(1);
 
         releaseRefetch();
         await pending;
 
         expect(uploads.value).toEqual([]);
-        expect(isUploading.value).toBe(false);
         expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["transactions"] });
     });
 
