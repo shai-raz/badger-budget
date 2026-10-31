@@ -1,6 +1,40 @@
 {
     "releases": [
         {
+            "version": "0.9.0",
+            "date": "2026-10-31",
+            "items": [
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "attachment storage, upload and delete (1/4) (1/4)",
+                    "pr": 75
+                },
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "attachment thumbnails, signed URLs and rename (2/4) (2/4)",
+                    "pr": 76
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "attachments card with upload, preview, download and rename (3/4) (3/4)",
+                    "pr": 77
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "paperclip count on rows and attachments on new transactions (4/4) (4/4)",
+                    "pr": 78
+                }
+            ]
+        },
+        {
             "version": "0.8.0",
             "date": "2026-10-28",
             "items": [
