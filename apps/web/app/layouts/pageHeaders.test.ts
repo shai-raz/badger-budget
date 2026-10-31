@@ -100,3 +100,16 @@ describe("page header contract", () => {
         expect(withConfirmDialog).toEqual(["layouts/app.vue"]);
     });
 });
+
+describe("ConfirmDialog overflow guard", () => {
+    // The confirm text can be a long file name with no spaces; the dialog must stay inside the viewport and wrap it.
+    const confirmTag = () => readFileSync(`${appDir}/layouts/app.vue`, "utf8").match(/<ConfirmDialog[^>]*>/)?.[0] ?? "";
+
+    it("caps the dialog width to the viewport and wraps the message", () => {
+        const tag = confirmTag();
+        expect(tag).toContain("max-w-[calc(100vw-2rem)]");
+        expect(tag).toContain("[overflow-wrap:anywhere]");
+        expect(tag).toContain("min-w-0");
+        expect(tag).toContain("whitespace-pre-line");
+    });
+});
