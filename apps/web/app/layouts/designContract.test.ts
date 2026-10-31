@@ -214,8 +214,8 @@ describe("design contract: spending donut follows the theme store", () => {
         expect(source).not.toContain("MutationObserver");
     });
 
-    it("keys the Chart remount on the store's dark flag", () => {
-        expect(source).toContain(`:key="isDark ? 'dark' : 'light'"`);
+    it("keys the Chart remount on the store's colour theme and dark flag", () => {
+        expect(source).toContain("`${themeStore.colorTheme}-${isDark ? 'dark' : 'light'}`");
     });
 });
 
