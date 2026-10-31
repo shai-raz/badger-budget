@@ -19,6 +19,9 @@ export class TransactionAttachmentResponseDto implements ITransactionAttachmentR
     @ApiProperty()
     sizeBytes: number;
 
+    @ApiProperty({ nullable: true, description: "Presigned inline URL for the WebP thumbnail, or null" })
+    thumbnailUrl: string | null;
+
     @ApiProperty()
     createdAt: Date;
 

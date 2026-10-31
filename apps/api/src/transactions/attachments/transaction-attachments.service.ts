@@ -2,22 +2,33 @@ import {
     BadRequestException,
     ConflictException,
     Injectable,
+    InternalServerErrorException,
+    Logger,
     NotFoundException,
     UnsupportedMediaTypeException,
 } from "@nestjs/common";
 import type { TransactionAttachment } from "@prisma/client";
-import { ATTACHMENT_MAX_PER_TRANSACTION, isAttachmentMimeType } from "@badger/shared-data";
-import { sanitizeAttachmentFileName } from "@badger/utils";
+import {
+    ATTACHMENT_EXTENSION_BY_MIME,
+    ATTACHMENT_MAX_PER_TRANSACTION,
+    ATTACHMENT_URL_TTL_SECONDS,
+    type AttachmentDisposition,
+    isAttachmentMimeType,
+} from "@badger/shared-data";
+import { sanitizeAttachmentBaseName, sanitizeAttachmentFileName } from "@badger/utils";
 import { PrismaService } from "../../prisma/prisma.service";
+import { AttachmentUrlResponseDto } from "../dto/attachment-url-response.dto";
 import { TransactionAttachmentResponseDto } from "../dto/transaction-attachment-response.dto";
 import { AttachmentStorageService } from "./attachment-storage.service";
-import { newAttachmentObjectKey } from "./attachment-keys";
+import { newAttachmentObjectKey, thumbnailKeyFor } from "./attachment-keys";
+import { contentDispositionFor } from "./content-disposition";
+import { generateAttachmentThumbnail } from "./attachment-thumbnail";
 import { detectAttachmentType } from "./detect-file-type";
 import type { UploadedAttachmentFile } from "./uploaded-attachment-file";
 
 type AttachmentRowFields = Pick<
     TransactionAttachment,
-    "id" | "transactionId" | "fileName" | "mimeType" | "sizeBytes" | "createdAt" | "updatedAt"
+    "id" | "transactionId" | "fileName" | "mimeType" | "sizeBytes" | "thumbnailKey" | "createdAt" | "updatedAt"
 >;
 
 /**
@@ -34,6 +45,8 @@ function decodeMultipartFileName(raw: string): string {
 /** Uploads and removes transaction attachment files. Object keys stay server-side and are never returned. */
 @Injectable()
 export class TransactionAttachmentsService {
+    private readonly logger = new Logger(TransactionAttachmentsService.name);
+
     constructor(
         private readonly prisma: PrismaService,
         private readonly storage: AttachmentStorageService,
@@ -79,8 +92,25 @@ export class TransactionAttachmentsService {
         const key = newAttachmentObjectKey(userId);
         // Recorded before the put so that a put which fails after writing the object is still cleaned up.
         const written: string[] = [key];
+        let thumbnailKey: string | null = null;
         try {
             await this.storage.putObject(key, file.buffer, detected.mime);
+
+            if (detected.mime.startsWith("image/")) {
+                const thumbnail = await generateAttachmentThumbnail(file.buffer);
+                if (thumbnail !== null) {
+                    const thumbKey = thumbnailKeyFor(key);
+                    try {
+                        await this.storage.putObject(thumbKey, thumbnail, "image/webp");
+                        written.push(thumbKey);
+                        thumbnailKey = thumbKey;
+                    } catch {
+                        // The attachment is still usable without its thumbnail, so the upload carries on.
+                        this.logger.warn("Could not store an attachment thumbnail; uploading without one");
+                        await this.storage.deleteObjects([thumbKey]);
+                    }
+                }
+            }
 
             // The row lock serializes concurrent uploads and a concurrent delete of the transaction. If the delete
             // committed first, the lock finds no live row and this returns 404. Otherwise the delete waits for this
@@ -109,7 +139,7 @@ export class TransactionAttachmentsService {
                         mimeType: detected.mime,
                         sizeBytes: file.buffer.length,
                         storageKey: key,
-                        thumbnailKey: null,
+                        thumbnailKey,
                     },
                 });
                 return this.toResponse(row);
@@ -136,12 +166,70 @@ export class TransactionAttachmentsService {
         await this.deleteObjectsForRows([row]);
     }
 
+    /** Changes the display name only, so it makes no storage call. The sanitizer keeps the stored type's extension. */
+    async rename(
+        userId: string,
+        transactionId: string,
+        attachmentId: string,
+        rawBaseName: string,
+    ): Promise<TransactionAttachmentResponseDto> {
+        const row = await this.prisma.transactionAttachment.findFirst({
+            where: { id: attachmentId, transactionId, userId, deletedAt: null },
+        });
+        if (!row) {
+            throw new NotFoundException(`Attachment with ID ${attachmentId} not found`);
+        }
+        if (!isAttachmentMimeType(row.mimeType)) {
+            throw new InternalServerErrorException();
+        }
+
+        const ext = ATTACHMENT_EXTENSION_BY_MIME[row.mimeType];
+        const base = sanitizeAttachmentBaseName(rawBaseName, ext);
+        if (base === "") {
+            throw new BadRequestException("Enter a name");
+        }
+
+        const updated = await this.prisma.transactionAttachment.update({
+            where: { id: attachmentId },
+            data: { fileName: `${base}.${ext}` },
+        });
+        return this.toResponse(updated);
+    }
+
+    /** Presigned URL for the attachment's bytes, served with the stored type and the requested disposition. */
+    async getUrl(
+        userId: string,
+        transactionId: string,
+        attachmentId: string,
+        disposition: AttachmentDisposition,
+    ): Promise<AttachmentUrlResponseDto> {
+        this.storage.assertEnabled();
+
+        const row = await this.prisma.transactionAttachment.findFirst({
+            where: { id: attachmentId, transactionId, userId, deletedAt: null },
+            select: { storageKey: true, mimeType: true, fileName: true },
+        });
+        if (!row) {
+            throw new NotFoundException(`Attachment with ID ${attachmentId} not found`);
+        }
+
+        const url = await this.storage.presignGetUrl(row.storageKey, {
+            contentType: row.mimeType,
+            contentDisposition: contentDispositionFor(disposition, row.fileName),
+        });
+        return {
+            url,
+            expiresAt: new Date(Date.now() + ATTACHMENT_URL_TTL_SECONDS * 1000).toISOString(),
+        };
+    }
+
+    /** Detail only: list endpoints never call this, so they make no presign calls. */
     async listForTransaction(transactionId: string): Promise<TransactionAttachmentResponseDto[]> {
         const rows = await this.prisma.transactionAttachment.findMany({
             where: { transactionId, deletedAt: null },
             orderBy: { createdAt: "asc" },
         });
-        return rows.map((row) => this.toResponse(row));
+        return Promise.all(rows.map((row) => this.toResponse(row)));
     }
 
     /** Best effort: deletes each row's file and thumbnail objects. Storage failures are logged, never thrown. */
@@ -152,16 +240,24 @@ export class TransactionAttachmentsService {
         await this.storage.deleteObjects(keys);
     }
 
-    private toResponse(row: AttachmentRowFields): TransactionAttachmentResponseDto {
+    private async toResponse(row: AttachmentRowFields): Promise<TransactionAttachmentResponseDto> {
         if (!isAttachmentMimeType(row.mimeType)) {
             throw new Error(`Attachment ${row.id} has an unexpected MIME type`);
         }
+        const thumbnailUrl =
+            this.storage.enabled && row.thumbnailKey !== null
+                ? await this.storage.presignGetUrl(row.thumbnailKey, {
+                      contentType: "image/webp",
+                      contentDisposition: "inline",
+                  })
+                : null;
         return {
             id: row.id,
             transactionId: row.transactionId,
             fileName: row.fileName,
             mimeType: row.mimeType,
             sizeBytes: row.sizeBytes,
+            thumbnailUrl,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
         };
