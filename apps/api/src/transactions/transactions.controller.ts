@@ -14,10 +14,8 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiExtraModels, getSchemaPath } from "@nestjs/swagger";
 import { TransactionsService } from "./transactions.service";
 import { CreateTransactionDto } from "./dto/create-transaction.dto";
-import { CreateTransactionAttachmentDto } from "./dto/create-transaction-attachment.dto";
 import { UpdateTransactionDto } from "./dto/update-transaction.dto";
 import { TransactionResponseDto } from "./dto/transaction-response.dto";
-import { TransactionAttachmentResponseDto } from "./dto/transaction-attachment-response.dto";
 import { ListTransactionsQueryDto } from "./dto/list-transactions-query.dto";
 import { SummaryTransactionsQueryDto } from "./dto/summary-transactions-query.dto";
 import { PaginatedTransactionsResponseDto } from "./dto/transaction-list-response.dto";
@@ -133,36 +131,5 @@ export class TransactionsController {
     @ApiResponse({ status: 404, description: "Transaction not found" })
     async remove(@Param("id") id: string, @CurrentUser() user: any) {
         await this.transactionsService.remove(id, user.id);
-    }
-
-    @Post(":id/attachments")
-    @ApiOperation({
-        summary: "Add an attachment to a transaction (metadata only — file upload comes in a later phase)",
-    })
-    @ApiResponse({
-        status: 201,
-        description: "Attachment created successfully",
-        type: TransactionAttachmentResponseDto,
-    })
-    @ApiResponse({ status: 404, description: "Transaction not found" })
-    addAttachment(
-        @Param("id") id: string,
-        @Body() createAttachmentDto: CreateTransactionAttachmentDto,
-        @CurrentUser() user: any,
-    ): Promise<TransactionAttachmentResponseDto> {
-        return this.transactionsService.addAttachment(id, user.id, createAttachmentDto);
-    }
-
-    @Delete(":id/attachments/:attachmentId")
-    @HttpCode(HttpStatus.NO_CONTENT)
-    @ApiOperation({ summary: "Delete a transaction attachment (soft delete)" })
-    @ApiResponse({ status: 204, description: "Attachment deleted successfully" })
-    @ApiResponse({ status: 404, description: "Attachment not found" })
-    async removeAttachment(
-        @Param("id") id: string,
-        @Param("attachmentId") attachmentId: string,
-        @CurrentUser() user: any,
-    ) {
-        await this.transactionsService.removeAttachment(id, attachmentId, user.id);
     }
 }

@@ -3,10 +3,8 @@ import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { CardPayoffPatternsService } from "../card-payoff-patterns/card-payoff-patterns.service";
 import { CreateTransactionDto } from "./dto/create-transaction.dto";
-import { CreateTransactionAttachmentDto } from "./dto/create-transaction-attachment.dto";
 import { UpdateTransactionDto } from "./dto/update-transaction.dto";
 import { TransactionResponseDto } from "./dto/transaction-response.dto";
-import { TransactionAttachmentResponseDto } from "./dto/transaction-attachment-response.dto";
 import { PaginatedTransactionsResponseDto } from "./dto/transaction-list-response.dto";
 import { TransactionsSummaryResponseDto } from "./dto/transactions-summary-response.dto";
 import { assertSyncedEditAllowed, LOCKED_FIELDS, SyncedLockSnapshot } from "./synced-edit-lock";
@@ -28,6 +26,7 @@ import {
 } from "./reimbursement-netting";
 import { assertReimbursementEditAllowed } from "./reimbursement-edit-guard";
 import { lockReimbursements } from "./reimbursement-lock";
+import { TransactionAttachmentsService } from "./attachments/transaction-attachments.service";
 import { isLedgerAccountType, parseAccountType } from "@badger/shared-data";
 
 /** Filters accepted by the transaction list endpoint (superset of legacy params). */
@@ -137,7 +136,7 @@ const transactionInclude = {
     originalCurrency: true,
     category: true,
     budget: true,
-    attachments: { where: { deletedAt: null }, orderBy: { createdAt: "asc" } },
+    _count: { select: { attachments: { where: { deletedAt: null } } } },
     counterpart: {
         select: {
             id: true,
@@ -196,6 +195,7 @@ export class TransactionsService {
         private prisma: PrismaService,
         private cardPayoffPatternsService: CardPayoffPatternsService,
         private fxConversionService: FxConversionService,
+        private attachmentsService: TransactionAttachmentsService,
     ) {}
 
     private get db(): any {
@@ -211,9 +211,10 @@ export class TransactionsService {
      * always loads `account.currency`, so the cast here is safe.
      */
     private toTransactionResponse(row: TransactionRow): TransactionResponseDto {
-        const { counterpart, counterpartOf, reimbursedBy, reimburses, ...rest } = row;
+        const { counterpart, counterpartOf, reimbursedBy, reimburses, _count, ...rest } = row;
         return {
             ...rest,
+            attachmentCount: _count.attachments,
             account: toAccountResponse(row.account),
             counterpartOfId: row.counterpartOfId,
             reimbursement: toReimbursementSummary({ ...row, reimbursedBy, reimburses }),
@@ -787,8 +788,9 @@ export class TransactionsService {
         }
 
         const applicableBudgets = await this.findApplicableBudgets(transaction);
+        const attachments = await this.attachmentsService.listForTransaction(id);
 
-        return { ...this.toTransactionResponse(transaction), applicableBudgets };
+        return { ...this.toTransactionResponse(transaction), applicableBudgets, attachments };
     }
 
     /**
@@ -1017,60 +1019,38 @@ export class TransactionsService {
         // Soft-delete the source; the derived mirror is hard-deleted with it. Soft delete never fires the
         // allocation FK cascade, so linked reimbursement allocations are removed explicitly. The lock keeps a
         // concurrent link from inserting an allocation on this row after the cleanup has run.
-        return this.prisma.$transaction(async (tx) => {
+        // Attachments on the source are soft-deleted with it. Attachment rows on the mirror are dropped by the
+        // cascade, so their storage keys are collected here too, before the mirror is deleted.
+        // The source row is updated first: that takes the row lock an in-flight upload holds while it inserts, so
+        // the attachment reads below see the upload's row and it is deleted with the transaction.
+        const now = new Date();
+        let attachmentRows: { storageKey: string; thumbnailKey: string | null }[] = [];
+        const deleted = await this.prisma.$transaction(async (tx) => {
             await lockReimbursements(tx, userId);
-            const deleted = await tx.transaction.update({ where: { id }, data: { deletedAt: new Date() } });
+            const deletedRow = await tx.transaction.update({ where: { id }, data: { deletedAt: now } });
+            attachmentRows = await tx.transactionAttachment.findMany({
+                where: { deletedAt: null, OR: [{ transactionId: id }, { transaction: { counterpartOfId: id } }] },
+                select: { storageKey: true, thumbnailKey: true },
+            });
+            await tx.transactionAttachment.updateMany({
+                where: { transactionId: id, deletedAt: null },
+                data: { deletedAt: now },
+            });
             await tx.transaction.deleteMany({ where: { counterpartOfId: id } });
             await tx.reimbursementAllocation.deleteMany({
                 where: { OR: [{ incomeId: id }, { expenseId: id }] },
             });
-            return deleted;
+            return deletedRow;
         });
+        // Storage calls stay outside the database transaction. Failures are logged by the service and never thrown.
+        await this.attachmentsService.deleteObjectsForRows(attachmentRows);
+        return deleted;
     }
 
     private findMirrorSource(sourceId: string) {
         return this.prisma.transaction.findFirst({
             where: { id: sourceId },
             select: { description: true, account: { select: { name: true } } },
-        });
-    }
-
-    async addAttachment(
-        transactionId: string,
-        userId: string,
-        createAttachmentDto: CreateTransactionAttachmentDto,
-    ): Promise<TransactionAttachmentResponseDto> {
-        await this.assertTransactionOwned(transactionId, userId);
-
-        // Metadata-only phase: the file itself is not uploaded yet, so
-        // storageKey stays null until the object-storage phase lands.
-        return this.db.transactionAttachment.create({
-            data: {
-                ...createAttachmentDto,
-                transactionId,
-                userId,
-            },
-        }) as unknown as TransactionAttachmentResponseDto;
-    }
-
-    async removeAttachment(transactionId: string, attachmentId: string, userId: string): Promise<void> {
-        const attachment = await this.db.transactionAttachment.findFirst({
-            where: {
-                id: attachmentId,
-                transactionId,
-                userId,
-                deletedAt: null,
-            },
-            select: { id: true },
-        });
-
-        if (!attachment) {
-            throw new NotFoundException(`Attachment with ID ${attachmentId} not found`);
-        }
-
-        await this.db.transactionAttachment.update({
-            where: { id: attachmentId },
-            data: { deletedAt: new Date() },
         });
     }
 

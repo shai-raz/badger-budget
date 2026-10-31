@@ -2,21 +2,25 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
 import { AppConfigController } from "./app-config.controller";
 import { RegistrationPolicyService } from "../auth/registration-policy.service";
+import { AttachmentStorageService } from "../transactions/attachments/attachment-storage.service";
 
 describe("AppConfigController", () => {
     let controller: AppConfigController;
     let env: Record<string, string | undefined>;
     let registrationPolicy: { isRegistrationOpen: jest.Mock };
+    let attachmentStorage: { enabled: boolean };
 
     beforeEach(async () => {
         env = {};
         registrationPolicy = { isRegistrationOpen: jest.fn().mockResolvedValue(false) };
+        attachmentStorage = { enabled: false };
 
         const module: TestingModule = await Test.createTestingModule({
             controllers: [AppConfigController],
             providers: [
                 { provide: ConfigService, useValue: { get: jest.fn((key: string) => env[key]) } },
                 { provide: RegistrationPolicyService, useValue: registrationPolicy },
+                { provide: AttachmentStorageService, useValue: attachmentStorage },
             ],
         }).compile();
 
@@ -30,7 +34,14 @@ describe("AppConfigController", () => {
             registrationOpen: false,
             googleSheetsEnabled: false,
             fxEnabled: false,
+            attachmentsEnabled: false,
         });
+    });
+
+    it("reports attachmentsEnabled from the attachment storage service", async () => {
+        attachmentStorage.enabled = true;
+
+        expect((await controller.getConfig()).attachmentsEnabled).toBe(true);
     });
 
     it("reports registrationOpen from the registration policy", async () => {

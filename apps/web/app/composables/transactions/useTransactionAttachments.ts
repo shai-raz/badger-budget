@@ -1,17 +1,14 @@
 import { useMutation, useQueryClient } from "@tanstack/vue-query";
-import type { ICreateTransactionAttachment } from "@badger/types";
 import { useApiClient } from "../useApiClient";
 import { transactionKeys } from "./useTransactions";
 
-// Metadata-only phase: the file itself is not uploaded yet, we only persist
-// its name/type/size. Actual upload to object storage comes in a later phase.
-export function useAddTransactionAttachment() {
+export function useUploadTransactionAttachment() {
     const apiClient = useApiClient();
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ transactionId, data }: { transactionId: string; data: ICreateTransactionAttachment }) =>
-            apiClient.createTransactionAttachment(transactionId, data),
+        mutationFn: ({ transactionId, file }: { transactionId: string; file: File }) =>
+            apiClient.uploadTransactionAttachment(transactionId, file, file.name),
         onSuccess: (_, { transactionId }) => {
             queryClient.invalidateQueries({ queryKey: transactionKeys.detail(transactionId) });
             // Widened to the root key so the infinite list and summary refresh too.

@@ -7,5 +7,4 @@ export { PaginatedTransactionsResponseDto } from "./transaction-list-response.dt
 export { ListTransactionsQueryDto } from "./list-transactions-query.dto";
 export { TransactionAttachmentResponseDto } from "./transaction-attachment-response.dto";
 export { CreateTransactionDto } from "./create-transaction.dto";
-export { CreateTransactionAttachmentDto } from "./create-transaction-attachment.dto";
 export { UpdateTransactionDto } from "./update-transaction.dto";

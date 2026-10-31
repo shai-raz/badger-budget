@@ -18,6 +18,9 @@
         "lint": "eslint .",
         "check-types": "tsc --noEmit"
     },
+    "dependencies": {
+        "@badger/shared-data": "workspace:*"
+    },
     "devDependencies": {
         "@repo/eslint-config": "workspace:*",
         "@repo/typescript-config": "workspace:*",
