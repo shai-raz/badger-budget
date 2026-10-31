@@ -10,22 +10,25 @@ const { apiClient, toastAdd } = vi.hoisted(() => ({
     toastAdd: vi.fn(),
 }));
 
-type SaveContext = { prev: string; next: string; seq: number };
+type SaveContext = { next: string; seq: number };
 type MutationOptions = {
+    scope?: { id: string };
     mutationFn: (name: string) => Promise<IAuthUser>;
     onMutate: (name: string) => SaveContext;
     onSuccess: (user: IAuthUser, name: string, ctx: SaveContext) => void;
     onError: (err: unknown, name: string, ctx: SaveContext | undefined) => void;
 };
 
-// Runs the mutation the way TanStack Query does: onMutate first, then the request, then onSuccess or onError.
+// Runs the mutation the way TanStack Query does: onMutate first, then the request, then onSuccess or onError. Requests
+// in one scope run one after another, as in TanStack Query.
 let options: MutationOptions;
+let scopeQueue: Promise<unknown>;
 const mutate = vi.fn((name: string) => {
     const ctx = options.onMutate(name);
-    options
-        .mutationFn(name)
-        .then((user) => options.onSuccess(user, name, ctx))
-        .catch((err: unknown) => options.onError(err, name, ctx));
+    const send = () => options.mutationFn(name);
+    const request = options.scope ? scopeQueue.then(send) : send();
+    scopeQueue = request.catch(() => undefined);
+    request.then((user) => options.onSuccess(user, name, ctx)).catch((err: unknown) => options.onError(err, name, ctx));
 });
 
 vi.mock("@tanstack/vue-query", () => ({
@@ -61,6 +64,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
     vi.clearAllMocks();
+    scopeQueue = Promise.resolve();
     setActivePinia(createPinia());
     useThemeStore().colorTheme = "noir";
     useAuthStore().user = { ...baseUser };
@@ -75,8 +79,8 @@ describe("useSelectColorTheme", () => {
         select("ocean");
 
         expect(useThemeStore().colorTheme).toBe("ocean");
-        expect(apiClient.updateMe).toHaveBeenCalledWith({ colorTheme: "ocean" });
         await settle();
+        expect(apiClient.updateMe).toHaveBeenCalledWith({ colorTheme: "ocean" });
         expect(useAuthStore().user).toEqual(saved);
         expect(toastAdd).not.toHaveBeenCalled();
     });
@@ -224,5 +228,32 @@ describe("useSelectColorTheme", () => {
 
         expect(useThemeStore().colorTheme).toBe("noir");
         expect(useAuthStore().user).toEqual({ ...baseUser, colorTheme: "noir" });
+    });
+
+    it("holds an overlapping save until the earlier one has reached the account, then sends it", async () => {
+        const first = deferred<IAuthUser>();
+        const second = deferred<IAuthUser>();
+        apiClient.updateMe.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+        const { select } = useSelectColorTheme();
+
+        select("ocean");
+        select("noir");
+        await settle();
+
+        expect(options.scope).toEqual({ id: "color-theme" });
+        expect(apiClient.updateMe).toHaveBeenCalledTimes(1);
+
+        first.resolve({ ...baseUser, colorTheme: "ocean" });
+        await settle();
+
+        expect(apiClient.updateMe).toHaveBeenCalledTimes(2);
+        expect(apiClient.updateMe).toHaveBeenLastCalledWith({ colorTheme: "noir" });
+
+        // The newer save fails after the earlier one saved, so the screen returns to the account's theme, Ocean.
+        second.reject({ response: { data: { message: "Offline" } } });
+        await settle();
+
+        expect(useThemeStore().colorTheme).toBe("ocean");
+        expect(toastAdd).toHaveBeenCalledTimes(1);
     });
 });

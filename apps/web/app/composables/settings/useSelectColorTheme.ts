@@ -33,7 +33,10 @@ export function useSelectColorTheme(): {
     let savedTheme: ColorThemeName = themeStore.colorTheme;
     let savedSeq = 0;
 
+    // Saves share one scope, so each request waits for the one before it. Responses then arrive in pick order, and a
+    // newer save never fails before an older one has reached the account.
     const mutation = useMutation({
+        scope: { id: "color-theme" },
         mutationFn: (name: ColorThemeName): Promise<IAuthUser> => apiClient.updateMe({ colorTheme: name }),
         onMutate: (name): ColorThemeSaveContext => {
             themeStore.applyColorTheme(name);
