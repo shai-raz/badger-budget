@@ -26,9 +26,12 @@ tailwind-base  <  primevue  <  tailwind-utilities
 
 ## Theme
 
-- `.dark` on `<html>` is PrimeVue's `darkModeSelector`; `stores/theme.ts` owns it. With no saved `theme-preference` the theme follows the OS live.
-- `THEME_INIT_SCRIPT` (`utils/theme.ts`), injected via `app.head`, applies the theme before first paint.
-- The `theme-color` meta follows the theme (`plugins/theme.client.ts`). iOS standalone ignores it, so `apple-mobile-web-app-status-bar-style` stays at its default: no static value is right in both themes.
+- Light/dark is per device. `.dark` on `<html>` is PrimeVue's `darkModeSelector`, owned by `stores/theme.ts`. A saved `theme-preference` pins it; "System" clears that key and the OS preference applies live.
+- Colour themes (Noir, Ocean) are defined only in `app/theme/themes.ts` as `Record<ColorThemeName, ThemeDefinition>`; names come from `COLOR_THEMES` in `@badger/shared-data`. `buildPreset` (`app/theme/preset.ts`) turns a definition into a PrimeVue preset.
+- `plugins/theme.client.ts` swaps presets live with `usePreset`. The store never imports PrimeVue.
+- The account's `colorTheme` wins over the `color-theme` cache, except for the demo account (`isDemo`), which stays device-only.
+- `THEME_INIT_SCRIPT` (`utils/theme.ts`, injected via `app.head`) paints each theme's surface before first paint through `--boot-surface`. It never sets `--p-*` inline: that beats PrimeVue's stylesheet and blocks later swaps. Its parity test (`utils/theme.test.ts`) must stay green.
+- The `theme-color` meta follows the theme. iOS standalone ignores it, so `apple-mobile-web-app-status-bar-style` stays at its default: no static value is right in both themes.
 
 ## Breakpoints
 
