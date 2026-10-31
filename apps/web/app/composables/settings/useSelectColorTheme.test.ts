@@ -170,6 +170,44 @@ describe("useSelectColorTheme", () => {
         expect(toastAdd).not.toHaveBeenCalled();
     });
 
+    it("ends on the original theme when two overlapping picks both fail", async () => {
+        const first = deferred<IAuthUser>();
+        const second = deferred<IAuthUser>();
+        apiClient.updateMe.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+        const { select } = useSelectColorTheme();
+
+        select("ocean");
+        select("noir");
+
+        first.reject({ response: { data: { message: "Offline" } } });
+        await settle();
+        expect(useThemeStore().colorTheme).toBe("noir");
+
+        second.reject({ response: { data: { message: "Offline" } } });
+        await settle();
+
+        expect(useThemeStore().colorTheme).toBe("noir");
+        expect(toastAdd).toHaveBeenCalledTimes(2);
+    });
+
+    it("reverts to the last saved theme when the newest pick fails after an earlier pick saved", async () => {
+        const first = deferred<IAuthUser>();
+        const second = deferred<IAuthUser>();
+        apiClient.updateMe.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+        const { select } = useSelectColorTheme();
+
+        select("ocean");
+        select("noir");
+
+        first.resolve({ ...baseUser, colorTheme: "ocean" });
+        await settle();
+        second.reject({ response: { data: { message: "Offline" } } });
+        await settle();
+
+        expect(useThemeStore().colorTheme).toBe("ocean");
+        expect(useAuthStore().user).toEqual(baseUser);
+    });
+
     it("ignores an earlier pick's response that lands after the newer one has saved", async () => {
         const first = deferred<IAuthUser>();
         const second = deferred<IAuthUser>();

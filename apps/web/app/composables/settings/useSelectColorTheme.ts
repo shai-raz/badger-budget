@@ -9,7 +9,6 @@ import { useThemeStore } from "~/stores/theme";
 import { getApiErrorMessage } from "~/utils/apiError";
 
 interface ColorThemeSaveContext {
-    prev: ColorThemeName;
     next: ColorThemeName;
     seq: number;
 }
@@ -29,21 +28,29 @@ export function useSelectColorTheme(): {
     const isDeviceOnly = computed(() => authStore.user?.isDemo === true);
     // Numbers each pick, so a response for an earlier pick cannot overwrite the user that the latest pick saved.
     let latestPick = 0;
+    // The last theme the account saved, and the pick that saved it. A failed latest pick reverts to this, not to the
+    // theme before it, which may have been a pick that never saved.
+    let savedTheme: ColorThemeName = themeStore.colorTheme;
+    let savedSeq = 0;
 
     const mutation = useMutation({
         mutationFn: (name: ColorThemeName): Promise<IAuthUser> => apiClient.updateMe({ colorTheme: name }),
         onMutate: (name): ColorThemeSaveContext => {
-            const prev = themeStore.colorTheme;
             themeStore.applyColorTheme(name);
             latestPick += 1;
-            return { prev, next: name, seq: latestPick };
+            return { next: name, seq: latestPick };
         },
         onSuccess: (user, _name, ctx) => {
-            if (ctx?.seq === latestPick) authStore.user = user;
+            if (!ctx) return;
+            if (ctx.seq > savedSeq) {
+                savedTheme = ctx.next;
+                savedSeq = ctx.seq;
+            }
+            if (ctx.seq === latestPick) authStore.user = user;
         },
         onError: (err, _name, ctx) => {
             // A failed save of an earlier pick must not undo a newer one that is already on screen.
-            if (ctx && themeStore.colorTheme === ctx.next) themeStore.applyColorTheme(ctx.prev);
+            if (ctx?.seq === latestPick) themeStore.applyColorTheme(savedTheme);
             toast.add({
                 severity: "error",
                 summary: "Couldn't save your theme",
