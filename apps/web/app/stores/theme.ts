@@ -3,10 +3,10 @@ import { computed, ref } from "vue";
 import {
     getThemeStorage,
     PREFERS_DARK_QUERY,
-    readSavedTheme,
+    readSavedColorMode,
     resolveIsDark,
-    saveTheme,
-    type ThemeName,
+    saveColorMode,
+    type ColorMode,
 } from "../utils/theme";
 
 // Module-level so a second initializeTheme() call (HMR, a re-run plugin) never stacks a second listener.
@@ -19,13 +19,13 @@ export const useThemeStore = defineStore("theme", () => {
     const hasExplicitChoice = ref(false);
 
     // Computed
-    const theme = computed<ThemeName>(() => (isDark.value ? "dark" : "light"));
+    const colorMode = computed<ColorMode>(() => (isDark.value ? "dark" : "light"));
 
     // Actions
     function initializeTheme() {
         if (typeof window === "undefined") return;
 
-        const saved = readSavedTheme(getThemeStorage());
+        const saved = readSavedColorMode(getThemeStorage());
         hasExplicitChoice.value = saved !== null;
 
         const mediaQuery = window.matchMedia?.(PREFERS_DARK_QUERY);
@@ -34,36 +34,36 @@ export const useThemeStore = defineStore("theme", () => {
             mediaQuery.addEventListener("change", (event) => {
                 if (hasExplicitChoice.value) return;
                 isDark.value = event.matches;
-                applyTheme();
+                applyColorMode();
             });
         }
 
         isDark.value = resolveIsDark(saved, mediaQuery?.matches ?? false);
-        applyTheme();
+        applyColorMode();
     }
 
-    function setTheme(dark: boolean) {
+    function setDarkMode(dark: boolean) {
         isDark.value = dark;
         hasExplicitChoice.value = true;
-        saveTheme(getThemeStorage(), dark ? "dark" : "light");
-        applyTheme();
+        saveColorMode(getThemeStorage(), dark ? "dark" : "light");
+        applyColorMode();
     }
 
-    function toggleTheme() {
-        setTheme(!isDark.value);
+    function toggleDarkMode() {
+        setDarkMode(!isDark.value);
     }
 
-    function applyTheme() {
+    function applyColorMode() {
         if (typeof window === "undefined") return;
         document.documentElement.classList.toggle("dark", isDark.value);
     }
 
     return {
         isDark,
-        theme,
+        colorMode,
         initializeTheme,
-        setTheme,
-        toggleTheme,
-        applyTheme,
+        setDarkMode,
+        toggleDarkMode,
+        applyColorMode,
     };
 });
