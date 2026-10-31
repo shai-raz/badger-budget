@@ -8,6 +8,7 @@ import {
     saveColorMode,
     type ColorMode,
 } from "../utils/theme";
+import { noirTheme, type ThemeDefinition } from "../theme/themes";
 
 // Module-level so a second initializeTheme() call (HMR, a re-run plugin) never stacks a second listener.
 let systemListenerAttached = false;
@@ -20,6 +21,8 @@ export const useThemeStore = defineStore("theme", () => {
 
     // Computed
     const colorMode = computed<ColorMode>(() => (isDark.value ? "dark" : "light"));
+    // The active theme. Fixed to Noir until the theme selector lands; it becomes the selected theme then.
+    const definition = computed<ThemeDefinition>(() => noirTheme);
 
     // Actions
     function initializeTheme() {
@@ -61,6 +64,7 @@ export const useThemeStore = defineStore("theme", () => {
     return {
         isDark,
         colorMode,
+        definition,
         initializeTheme,
         setDarkMode,
         toggleDarkMode,

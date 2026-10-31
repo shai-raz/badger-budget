@@ -139,4 +139,11 @@ describe("theme store", () => {
         expect(store.isDark).toBe(false);
         expect(env.classList.toggle).toHaveBeenLastCalledWith("dark", false);
     });
+
+    it("exposes the Noir theme definition", async () => {
+        setup();
+        const store = await loadStore();
+        const { noirTheme } = await import("../theme/themes");
+        expect(store.definition).toBe(noirTheme);
+    });
 });

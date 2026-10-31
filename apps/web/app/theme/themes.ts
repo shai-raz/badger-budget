@@ -2,6 +2,8 @@
 // can all read it. `buildPreset` in preset.ts turns a ThemeDefinition into the
 // PrimeVue preset.
 
+import type { ColorMode } from "../utils/theme";
+
 export type PrimaryStep = 50 | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900 | 950;
 export type SurfaceStep = 0 | PrimaryStep;
 
@@ -105,3 +107,14 @@ export const noirTheme: ThemeDefinition = {
         amount: DEFAULT_AMOUNT,
     },
 };
+
+// Chart.js draws on a canvas, where CSS var() does not resolve, so chart colours are hex
+// read straight from the theme's surface ramp.
+export function chartColors(def: ThemeDefinition, mode: ColorMode): { sliceBorder: string; other: string } {
+    return {
+        // Separates the slices: the card's surface in each mode.
+        sliceBorder: mode === "dark" ? def.surface[900] : def.surface[0],
+        // The synthetic "Other" slice, which has no category colour of its own.
+        other: def.surface[300],
+    };
+}
