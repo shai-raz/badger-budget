@@ -10,11 +10,12 @@ const { apiClient, toastAdd } = vi.hoisted(() => ({
     toastAdd: vi.fn(),
 }));
 
+type SaveContext = { prev: string; next: string; seq: number };
 type MutationOptions = {
     mutationFn: (name: string) => Promise<IAuthUser>;
-    onMutate: (name: string) => { prev: string; next: string };
-    onSuccess: (user: IAuthUser) => void;
-    onError: (err: unknown, name: string, ctx: { prev: string; next: string } | undefined) => void;
+    onMutate: (name: string) => SaveContext;
+    onSuccess: (user: IAuthUser, name: string, ctx: SaveContext) => void;
+    onError: (err: unknown, name: string, ctx: SaveContext | undefined) => void;
 };
 
 // Runs the mutation the way TanStack Query does: onMutate first, then the request, then onSuccess or onError.
@@ -23,7 +24,7 @@ const mutate = vi.fn((name: string) => {
     const ctx = options.onMutate(name);
     options
         .mutationFn(name)
-        .then((user) => options.onSuccess(user))
+        .then((user) => options.onSuccess(user, name, ctx))
         .catch((err: unknown) => options.onError(err, name, ctx));
 });
 
@@ -143,5 +144,47 @@ describe("useSelectColorTheme", () => {
 
         expect(useThemeStore().colorTheme).toBe("noir");
         expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ detail: "Timed out" }));
+    });
+
+    it("keeps the newer pick when an earlier pick's save resolves while the newer one is still pending", async () => {
+        const first = deferred<IAuthUser>();
+        const second = deferred<IAuthUser>();
+        apiClient.updateMe.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+        const { select } = useSelectColorTheme();
+
+        select("ocean");
+        select("noir");
+
+        first.resolve({ ...baseUser, colorTheme: "ocean" });
+        await settle();
+
+        // The earlier response must not switch the app back to Ocean, nor replace the cached user.
+        expect(useThemeStore().colorTheme).toBe("noir");
+        expect(useAuthStore().user).toEqual(baseUser);
+
+        second.resolve({ ...baseUser, colorTheme: "noir" });
+        await settle();
+
+        expect(useThemeStore().colorTheme).toBe("noir");
+        expect(useAuthStore().user).toEqual({ ...baseUser, colorTheme: "noir" });
+        expect(toastAdd).not.toHaveBeenCalled();
+    });
+
+    it("ignores an earlier pick's response that lands after the newer one has saved", async () => {
+        const first = deferred<IAuthUser>();
+        const second = deferred<IAuthUser>();
+        apiClient.updateMe.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+        const { select } = useSelectColorTheme();
+
+        select("ocean");
+        select("noir");
+
+        second.resolve({ ...baseUser, colorTheme: "noir" });
+        await settle();
+        first.resolve({ ...baseUser, colorTheme: "ocean" });
+        await settle();
+
+        expect(useThemeStore().colorTheme).toBe("noir");
+        expect(useAuthStore().user).toEqual({ ...baseUser, colorTheme: "noir" });
     });
 });

@@ -14,6 +14,7 @@ import {
     themeColorFor,
     THEME_INIT_SCRIPT,
     THEME_STORAGE_KEY,
+    accountColorTheme,
     type ColorMode,
 } from "./theme";
 
@@ -404,5 +405,34 @@ describe("THEME_INIT_SCRIPT", () => {
         expect(THEME_INIT_SCRIPT).not.toContain("=>");
         expect(THEME_INIT_SCRIPT).not.toContain("?.");
         expect(THEME_INIT_SCRIPT).not.toMatch(/\b(const|let)\s/);
+    });
+});
+
+describe("accountColorTheme", () => {
+    const user = {
+        id: "u1",
+        email: "a@example.com",
+        firstName: "A",
+        lastName: "B",
+        role: "USER",
+        colorTheme: "ocean",
+        isDemo: false,
+    } as const;
+
+    it("returns the account's stored theme for a real user", () => {
+        expect(accountColorTheme(user)).toBe("ocean");
+    });
+
+    it("falls back to the default theme when the account has none stored", () => {
+        expect(accountColorTheme({ ...user, colorTheme: null })).toBe(DEFAULT_COLOR_THEME);
+    });
+
+    it("returns null for the shared demo account, so its theme stays on this device", () => {
+        expect(accountColorTheme({ ...user, isDemo: true })).toBeNull();
+    });
+
+    it("returns null when there is no user", () => {
+        expect(accountColorTheme(null)).toBeNull();
+        expect(accountColorTheme(undefined)).toBeNull();
     });
 });

@@ -2,7 +2,7 @@ import { usePreset } from "@primeuix/themes";
 import { DEFAULT_COLOR_THEME, type ColorThemeName } from "@badger/shared-data";
 import { useAuthStore } from "~/stores/auth";
 import { themePresets } from "~/theme/preset";
-import { themeColorFor } from "~/utils/theme";
+import { accountColorTheme, themeColorFor } from "~/utils/theme";
 
 export default defineNuxtPlugin(() => {
     const themeStore = useThemeStore();
@@ -23,12 +23,15 @@ export default defineNuxtPlugin(() => {
     );
 
     // The account's theme wins over the device cache, except for the shared demo account, which stays device-only.
-    // The user is loaded before this runs (auth-init.ts awaits loadUser). Logout leaves the theme as it is.
+    // Watches the user's identity only: a save's response replaces the user object, and that must not re-apply
+    // an older pick over a newer one. The user is loaded before this runs (auth-init.ts awaits loadUser).
+    // Logout leaves the theme as it is.
     const authStore = useAuthStore();
     watch(
-        () => authStore.user,
-        (user) => {
-            if (user && !user.isDemo) themeStore.applyColorTheme(user.colorTheme ?? DEFAULT_COLOR_THEME);
+        () => authStore.user?.id,
+        () => {
+            const name = accountColorTheme(authStore.user);
+            if (name) themeStore.applyColorTheme(name);
         },
         { immediate: true },
     );

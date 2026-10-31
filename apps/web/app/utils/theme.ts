@@ -1,4 +1,5 @@
 import { COLOR_THEMES, DEFAULT_COLOR_THEME, isColorThemeName, type ColorThemeName } from "@badger/shared-data";
+import type { IAuthUser } from "@badger/types";
 import { THEMES } from "../theme/themes";
 
 export type ColorMode = "light" | "dark";
@@ -77,6 +78,15 @@ export function saveColorTheme(storage: ThemeStorage | null, name: ColorThemeNam
     } catch {
         // Intentionally silent.
     }
+}
+
+/**
+ * The theme the account should show, or null when the device cache decides: no user, or the shared demo account
+ * (its theme stays on this device). A user with no stored theme gets the default.
+ */
+export function accountColorTheme(user: IAuthUser | null | undefined): ColorThemeName | null {
+    if (!user || user.isDemo) return null;
+    return user.colorTheme ?? DEFAULT_COLOR_THEME;
 }
 
 /** A saved choice wins; with no saved choice the OS preference decides. */

@@ -11,6 +11,7 @@ import { getApiErrorMessage } from "~/utils/apiError";
 interface ColorThemeSaveContext {
     prev: ColorThemeName;
     next: ColorThemeName;
+    seq: number;
 }
 
 // Applies the picked theme at once and saves it to the account. The demo account is shared, so its theme stays on
@@ -26,16 +27,19 @@ export function useSelectColorTheme(): {
     const toast = useToast();
 
     const isDeviceOnly = computed(() => authStore.user?.isDemo === true);
+    // Numbers each pick, so a response for an earlier pick cannot overwrite the user that the latest pick saved.
+    let latestPick = 0;
 
     const mutation = useMutation({
         mutationFn: (name: ColorThemeName): Promise<IAuthUser> => apiClient.updateMe({ colorTheme: name }),
         onMutate: (name): ColorThemeSaveContext => {
             const prev = themeStore.colorTheme;
             themeStore.applyColorTheme(name);
-            return { prev, next: name };
+            latestPick += 1;
+            return { prev, next: name, seq: latestPick };
         },
-        onSuccess: (user) => {
-            authStore.user = user;
+        onSuccess: (user, _name, ctx) => {
+            if (ctx?.seq === latestPick) authStore.user = user;
         },
         onError: (err, _name, ctx) => {
             // A failed save of an earlier pick must not undo a newer one that is already on screen.
