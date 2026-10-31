@@ -23,6 +23,9 @@ export default defineConfig({
                     include: ["app/**/*.nuxt.test.ts"],
                     environment: "nuxt",
                     environmentOptions: { nuxt: { domEnvironment: "happy-dom" } },
+                    // Each file boots a Nuxt app in beforeAll (~9s alone); sharing CPU with the unit project pushes it
+                    // past the 10s default.
+                    hookTimeout: 60_000,
                     // Same TZ pin as the unit project (see above).
                     env: { TZ: "America/New_York" },
                 },
