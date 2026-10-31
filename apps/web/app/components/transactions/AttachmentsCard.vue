@@ -30,6 +30,7 @@ import {
     uploadingHeader,
     validateAttachmentPick,
 } from "~/utils/attachments";
+import { middleTruncateFileName } from "~/utils/attachmentDisplayName";
 
 interface Props {
     transaction: ITransactionResponse;
@@ -221,7 +222,7 @@ const submitRename = async () => {
 
 const handleRemove = (attachment: ITransactionAttachmentResponse) => {
     confirm.require({
-        message: `Remove "${attachment.fileName}"?`,
+        message: `Remove "${middleTruncateFileName(attachment.fileName)}"?`,
         header: "Remove attachment",
         icon: "pi pi-exclamation-triangle",
         acceptClass: "p-button-danger",

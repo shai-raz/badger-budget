@@ -66,7 +66,13 @@ useHead({ bodyAttrs: { class: "app-layout-body" } });
                     <Toast :breakpoints="toastBreakpoints" />
                     <CashFollowupToast />
                     <UpgradeToast />
-                    <ConfirmDialog :pt="{ message: { class: 'whitespace-pre-line' } }" />
+                    <ConfirmDialog
+                        :pt="{
+                            root: { class: 'max-w-[calc(100vw-2rem)] md:max-w-xl' },
+                            icon: { class: 'shrink-0' },
+                            message: { class: 'min-w-0 whitespace-pre-line [overflow-wrap:anywhere]' },
+                        }"
+                    />
                 </div>
             </div>
         </div>

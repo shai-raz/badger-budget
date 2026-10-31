@@ -147,3 +147,10 @@ describe("AttachmentsCard actions", () => {
         expect(source).toContain("getApiErrorMessage(error,");
     });
 });
+
+describe("AttachmentsCard remove confirm", () => {
+    it("names the file in the remove confirm through middleTruncateFileName", () => {
+        expect(source).toContain("middleTruncateFileName(attachment.fileName)");
+        expect(source).not.toContain('Remove "${attachment.fileName}"');
+    });
+});
