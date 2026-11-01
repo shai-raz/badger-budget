@@ -1,3 +1,5 @@
+// Loads from shared-data's compiled dist/, so web's postinstall builds it first (scripts/build-shared-data.mjs).
+// A new workspace runtime import here, or in app/theme/* or app/utils/theme.ts, needs the same.
 import { DEFAULT_COLOR_THEME } from "@badger/shared-data";
 import { customAuraPreset } from "./app/theme/preset";
 import { themeColorFor, THEME_INIT_SCRIPT } from "./app/utils/theme";

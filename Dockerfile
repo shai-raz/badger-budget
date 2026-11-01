@@ -22,6 +22,8 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
+# Web's postinstall runs this script; it skips the shared-data build here because the package sources aren't copied yet.
+COPY apps/web/scripts/build-shared-data.mjs apps/web/scripts/
 COPY packages/api-client/package.json packages/api-client/
 COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/release/package.json packages/release/
