@@ -46,8 +46,13 @@ jobs:
                   cache: pnpm
 
             # `--ignore-scripts` skips Puppeteer's Chrome download; web's
-            # postinstall (`nuxt prepare`) runs explicitly below.
+            # postinstall steps (build @badger/shared-data, then `nuxt prepare`)
+            # run explicitly below.
             - run: pnpm install --frozen-lockfile --ignore-scripts
+
+            # nuxt.config.ts imports runtime values from @badger/shared-data,
+            # which loads from its compiled dist/.
+            - run: pnpm --filter @badger/shared-data build
 
             # eslint.config.mjs imports ./.nuxt/eslint.config.mjs, so .nuxt must
             # exist before linting.
@@ -78,8 +83,8 @@ jobs:
 
             # Install scripts must run here (unlike the jobs above): they build bcrypt's
             # native binding, the israeli-bank-scrapers git dependency (its `prepare`),
-            # and web's `.nuxt` (`nuxt prepare`). PUPPETEER_SKIP_DOWNLOAD skips the
-            # Chrome download, as in the Dockerfile.
+            # @badger/shared-data (web's postinstall), and web's `.nuxt` (`nuxt prepare`).
+            # PUPPETEER_SKIP_DOWNLOAD skips the Chrome download, as in the Dockerfile.
             - run: pnpm install --frozen-lockfile
 
             - run: pnpm --filter api exec prisma generate

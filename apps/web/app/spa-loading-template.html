@@ -1,6 +1,7 @@
 <!-- Shown while the SPA bundle loads; Nuxt removes it once the app mounts. The head theme script has already set
-     `.dark` on <html>, so the backdrop and logo match the theme from the first frame. Colours mirror app.vue's
-     html background fallbacks; the two logo sets are explained in components/shared/BrandLogo.vue. -->
+     `.dark` on <html>, so the backdrop and logo match the theme from the first frame. The backdrop reads the
+     `--boot-surface` the head script sets, the same fallback app.vue uses; the two logo sets are explained in
+     components/shared/BrandLogo.vue. -->
 <div class="badger-loader">
     <img
         class="badger-loader-logo badger-loader-light"
@@ -20,10 +21,10 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #ffffff;
+        background: var(--boot-surface, #ffffff);
     }
     html.dark .badger-loader {
-        background: #111111;
+        background: var(--boot-surface, #111111);
     }
     .badger-loader-logo {
         width: min(40vw, 10rem);

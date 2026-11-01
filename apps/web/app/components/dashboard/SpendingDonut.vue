@@ -58,7 +58,7 @@ const centerTotal = computed(() => formatCurrencyRounded(props.report.total, pro
     <div class="flex items-center gap-6 px-4 pb-3 md:px-0 md:pb-0">
         <div class="relative h-32 w-32 shrink-0 md:h-40 md:w-40">
             <Chart
-                :key="isDark ? 'dark' : 'light'"
+                :key="`${themeStore.colorTheme}-${isDark ? 'dark' : 'light'}`"
                 type="doughnut"
                 :data="chartData"
                 :options="chartOptions"
