@@ -192,9 +192,89 @@ export const oceanTheme: ThemeDefinition = {
     dark: tintedDark("96, 165, 250", "#0A0F18"),
 };
 
+// Forest's primary is green, so income moves to cyan to stay distinct from the primary.
+const FOREST_AMOUNT = {
+    income: "{cyan.500}",
+    incomeStrong: "{cyan.600}",
+    expense: "{rose.500}",
+} as const;
+
+export const forestTheme: ThemeDefinition = {
+    label: "Forest",
+    primary: paletteRamp("green"),
+    surface: {
+        0: "#FFFFFF",
+        50: "#F6F8F6",
+        100: "#EEF2EE",
+        200: "#DDE4DE",
+        300: "#C4CFC6",
+        400: "#93A397",
+        500: "#66756A",
+        600: "#4A584E",
+        700: "#36423A",
+        800: "#1C2420",
+        900: "#111814",
+        950: "#0A0F0C",
+    },
+    light: tintedLight(FOREST_AMOUNT),
+    dark: tintedDark("74, 222, 128", "#0A0F0C", FOREST_AMOUNT),
+};
+
+export const sunsetTheme: ThemeDefinition = {
+    label: "Sunset",
+    primary: paletteRamp("orange"),
+    surface: {
+        0: "#FFFFFF",
+        50: "#FBF8F5",
+        100: "#F5F0EB",
+        200: "#E9E1D8",
+        300: "#D6CABD",
+        400: "#A8998A",
+        500: "#7A6C5F",
+        600: "#5C5046",
+        700: "#433A33",
+        800: "#241E1A",
+        900: "#161210",
+        950: "#0D0A08",
+    },
+    light: tintedLight(),
+    dark: tintedDark("251, 146, 60", "#0D0A08"),
+};
+
+// Rose's primary is pink, so expense moves to orange to stay distinct from the primary.
+const ROSE_AMOUNT = {
+    income: "{teal.500}",
+    incomeStrong: "{teal.600}",
+    expense: "{orange.500}",
+} as const;
+
+export const roseTheme: ThemeDefinition = {
+    label: "Rose",
+    primary: paletteRamp("pink"),
+    surface: {
+        0: "#FFFFFF",
+        50: "#FCF7F9",
+        100: "#F7EFF3",
+        200: "#EBDDE4",
+        300: "#D9C5CF",
+        400: "#AA95A0",
+        500: "#7B6872",
+        600: "#5D4D56",
+        700: "#45383F",
+        800: "#251C21",
+        900: "#171114",
+        950: "#0E0A0C",
+    },
+    light: tintedLight(ROSE_AMOUNT),
+    dark: tintedDark("244, 114, 182", "#0E0A0C", ROSE_AMOUNT),
+};
+
 export const THEMES: Record<ColorThemeName, ThemeDefinition> = {
     noir: noirTheme,
     ocean: oceanTheme,
+    forest: forestTheme,
+    sunset: sunsetTheme,
+    rose: roseTheme,
 };
 
 // Chart.js draws on a canvas, where CSS var() does not resolve, so chart colours are hex
