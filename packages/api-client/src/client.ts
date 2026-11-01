@@ -48,6 +48,7 @@ import type {
     IChangelogSeenResponse,
     IAuthResponse,
     IAuthUser,
+    IUpdateMeRequest,
 } from "@badger/types";
 import type { AccountType, AttachmentDisposition, AvatarIconName } from "@badger/shared-data";
 
@@ -231,6 +232,11 @@ export class ApiClient {
 
     async getMe(): Promise<IAuthUser> {
         const response = await this.client.get<IAuthUser>("/auth/me");
+        return response.data;
+    }
+
+    async updateMe(data: IUpdateMeRequest): Promise<IAuthUser> {
+        const response = await this.client.patch<IAuthUser>("/auth/me", data);
         return response.data;
     }
 
