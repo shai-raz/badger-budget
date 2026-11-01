@@ -52,7 +52,7 @@ describe("theme store", () => {
         const store = await loadStore();
         store.initializeTheme();
         expect(store.isDark).toBe(true);
-        expect(store.theme).toBe("dark");
+        expect(store.colorMode).toBe("dark");
     });
 
     it("follows a light OS when nothing is saved", async () => {
@@ -60,7 +60,7 @@ describe("theme store", () => {
         const store = await loadStore();
         store.initializeTheme();
         expect(store.isDark).toBe(false);
-        expect(store.theme).toBe("light");
+        expect(store.colorMode).toBe("light");
     });
 
     it("lets a saved choice win over the OS", async () => {
@@ -88,7 +88,7 @@ describe("theme store", () => {
         const store = await loadStore();
         store.initializeTheme();
 
-        store.toggleTheme();
+        store.toggleDarkMode();
         expect(store.isDark).toBe(true);
 
         env.osChange(false);
@@ -100,7 +100,7 @@ describe("theme store", () => {
         const store = await loadStore();
         store.initializeTheme();
 
-        store.toggleTheme();
+        store.toggleDarkMode();
 
         expect(env.storage.setItem).toHaveBeenCalledWith("theme-preference", "dark");
         expect(env.classList.toggle).toHaveBeenLastCalledWith("dark", true);
@@ -135,8 +135,15 @@ describe("theme store", () => {
         store.initializeTheme();
         expect(store.isDark).toBe(true);
 
-        expect(() => store.toggleTheme()).not.toThrow();
+        expect(() => store.toggleDarkMode()).not.toThrow();
         expect(store.isDark).toBe(false);
         expect(env.classList.toggle).toHaveBeenLastCalledWith("dark", false);
+    });
+
+    it("exposes the Noir theme definition", async () => {
+        setup();
+        const store = await loadStore();
+        const { noirTheme } = await import("../theme/themes");
+        expect(store.definition).toBe(noirTheme);
     });
 });

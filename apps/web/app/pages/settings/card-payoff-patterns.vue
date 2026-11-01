@@ -207,7 +207,7 @@ const getTypeSeverity = (isSystem: boolean): "info" | "success" => {
                 class="mx-4 mt-3 mb-4 rounded-lg bg-surface-50 p-3 md:mx-0 md:mb-0 dark:bg-surface-800"
             >
                 <div class="flex items-start gap-2">
-                    <i class="pi pi-info-circle mt-1 text-blue-500"></i>
+                    <i class="pi pi-info-circle mt-1 text-primary"></i>
                     <div class="text-sm text-surface-700 dark:text-surface-200">
                         <strong>System patterns</strong> are provided by default and cannot be deleted.
                         <strong>User patterns</strong> are created when you mark transactions as credit card payments.

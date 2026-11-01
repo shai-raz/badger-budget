@@ -143,12 +143,12 @@ describe("rowAmountClass", () => {
         expect(rowAmountClass(income)).toBe("text-muted-color");
     });
 
-    it("keeps teal for an unallocated income", () => {
-        expect(rowAmountClass(tx({ type: "income" }))).toBe("text-teal-500");
+    it("keeps the income colour for an unallocated income", () => {
+        expect(rowAmountClass(tx({ type: "income" }))).toBe("text-income");
     });
 
-    it("keeps rose for an expense, even one with reimbursements", () => {
-        expect(rowAmountClass(tx({ reimbursement: reimbursement({ allocatedActive: 300 }) }))).toBe("text-rose-500");
+    it("keeps the expense colour for an expense, even one with reimbursements", () => {
+        expect(rowAmountClass(tx({ reimbursement: reimbursement({ allocatedActive: 300 }) }))).toBe("text-expense");
     });
 
     it("keeps the neutral transfer class for a transfer", () => {

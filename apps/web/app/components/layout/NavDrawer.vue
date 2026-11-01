@@ -118,7 +118,7 @@ watch(isDesktop, (desktop) => {
                     <ToggleSwitch
                         :input-id="themeSwitchId"
                         :model-value="themeStore.isDark"
-                        @update:model-value="(value) => themeStore.setTheme(value === true)"
+                        @update:model-value="(value) => themeStore.setDarkMode(value === true)"
                     >
                         <template #handle="{ checked }">
                             <i

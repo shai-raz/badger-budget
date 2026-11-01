@@ -20,8 +20,8 @@ const props = withDefaults(defineProps<Props>(), {
     mobileSurface: "recessed",
 });
 
-const POSITIVE_CLASS = "text-teal-500";
-const NEGATIVE_CLASS = "text-rose-500";
+const POSITIVE_CLASS = "text-income";
+const NEGATIVE_CLASS = "text-expense";
 const NEUTRAL_CLASS = "text-surface-600 dark:text-surface-300";
 
 interface MetricCell {

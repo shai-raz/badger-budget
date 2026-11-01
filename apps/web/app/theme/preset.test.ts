@@ -2,8 +2,7 @@ import Aura from "@primeuix/themes/aura";
 import { describe, expect, it } from "vitest";
 import { customAuraPreset, surfacePalette } from "./preset";
 
-type Preset = typeof customAuraPreset;
-const semantic = customAuraPreset.semantic as Preset["semantic"];
+const semantic = customAuraPreset.semantic;
 const lightScheme = semantic.colorScheme.light;
 const darkScheme = semantic.colorScheme.dark;
 const buttonScheme = customAuraPreset.components.button.colorScheme;
@@ -79,5 +78,29 @@ describe("customAuraPreset: components moved over losslessly", () => {
     it("keeps the dialog header and content paddings", () => {
         expect(customAuraPreset.components.dialog.header.padding).toBe("1.25rem 1.25rem 1rem");
         expect(customAuraPreset.components.dialog.content.padding).toBe("0.25rem 1.25rem 1.25rem 1.25rem");
+    });
+});
+
+describe("customAuraPreset: amount and budget tokens", () => {
+    // Literal values, not the constants the preset is built from: Noir must look exactly
+    // as it did before the tokens existed, so editing a constant should fail here.
+    it("keeps the Noir amount refs in both schemes", () => {
+        const noirAmount = {
+            income: "{teal.500}",
+            incomeStrong: "{teal.600}",
+            expense: "{rose.500}",
+        };
+        expect(lightScheme.amount).toEqual(noirAmount);
+        expect(darkScheme.amount).toEqual(noirAmount);
+    });
+
+    it("keeps the budget status hexes in both schemes", () => {
+        const noirBudget = {
+            ok: "#10b981",
+            warning: "#f59e0b",
+            over: "#ef4444",
+        };
+        expect(lightScheme.budget).toEqual(noirBudget);
+        expect(darkScheme.budget).toEqual(noirBudget);
     });
 });

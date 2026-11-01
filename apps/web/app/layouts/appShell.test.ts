@@ -167,7 +167,7 @@ describe("app shell viewport contract", () => {
         expect(navDrawer).toContain("pi-sun");
         expect(navDrawer).toContain("Dark mode");
         expect(navDrawer).not.toContain("Light mode");
-        expect(navDrawer).not.toContain("toggleTheme");
+        expect(navDrawer).not.toContain("toggleDarkMode");
     });
 
     it("gives PageHeader the back and menu buttons, the single title and resolves leading via the pure util", () => {

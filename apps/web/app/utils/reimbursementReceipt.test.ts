@@ -46,7 +46,7 @@ describe("reimbursementReceiptLines", () => {
         );
         expect(lines).toEqual([
             { label: "Paid", value: formatCurrency(600, "ILS"), valueClass: "" },
-            { label: "Paid back", value: `−${formatCurrency(300, "ILS")}`, valueClass: "text-teal-500" },
+            { label: "Paid back", value: `−${formatCurrency(300, "ILS")}`, valueClass: "text-income" },
         ]);
     });
 
@@ -58,7 +58,7 @@ describe("reimbursementReceiptLines", () => {
         expect(lines?.[1]).toEqual({
             label: "Paid back",
             value: `−${formatCurrency(600, "ILS")}`,
-            valueClass: "text-teal-500",
+            valueClass: "text-income",
         });
     });
 
@@ -75,7 +75,7 @@ describe("reimbursementReceiptLines", () => {
         expect(lines?.[1]).toEqual({
             label: "Paid back",
             value: `−${formatCurrency(0, "ILS")}`,
-            valueClass: "text-teal-500",
+            valueClass: "text-income",
         });
     });
 

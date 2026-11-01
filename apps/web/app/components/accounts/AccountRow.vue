@@ -63,7 +63,7 @@ const handleMenu = (event: Event) => emit("menuToggle", { account: props.account
                 <p
                     v-else
                     class="font-semibold tabular-nums"
-                    :class="display.tone === 'negative' ? 'text-rose-500' : ''"
+                    :class="display.tone === 'negative' ? 'text-expense' : ''"
                 >
                     {{ formatCurrency(display.amount, account.currency?.code) }}
                 </p>
