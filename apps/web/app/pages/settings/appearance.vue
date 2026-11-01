@@ -64,6 +64,7 @@ async function onKeydown(event: KeyboardEvent) {
 
         <SharedSectionBand title="Mode">
             <div class="flex flex-col gap-2 px-4 pb-4 md:px-0 md:pb-0">
+                <!-- Full width below md; natural width from md up. Fixed-width toggles keep the three options equal. -->
                 <SelectButton
                     v-model="modePreference"
                     :options="COLOR_MODE_OPTIONS"
@@ -71,9 +72,19 @@ async function onKeydown(event: KeyboardEvent) {
                     option-value="value"
                     :allow-empty="false"
                     aria-label="Mode"
-                    class="flex w-full"
-                    :pt="{ pcToggleButton: { root: { class: 'flex-1' } } }"
-                />
+                    class="flex w-full md:inline-flex md:w-auto"
+                    :pt="{ pcToggleButton: { root: { class: 'flex-1 md:w-28 md:flex-none' } } }"
+                >
+                    <template #option="slotProps">
+                        <span class="inline-flex items-center gap-2">
+                            <i
+                                :class="['pi', slotProps.option.icon]"
+                                aria-hidden="true"
+                            />
+                            <span>{{ slotProps.option.label }}</span>
+                        </span>
+                    </template>
+                </SelectButton>
                 <p class="text-xs text-muted-color">Saved on this device.</p>
             </div>
         </SharedSectionBand>

@@ -68,4 +68,34 @@ describe("settings appearance page", () => {
 
         expect(wrapper.text()).toContain("Synced to your account");
     });
+
+    it("shows a hidden icon before each Mode option, keeping the label as the accessible name", async () => {
+        const wrapper = await mountSuspended(Appearance);
+
+        const expected = [
+            { icon: "pi-desktop", label: "System" },
+            { icon: "pi-sun", label: "Light" },
+            { icon: "pi-moon", label: "Dark" },
+        ];
+        for (const { icon, label } of expected) {
+            const iconEl = wrapper.get(`i.pi.${icon}`);
+            expect(iconEl.attributes("aria-hidden")).toBe("true");
+            expect(iconEl.element.parentElement?.textContent).toContain(label);
+        }
+    });
+
+    it("keeps the Mode options equal width and the control full width below md, natural width from md up", async () => {
+        const wrapper = await mountSuspended(Appearance);
+
+        const root = wrapper.get('[aria-label="Mode"]');
+        expect(root.classes()).toEqual(expect.arrayContaining(["w-full", "md:inline-flex", "md:w-auto"]));
+
+        for (const icon of ["pi-desktop", "pi-sun", "pi-moon"]) {
+            const toggle = wrapper.get(`i.pi.${icon}`).element.closest(".p-togglebutton");
+            expect(toggle).not.toBeNull();
+            expect(toggle?.classList).toContain("flex-1");
+            expect(toggle?.classList).toContain("md:w-28");
+            expect(toggle?.classList).toContain("md:flex-none");
+        }
+    });
 });
