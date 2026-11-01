@@ -4,6 +4,10 @@ import { useSelectColorTheme } from "../../composables/settings/useSelectColorTh
 import { nextRadioIndex } from "../../utils/radioGroup";
 import { COLOR_MODE_OPTIONS, type ColorModePreference } from "../../utils/theme";
 
+// Both bands share these header notes: the first for device-only saves, the second for account-synced ones.
+const SAVED_ON_DEVICE_NOTE = "Saved on this device";
+const SYNCED_TO_ACCOUNT_NOTE = "Synced to your account";
+
 // fullBleed: below md the bands run edge to edge, as on Settings (see layouts/app.vue).
 definePageMeta({
     layout: "app",
@@ -43,7 +47,7 @@ async function onKeydown(event: KeyboardEvent) {
         <SharedSectionBand
             title="Color theme"
             heading-id="color-theme-heading"
-            :meta="isDeviceOnly ? 'Saved on this device' : 'Synced to your account'"
+            :meta="isDeviceOnly ? SAVED_ON_DEVICE_NOTE : SYNCED_TO_ACCOUNT_NOTE"
         >
             <div
                 ref="groupRef"
@@ -62,8 +66,12 @@ async function onKeydown(event: KeyboardEvent) {
             </div>
         </SharedSectionBand>
 
-        <SharedSectionBand title="Mode">
-            <div class="flex flex-col gap-2 px-4 pb-4 md:px-0 md:pb-0">
+        <SharedSectionBand
+            title="Mode"
+            heading-id="mode-heading"
+            :meta="SAVED_ON_DEVICE_NOTE"
+        >
+            <div class="px-4 pb-4 md:px-0 md:pb-0">
                 <!-- Full width below md; natural width from md up. Fixed-width toggles keep the three options equal. -->
                 <SelectButton
                     v-model="modePreference"
@@ -85,7 +93,6 @@ async function onKeydown(event: KeyboardEvent) {
                         </span>
                     </template>
                 </SelectButton>
-                <p class="text-xs text-muted-color">Saved on this device.</p>
             </div>
         </SharedSectionBand>
     </div>

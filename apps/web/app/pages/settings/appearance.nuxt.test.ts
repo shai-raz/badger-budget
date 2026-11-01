@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
+import type { VueWrapper } from "@vue/test-utils";
 import { COLOR_THEMES } from "@badger/shared-data";
 import type { IAuthUser } from "@badger/types";
 import { useAuthStore } from "~/stores/auth";
@@ -37,6 +38,12 @@ beforeEach(() => {
     useAuthStore().user = { ...baseUser };
 });
 
+// The header's right-hand slot, which holds the band's meta note.
+function bandMeta(wrapper: VueWrapper, title: string): string {
+    const heading = wrapper.findAll("h2").find((h) => h.text().includes(title));
+    return heading?.element.nextElementSibling?.textContent?.trim() ?? "";
+}
+
 describe("settings appearance page", () => {
     it("renders one radio per colour theme, with the current theme checked", async () => {
         const wrapper = await mountSuspended(Appearance);
@@ -55,18 +62,28 @@ describe("settings appearance page", () => {
         expect(select).toHaveBeenCalledWith("ocean");
     });
 
-    it("says the colour theme is saved on this device for the demo user", async () => {
+    it("shows where each choice is saved in the band headers for other users", async () => {
+        const wrapper = await mountSuspended(Appearance);
+
+        expect(bandMeta(wrapper, "Color theme")).toBe("Synced to your account");
+        expect(bandMeta(wrapper, "Mode")).toBe("Saved on this device");
+    });
+
+    it("shows both choices as saved on this device for the demo user", async () => {
         useAuthStore().user = { ...baseUser, isDemo: true };
         const wrapper = await mountSuspended(Appearance);
 
-        expect(wrapper.text()).toContain("Saved on this device");
+        expect(bandMeta(wrapper, "Color theme")).toBe("Saved on this device");
+        expect(bandMeta(wrapper, "Mode")).toBe("Saved on this device");
         expect(wrapper.text()).not.toContain("Synced to your account");
     });
 
-    it("says the colour theme is synced to the account for other users", async () => {
+    it("has no trailing period on the notes and no note under the Mode control", async () => {
         const wrapper = await mountSuspended(Appearance);
 
-        expect(wrapper.text()).toContain("Synced to your account");
+        expect(wrapper.text()).not.toContain("Saved on this device.");
+        const modeBand = wrapper.get("#mode-heading").element.closest("section");
+        expect(modeBand?.querySelector("p")).toBeNull();
     });
 
     it("shows a hidden icon before each Mode option, keeping the label as the accessible name", async () => {
