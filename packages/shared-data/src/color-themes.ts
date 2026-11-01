@@ -1,5 +1,5 @@
 // Only themes the web app ships. Adding a theme = a name here + its definition in apps/web/app/theme/themes.ts.
-export const COLOR_THEMES = ["noir", "ocean"] as const;
+export const COLOR_THEMES = ["noir", "ocean", "forest", "sunset", "rose"] as const;
 export type ColorThemeName = (typeof COLOR_THEMES)[number];
 export const DEFAULT_COLOR_THEME: ColorThemeName = "noir";
 
