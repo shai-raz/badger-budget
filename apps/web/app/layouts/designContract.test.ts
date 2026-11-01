@@ -166,10 +166,10 @@ describe("design contract: amount colours come from theme tokens", () => {
     // two allow-listed files below, whose colours are not amounts.
     const RAW_AMOUNT_COLOUR = /text-teal-\d|text-rose-500/;
     const ALLOW_LIST = [
-        // File-type icons: teal for images, rose for PDFs. A file kind, not an amount.
-        "components/transactions/AttachmentsCard.vue",
         // The Delete menu item: a destructive status colour, not an amount.
         "pages/accounts/index.vue",
+        // File-type icons: teal for images, rose for PDFs. A file kind, not an amount.
+        "utils/attachments.ts",
     ];
     const sourceFiles = ["components", "pages", "layouts", "utils"].flatMap((dir) =>
         readdirSync(`${appDir}/${dir}`, { recursive: true, encoding: "utf8" })
