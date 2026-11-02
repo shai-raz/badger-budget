@@ -6,6 +6,8 @@ import type { IScraperConnectionResponse, IUpdateScraperConnection } from "@badg
 import { useQueryClient } from "@tanstack/vue-query";
 import { bankSyncKeys } from "~/composables/bankSync/useBankSync";
 import { STALE_PIN_MESSAGE, unlockFallbackMessage } from "~/utils/syncPasskeyWebAuthn";
+import { shouldAutoSyncAfterSave } from "~/utils/bankConnections";
+import { useBankSyncFlow } from "~/composables/bankSync/useBankSyncFlow";
 
 const props = defineProps<{
     visible: boolean;
@@ -23,6 +25,7 @@ const toast = useToast();
 const queryClient = useQueryClient();
 const createMutation = useCreateScraperConnectionMutation();
 const updateMutation = useUpdateScraperConnectionMutation();
+const { syncConnectionWithPin } = useBankSyncFlow();
 
 const isEditMode = computed(() => !!props.connection);
 // The first login field takes focus on create, and on edit only when opened to fix a login.
@@ -178,17 +181,21 @@ const handleSave = async () => {
                 displayName: displayName.value.trim(),
                 scrapeLookbackDays: scrapeLookbackDays.value,
             };
-            if (credentialsTouched.value) {
+            const credentialsChanged = credentialsTouched.value;
+            if (credentialsChanged) {
                 data.pin = pin;
                 data.credentials = { ...credentials.value };
             }
-            await updateMutation.mutateAsync({ id: props.connection.id, data });
+            const updated = await updateMutation.mutateAsync({ id: props.connection.id, data });
             toast.add({
                 severity: "success",
                 summary: "Success",
                 detail: "Bank connection updated successfully",
                 life: 3000,
             });
+            if (shouldAutoSyncAfterSave({ credentialsChanged, isActive: updated.isActive })) {
+                void syncConnectionWithPin(updated.id, pin, { typed: !pinFromPasskey });
+            }
         } else {
             if (!selectedCompanyId.value || !selectedProvider.value) return;
             await createMutation.mutateAsync({
