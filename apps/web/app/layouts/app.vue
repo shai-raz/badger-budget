@@ -8,6 +8,7 @@ import UpdateDialog from "~/components/layout/UpdateDialog.vue";
 import WhatsNewDialog from "~/components/layout/WhatsNewDialog.vue";
 import BudgetFormDialog from "~/components/budgets/BudgetFormDialog.vue";
 import BankSyncSyncFlowHost from "~/components/bankSync/SyncFlowHost.vue";
+import BankSyncSyncRunDialog from "~/components/bankSync/SyncRunDialog.vue";
 import BankSyncScraperConnectionModal from "~/components/bankSync/ScraperConnectionModal.vue";
 import CashFollowupToast from "~/components/transactions/CashFollowupToast.vue";
 import UpgradeToast from "~/components/layout/UpgradeToast.vue";
@@ -88,6 +89,7 @@ useHead({ bodyAttrs: { class: "app-layout-body" } });
         <WhatsNewDialog />
         <BudgetFormDialog />
         <BankSyncSyncFlowHost />
+        <BankSyncSyncRunDialog />
         <BankSyncScraperConnectionModal
             :visible="connectionEditor.visible"
             :connection="connectionEditor.connection"
