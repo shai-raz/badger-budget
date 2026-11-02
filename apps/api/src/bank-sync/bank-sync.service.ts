@@ -24,14 +24,11 @@ const CONNECTION_SELECT = {
     isActive: true,
     lastSyncedAt: true,
     createdAt: true,
-    // Only the latest finished run; `toConnectionResponse` turns it into `latestJob`.
-    scraperJobs: {
-        where: { finishedAt: { not: null }, status: { in: ["success", "failed"] } },
-        orderBy: { finishedAt: "desc" as const },
-        take: 1,
-        select: { syncJobId: true, status: true, errorCode: true, finishedAt: true },
-    },
 };
+
+// A connection's latest finished run, read per connection in `toConnectionResponses`. Not a nested
+// `take: 1` on CONNECTION_SELECT: Prisma 6 applies a nested take in memory, so it reads every finished run.
+const LATEST_JOB_SELECT = { syncJobId: true, status: true, errorCode: true, finishedAt: true } as const;
 
 export const SYNC_PASSKEY_SELECT = {
     id: true,
@@ -49,13 +46,10 @@ const SYNC_JOB_INCLUDE = {
 
 const DEFAULT_SYNC_JOB_PAGE_SIZE = 10;
 
-type ConnectionRow = {
-    scraperJobs: { syncJobId: string; status: string; errorCode: string | null; finishedAt: Date | null }[];
-};
+type LatestJobRow = { syncJobId: string; status: string; errorCode: string | null; finishedAt: Date | null };
 
-/** Drops the raw `scraperJobs` rows from a connection and exposes its latest finished run as `latestJob`. */
-function toConnectionResponse<T extends ConnectionRow>({ scraperJobs, ...connection }: T) {
-    const latest = scraperJobs[0];
+/** Exposes a connection's latest finished run as `latestJob` (null when it has none). */
+function toConnectionResponse<T extends object>(connection: T, latest: LatestJobRow | null) {
     return {
         ...connection,
         latestJob: latest
@@ -208,7 +202,25 @@ export class BankSyncService {
             select: CONNECTION_SELECT,
             orderBy: { createdAt: "desc" },
         });
-        return rows.map(toConnectionResponse);
+        return this.toConnectionResponses(rows);
+    }
+
+    /** One bounded `findFirst` per connection (the user has only a handful), so each read stays O(1) in run history. */
+    private async toConnectionResponses<T extends { id: string }>(connections: T[]) {
+        return Promise.all(
+            connections.map(async (connection) => {
+                const latest = await this.prisma.scraperJob.findFirst({
+                    where: {
+                        scraperConnectionId: connection.id,
+                        finishedAt: { not: null },
+                        status: { in: ["success", "failed"] },
+                    },
+                    orderBy: { finishedAt: "desc" },
+                    select: LATEST_JOB_SELECT,
+                });
+                return toConnectionResponse(connection, latest);
+            }),
+        );
     }
 
     async createConnection(userId: string, dto: CreateScraperConnectionDto) {
@@ -247,7 +259,8 @@ export class BankSyncService {
             },
             select: CONNECTION_SELECT,
         });
-        return toConnectionResponse(created);
+        // A new connection has no runs yet.
+        return toConnectionResponse(created, null);
     }
 
     async updateConnection(userId: string, id: string, dto: UpdateScraperConnectionDto) {
@@ -293,7 +306,8 @@ export class BankSyncService {
             data: updateData,
             select: CONNECTION_SELECT,
         });
-        return toConnectionResponse(updated);
+        const [response] = await this.toConnectionResponses([updated]);
+        return response;
     }
 
     async deleteConnection(userId: string, id: string): Promise<void> {

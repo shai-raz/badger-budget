@@ -514,7 +514,7 @@ model ScraperJob {
   balanceSnapshots  AccountBalanceSnapshot[]
 
   @@index([syncJobId])
-  @@index([scraperConnectionId])
+  @@index([scraperConnectionId, finishedAt])
   @@map("scraper_jobs")
 }
 
