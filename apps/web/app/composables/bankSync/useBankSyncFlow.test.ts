@@ -137,3 +137,37 @@ describe("shared bank sync flow", () => {
         expect(mocks.full).not.toHaveBeenCalled();
     });
 });
+
+describe("syncConnectionWithPin", () => {
+    it("syncs the connection with the given PIN and tracks the job", async () => {
+        const started = await flow.syncConnectionWithPin("bank-4", "1234", { typed: true });
+        expect(started).toBe(true);
+        expect(mocks.single).toHaveBeenCalledWith({
+            connectionId: "bank-4",
+            pin: "1234",
+            defaultCurrencyCode: undefined,
+        });
+        expect(mocks.full).not.toHaveBeenCalled();
+        expect(flow.activeJobId.value).toBe("single-job");
+    });
+
+    it("refuses while a sync is running, with an info toast and no mutation", async () => {
+        await flow.syncConnectionWithPin("bank-4", "1234", { typed: false });
+        const started = await flow.syncConnectionWithPin("bank-5", "5678", { typed: false });
+        expect(started).toBe(false);
+        expect(mocks.single).toHaveBeenCalledTimes(1);
+        expect(mocks.addToast).toHaveBeenCalledWith(
+            expect.objectContaining({ severity: "info", summary: "A sync is already running" }),
+        );
+    });
+
+    it("shows the start error and returns false when the mutation rejects", async () => {
+        mocks.single.mockRejectedValueOnce(new Error("Network error"));
+        const started = await flow.syncConnectionWithPin("bank-4", "1234", { typed: true });
+        expect(started).toBe(false);
+        expect(flow.activeJobId.value).toBeNull();
+        expect(mocks.addToast).toHaveBeenCalledWith(
+            expect.objectContaining({ severity: "error", summary: "Failed to Start Sync" }),
+        );
+    });
+});

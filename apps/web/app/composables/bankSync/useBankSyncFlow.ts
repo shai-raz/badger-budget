@@ -323,6 +323,32 @@ function createBankSyncFlow() {
         }
     };
 
+    /** Syncs one connection with a PIN the caller already unlocked (e.g. the edit modal), so the user isn't asked twice. Returns whether a sync started. */
+    const syncConnectionWithPin = async (
+        connectionId: string,
+        syncPin: string,
+        { typed }: { typed: boolean },
+    ): Promise<boolean> => {
+        if (busy.value || pinDialogVisible.value) {
+            toast.add({
+                severity: "info",
+                summary: "A sync is already running",
+                detail: "Sync this connection again when it finishes.",
+                life: 5000,
+            });
+            return false;
+        }
+        target = { connectionId };
+        try {
+            await startSync(syncPin, { typed });
+            return true;
+        } catch (error: unknown) {
+            target = {};
+            showStartError(error);
+            return false;
+        }
+    };
+
     const cancelSync = () => {
         if (triggerPending.value) return;
         pinDialogVisible.value = false;
@@ -356,5 +382,6 @@ function createBankSyncFlow() {
         submitSync,
         triggerPending,
         cancelSync,
+        syncConnectionWithPin,
     };
 }
