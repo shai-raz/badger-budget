@@ -9,6 +9,8 @@ Scrapes Israeli banks with `israeli-bank-scrapers` (IBS) + `puppeteer-extra` (st
 - `CAL_PROXY_URL` runs `visaCal` in its own proxied browser context (Cal blocks datacenter IPs), with one direct retry unless the error is a credential error (never retried, to avoid lockouts).
 - IBS is installed from the shai-raz fork, pinned to a commit, for in-browser Cal API calls. Switch back once upstream ships them.
 - Debug artifacts (screenshots, MHTML) are bank-page content: upload to R2 when configured, write locally only with `STORE_SCRAPER_DEBUG_LOCALLY=true`, otherwise store nothing.
+- Every failure path must set `errorCode` (`withSyncErrorCode` / `syncErrorCodeOf`); the web copy map is total over `SYNC_ERROR_CODES`.
+- `SyncRecoveryService` marks every pending/running run interrupted on boot, which assumes one API instance.
 
 ## Balances
 
@@ -19,6 +21,3 @@ Scrapes Israeli banks with `israeli-bank-scrapers` (IBS) + `puppeteer-extra` (st
 ## Dates
 
 IBS sets `moment.tz.setDefault('Asia/Jerusalem')` globally on first scrape, which leaks into every later `moment()` in the process. Scraped dates are converted to UTC midnight of the provider's local day (`scraped-date.util.ts`, zone from `SOURCE_TIMEZONE_BY_COMPANY`). Never pass `new Date(txn.date)` to a `@db.Date` column.
-
-- Every failure path must set `errorCode` (`withSyncErrorCode` / `syncErrorCodeOf`); the web copy map is total over `SYNC_ERROR_CODES`.
-- `SyncRecoveryService` marks every pending/running run interrupted on boot, which assumes one API instance.
