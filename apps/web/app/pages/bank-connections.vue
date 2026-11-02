@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useBankSyncFlow } from "~/composables/bankSync/useBankSyncFlow";
 import type { IScraperConnectionResponse } from "@badger/types";
+import { connectionSubtitle } from "~/utils/bankConnections";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
 
@@ -30,7 +31,11 @@ const connectionCountLabel = computed(() => {
 
 const handleAddConnection = () => openCreate();
 
+// The row whose toggle is saving; its switch stays disabled until the update settles.
+const pendingToggleId = ref<string | null>(null);
+
 const handleToggleConnection = async (connection: IScraperConnectionResponse) => {
+    pendingToggleId.value = connection.id;
     try {
         await updateConnectionMutation.mutateAsync({
             id: connection.id,
@@ -49,6 +54,8 @@ const handleToggleConnection = async (connection: IScraperConnectionResponse) =>
             detail: getApiErrorMessage(err, "Failed to update connection"),
             life: 5000,
         });
+    } finally {
+        pendingToggleId.value = null;
     }
 };
 
@@ -96,11 +103,6 @@ const menuItems = computed(() => {
             command: () => requestSync({ connectionId: connection.id }),
         },
         {
-            label: connection.isActive ? "Pause" : "Resume",
-            icon: connection.isActive ? "pi pi-pause" : "pi pi-play",
-            command: () => handleToggleConnection(connection),
-        },
-        {
             label: "Edit",
             icon: "pi pi-pencil",
             command: () => openEdit(connection),
@@ -120,11 +122,6 @@ const openMenu = ({ connection, event }: { connection: IScraperConnectionRespons
 
 const formatDate = (date: Date) =>
     new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(date));
-
-const connectionDetails = (connection: IScraperConnectionResponse) => {
-    const synced = connection.lastSyncedAt ? `Last synced ${formatDate(connection.lastSyncedAt)}` : "Never synced";
-    return `${connection.companyId} · ${connection.scrapeLookbackDays} days lookback · ${synced}`;
-};
 </script>
 
 <template>
@@ -167,16 +164,18 @@ const connectionDetails = (connection: IScraperConnectionResponse) => {
                     <div class="flex min-w-0 flex-1 flex-col gap-1">
                         <div class="flex min-w-0 items-center gap-2">
                             <span class="truncate font-semibold">{{ conn.displayName }}</span>
-                            <SharedStatusTag
-                                :value="conn.isActive ? 'Active' : 'Paused'"
-                                :tone="conn.isActive ? 'success' : 'neutral'"
-                                class="shrink-0"
-                            />
                         </div>
                         <p class="truncate text-xs text-muted-color">
-                            {{ connectionDetails(conn) }}
+                            {{ connectionSubtitle(conn, formatDate) }}
                         </p>
                     </div>
+                    <ToggleSwitch
+                        :model-value="conn.isActive"
+                        :disabled="pendingToggleId === conn.id"
+                        :aria-label="`Sync ${conn.displayName}`"
+                        class="shrink-0"
+                        @update:model-value="handleToggleConnection(conn)"
+                    />
                     <Button
                         icon="pi pi-ellipsis-v"
                         text
