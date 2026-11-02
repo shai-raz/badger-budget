@@ -1,5 +1,8 @@
+// Loads from shared-data's compiled dist/, so web's postinstall builds it first (scripts/build-shared-data.mjs).
+// A new workspace runtime import here, or in app/theme/* or app/utils/theme.ts, needs the same.
+import { DEFAULT_COLOR_THEME } from "@badger/shared-data";
 import { customAuraPreset } from "./app/theme/preset";
-import { THEME_COLOR, THEME_INIT_SCRIPT } from "./app/utils/theme";
+import { themeColorFor, THEME_INIT_SCRIPT } from "./app/utils/theme";
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
@@ -102,7 +105,7 @@ export default defineNuxtConfig({
             link: [{ rel: "apple-touch-icon", href: "/apple-touch-icon-180x180.png" }],
             meta: [
                 // Replaced at runtime by plugins/theme.client.ts (useHead) and the init script below.
-                { name: "theme-color", content: THEME_COLOR.light },
+                { name: "theme-color", content: themeColorFor(DEFAULT_COLOR_THEME, "light") },
                 // viewport-fit=cover enables env(safe-area-inset-*), used by AppBottomBar, the app-shell and the fullscreen dialog pt.
                 { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
             ],

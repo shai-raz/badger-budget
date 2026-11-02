@@ -1,13 +1,21 @@
 <script setup lang="ts">
+import { THEMES } from "../../theme/themes";
+import { COLOR_MODE_OPTIONS } from "../../utils/theme";
+
 definePageMeta({
     layout: "app",
     fullBleed: true,
 });
 
 const authStore = useAuthStore();
+const themeStore = useThemeStore();
 const logout = useLogout();
 
 const user = computed(() => authStore.user);
+const modeLabel = computed(
+    () => COLOR_MODE_OPTIONS.find((option) => option.value === themeStore.modePreference)?.label,
+);
+const appearanceSummary = computed(() => `${THEMES[themeStore.colorTheme].label} theme · ${modeLabel.value} mode`);
 </script>
 
 <template>
@@ -18,6 +26,28 @@ const user = computed(() => authStore.user);
             <div class="flex flex-col px-4 pb-4 md:px-0 md:pb-0">
                 <SharedDetailRow label="Name">{{ user?.firstName }} {{ user?.lastName }}</SharedDetailRow>
                 <SharedDetailRow label="Email">{{ user?.email }}</SharedDetailRow>
+            </div>
+        </SharedSectionBand>
+
+        <SharedSectionBand title="General">
+            <div class="flex flex-col divide-y divide-surface-200 dark:divide-surface-700">
+                <NuxtLink
+                    to="/settings/appearance"
+                    class="flex items-center gap-3 px-4 py-3 md:px-0"
+                >
+                    <i
+                        class="pi pi-palette text-muted-color"
+                        aria-hidden="true"
+                    />
+                    <span class="flex min-w-0 flex-1 flex-col">
+                        <span class="text-sm font-semibold">Appearance</span>
+                        <span class="text-xs text-muted-color">{{ appearanceSummary }}</span>
+                    </span>
+                    <i
+                        class="pi pi-chevron-right text-surface-400"
+                        aria-hidden="true"
+                    />
+                </NuxtLink>
             </div>
         </SharedSectionBand>
 

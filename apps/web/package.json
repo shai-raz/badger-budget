@@ -12,7 +12,7 @@
         "lint": "eslint . --max-warnings 0",
         "check-types": "nuxt typecheck",
         "test": "vitest run",
-        "postinstall": "nuxt prepare"
+        "postinstall": "node scripts/build-shared-data.mjs && nuxt prepare"
     },
     "dependencies": {
         "@badger/api-client": "workspace:^",

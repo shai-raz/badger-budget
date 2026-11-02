@@ -28,6 +28,8 @@ interface Props {
     card?: boolean;
     /** Dims the content while keeping it on screen, e.g. while a refetch runs. */
     refreshing?: boolean;
+    /** Id on the heading, so a group can name itself with aria-labelledby. */
+    headingId?: string;
 }
 
 withDefaults(defineProps<Props>(), {
@@ -42,6 +44,7 @@ withDefaults(defineProps<Props>(), {
     emptyText: undefined,
     card: true,
     refreshing: false,
+    headingId: undefined,
 });
 </script>
 
@@ -56,6 +59,7 @@ withDefaults(defineProps<Props>(), {
     >
         <div class="flex items-center justify-between gap-2 px-4 pt-3 pb-2 md:px-0 md:pt-0 md:pb-3">
             <h2
+                :id="headingId"
                 class="text-xs font-semibold uppercase tracking-wide text-muted-color md:text-base md:font-semibold md:normal-case md:tracking-normal md:text-surface-900 dark:md:text-surface-0"
             >
                 <slot name="label">

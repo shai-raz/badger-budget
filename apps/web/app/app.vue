@@ -35,13 +35,13 @@ watch(
 /* App-wide base background so no viewport region (overscroll, unpainted gaps)
    ever falls through to the raw browser canvas. Uses PrimeVue surface tokens;
    the `.dark` class on <html> is toggled by the theme store. PrimeVue's CSS vars
-   are injected at runtime, so the hex fallbacks are what paints before the bundle
-   runs (no white flash in dark mode). */
+   are injected at runtime, so before the bundle runs the fallback is --boot-surface,
+   set inline by the head script from the saved theme and mode (THEME_INIT_SCRIPT). */
 html {
-    background-color: var(--p-surface-0, #ffffff);
+    background-color: var(--p-surface-0, var(--boot-surface, #ffffff));
 }
 html.dark {
-    background-color: var(--p-surface-900, #111111);
+    background-color: var(--p-surface-900, var(--boot-surface, #111111));
     color-scheme: dark;
 }
 /* App layout only (class set by layouts/app.vue): the inner scroller is the only vertical scroller, and the document itself must never scroll or bounce. The :has() rule covers the root scroller; on browsers without :has(), body overflow still propagates to the viewport. */

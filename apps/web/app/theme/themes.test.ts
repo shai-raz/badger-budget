@@ -1,5 +1,12 @@
+import { COLOR_THEMES } from "@badger/shared-data";
 import { describe, expect, it } from "vitest";
-import { chartColors, noirTheme } from "./themes";
+import { chartColors, noirTheme, THEMES } from "./themes";
+
+describe("THEMES", () => {
+    it("defines exactly the shipped colour themes, in COLOR_THEMES order", () => {
+        expect(Object.keys(THEMES)).toEqual([...COLOR_THEMES]);
+    });
+});
 
 describe("chartColors", () => {
     it("draws slice borders in the card surface of each mode", () => {

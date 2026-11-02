@@ -2,6 +2,7 @@
 // can all read it. `buildPreset` in preset.ts turns a ThemeDefinition into the
 // PrimeVue preset.
 
+import type { ColorThemeName } from "@badger/shared-data";
 import type { ColorMode } from "../utils/theme";
 
 export type PrimaryStep = 50 | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900 | 950;
@@ -106,6 +107,94 @@ export const noirTheme: ThemeDefinition = {
         },
         amount: DEFAULT_AMOUNT,
     },
+};
+
+// A palette ramp as Aura references: `paletteRamp("blue")` gives `{blue.50}` … `{blue.950}`.
+export function paletteRamp(palette: string): Record<PrimaryStep, string> {
+    const at = (step: PrimaryStep) => `{${palette}.${step}}`;
+    return {
+        50: at(50),
+        100: at(100),
+        200: at(200),
+        300: at(300),
+        400: at(400),
+        500: at(500),
+        600: at(600),
+        700: at(700),
+        800: at(800),
+        900: at(900),
+        950: at(950),
+    };
+}
+
+// Light scheme on a tinted primary: primary at 700, highlights tinted from the 50-900 steps.
+export function tintedLight(amount: SchemeMapping["amount"] = DEFAULT_AMOUNT): SchemeMapping {
+    return {
+        primary: {
+            color: "{primary.700}",
+            contrastColor: "#ffffff",
+            hoverColor: "{primary.800}",
+            activeColor: "{primary.900}",
+        },
+        highlight: {
+            background: "{primary.50}",
+            focusBackground: "{primary.100}",
+            color: "{primary.800}",
+            focusColor: "{primary.900}",
+        },
+        amount,
+    };
+}
+
+// Dark scheme on a tinted primary: the 400 step on the surface. `rgb400` is the same
+// colour as `{primary.400}`, as "r, g, b", so the translucent highlights can use it.
+export function tintedDark(
+    rgb400: string,
+    onPrimary: string,
+    amount: SchemeMapping["amount"] = DEFAULT_AMOUNT,
+): SchemeMapping {
+    return {
+        primary: {
+            color: "{primary.400}",
+            contrastColor: onPrimary,
+            hoverColor: "{primary.300}",
+            activeColor: "{primary.200}",
+        },
+        highlight: {
+            background: `rgba(${rgb400}, .16)`,
+            focusBackground: `rgba(${rgb400}, .24)`,
+            color: "{primary.300}",
+            focusColor: "{primary.200}",
+        },
+        amount,
+    };
+}
+
+export const oceanTheme: ThemeDefinition = {
+    label: "Ocean",
+    primary: paletteRamp("blue"),
+    surface: {
+        0: "#FFFFFF",
+        50: "#F5F8FC",
+        100: "#EDF2F8",
+        200: "#DCE4EE",
+        300: "#C3CFDD",
+        400: "#94A3B8",
+        // Muted text on the page must pass 4.5:1; #64748B gives only 4.47:1 here.
+        500: "#617089",
+        600: "#475569",
+        700: "#334155",
+        800: "#1A2433",
+        900: "#0F1724",
+        950: "#0A0F18",
+    },
+    light: tintedLight(),
+    dark: tintedDark("96, 165, 250", "#0A0F18"),
+};
+
+export const THEMES: Record<ColorThemeName, ThemeDefinition> = {
+    noir: noirTheme,
+    ocean: oceanTheme,
 };
 
 // Chart.js draws on a canvas, where CSS var() does not resolve, so chart colours are hex
