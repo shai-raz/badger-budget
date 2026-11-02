@@ -22,7 +22,7 @@ describe("BankSyncService passkeys", () => {
     const mockPrisma = {
         userSyncSecret: { findUnique: jest.fn(), upsert: jest.fn(), create: jest.fn() },
         scraperConnection: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
-        syncJob: { findFirst: jest.fn() },
+        syncJob: { findFirst: jest.fn(), findMany: jest.fn() },
         syncPasskey: { findMany: jest.fn(), count: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
         $transaction: jest.fn(),
     };
@@ -184,7 +184,7 @@ describe("BankSyncService passkeys", () => {
         it("createConnection registers the PIN on first use without verifying", async () => {
             mockPrisma.userSyncSecret.findUnique.mockResolvedValueOnce(null);
             mockPrisma.userSyncSecret.create.mockResolvedValue({});
-            mockPrisma.scraperConnection.create.mockResolvedValue({ id: "c1" });
+            mockPrisma.scraperConnection.create.mockResolvedValue({ id: "c1", scraperJobs: [] });
             await service.createConnection(userId, {
                 companyId: "x",
                 displayName: "d",
@@ -237,7 +237,7 @@ describe("BankSyncService passkeys", () => {
         });
 
         it("createConnection reads the sync secret once when one already exists", async () => {
-            mockPrisma.scraperConnection.create.mockResolvedValue({ id: "c1" });
+            mockPrisma.scraperConnection.create.mockResolvedValue({ id: "c1", scraperJobs: [] });
             await service.createConnection(userId, {
                 companyId: "x",
                 displayName: "d",
@@ -245,6 +245,140 @@ describe("BankSyncService passkeys", () => {
                 credentials: creds,
             } as never);
             expect(mockPrisma.userSyncSecret.findUnique).toHaveBeenCalledTimes(1);
+        });
+    });
+    describe("getConnections latestJob", () => {
+        const finishedAt = new Date("2026-01-02T10:00:00Z");
+
+        it("flattens the latest finished run into latestJob and drops scraperJobs", async () => {
+            mockPrisma.scraperConnection.findMany.mockResolvedValue([
+                {
+                    id: "c1",
+                    displayName: "Bank",
+                    scraperJobs: [{ syncJobId: "job-1", status: "failed", errorCode: "INVALID_PASSWORD", finishedAt }],
+                },
+            ]);
+
+            const [connection] = await service.getConnections(userId);
+
+            expect(connection).not.toHaveProperty("scraperJobs");
+            expect(connection.latestJob).toEqual({
+                syncJobId: "job-1",
+                status: "failed",
+                errorCode: "INVALID_PASSWORD",
+                finishedAt,
+            });
+        });
+
+        it("sets latestJob to null when the connection has no finished run", async () => {
+            mockPrisma.scraperConnection.findMany.mockResolvedValue([{ id: "c1", scraperJobs: [] }]);
+
+            const [connection] = await service.getConnections(userId);
+
+            expect(connection.latestJob).toBeNull();
+        });
+
+        it("keeps a null errorCode for a successful run", async () => {
+            mockPrisma.scraperConnection.findMany.mockResolvedValue([
+                {
+                    id: "c1",
+                    scraperJobs: [{ syncJobId: "job-1", status: "success", errorCode: null, finishedAt }],
+                },
+            ]);
+
+            const [connection] = await service.getConnections(userId);
+
+            expect(connection.latestJob?.errorCode).toBeNull();
+        });
+
+        it("turns an unknown stored code into UNKNOWN", async () => {
+            mockPrisma.scraperConnection.findMany.mockResolvedValue([
+                {
+                    id: "c1",
+                    scraperJobs: [{ syncJobId: "job-1", status: "failed", errorCode: "NOT_A_CODE", finishedAt }],
+                },
+            ]);
+
+            const [connection] = await service.getConnections(userId);
+
+            expect(connection.latestJob?.errorCode).toBe("UNKNOWN");
+        });
+
+        it("only reads the single latest finished success or failed run", async () => {
+            mockPrisma.scraperConnection.findMany.mockResolvedValue([]);
+
+            await service.getConnections(userId);
+
+            const { select } = mockPrisma.scraperConnection.findMany.mock.calls[0][0];
+            expect(select.scraperJobs).toEqual(
+                expect.objectContaining({
+                    where: { finishedAt: { not: null }, status: { in: ["success", "failed"] } },
+                    orderBy: { finishedAt: "desc" },
+                    take: 1,
+                }),
+            );
+        });
+    });
+
+    describe("listJobs", () => {
+        const job = (id: string) => ({
+            id,
+            userId,
+            status: "success",
+            scraperJobs: [{ id: `${id}-s`, status: "success", errorCode: null }],
+        });
+
+        it("filters by userId, newest first, and fetches one row beyond the limit", async () => {
+            mockPrisma.syncJob.findMany.mockResolvedValue([]);
+
+            await service.listJobs(userId, { limit: 5 });
+
+            expect(mockPrisma.syncJob.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { userId },
+                    orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+                    take: 6,
+                }),
+            );
+            expect(mockPrisma.syncJob.findMany.mock.calls[0][0]).not.toHaveProperty("cursor");
+        });
+
+        it("passes the cursor and skips the cursor row itself", async () => {
+            mockPrisma.syncJob.findMany.mockResolvedValue([]);
+
+            await service.listJobs(userId, { limit: 5, cursor: "job-9" });
+
+            expect(mockPrisma.syncJob.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ take: 6, cursor: { id: "job-9" }, skip: 1 }),
+            );
+        });
+
+        it("returns nextCursor from the last kept row when an extra row exists", async () => {
+            mockPrisma.syncJob.findMany.mockResolvedValue([job("job-1"), job("job-2"), job("job-3")]);
+
+            const page = await service.listJobs(userId, { limit: 2 });
+
+            expect(page.items.map((j) => j.id)).toEqual(["job-1", "job-2"]);
+            expect(page.nextCursor).toBe("job-2");
+        });
+
+        it("returns a null nextCursor on the last page", async () => {
+            mockPrisma.syncJob.findMany.mockResolvedValue([job("job-1")]);
+
+            const page = await service.listJobs(userId, { limit: 2 });
+
+            expect(page.items.map((j) => j.id)).toEqual(["job-1"]);
+            expect(page.nextCursor).toBeNull();
+        });
+
+        it("turns an unknown stored scraper errorCode into UNKNOWN", async () => {
+            mockPrisma.syncJob.findMany.mockResolvedValue([
+                { id: "job-1", scraperJobs: [{ id: "s1", status: "failed", errorCode: "NOT_A_CODE" }] },
+            ]);
+
+            const page = await service.listJobs(userId, { limit: 5 });
+
+            expect(page.items[0].scraperJobs[0].errorCode).toBe("UNKNOWN");
         });
     });
 });

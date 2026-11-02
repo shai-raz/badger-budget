@@ -10,6 +10,7 @@ import {
     HttpStatus,
     UseGuards,
     ParseUUIDPipe,
+    Query,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from "@nestjs/swagger";
 import { BankSyncService } from "./bank-sync.service";
@@ -19,6 +20,7 @@ import {
     UpdateScraperConnectionDto,
     TriggerSyncDto,
     RegisterSyncPasskeyDto,
+    ListSyncJobsQueryDto,
 } from "./dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
@@ -135,6 +137,13 @@ export class BankSyncController {
     @ApiResponse({ status: 200, description: "Active sync job or null" })
     async getActiveJob(@CurrentUser() user: any) {
         return this.bankSyncService.getActiveJob(user.id);
+    }
+
+    @Get("sync/jobs")
+    @ApiOperation({ summary: "List past sync jobs, newest first (cursor-paged)" })
+    @ApiResponse({ status: 200, description: "Page of sync jobs with a nextCursor (null on the last page)" })
+    listJobs(@CurrentUser() user: { id: string }, @Query() query: ListSyncJobsQueryDto) {
+        return this.bankSyncService.listJobs(user.id, query);
     }
 
     @Get("sync/jobs/:id")

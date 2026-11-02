@@ -13,7 +13,7 @@ import { ImportCandidate } from "../transactions/transaction-import.service";
 import { ScrapedAccountBalance } from "./scraped-balance.util";
 import { AccountBalanceService } from "../accounts/account-balance.service";
 import { AccountsService } from "../accounts/accounts.service";
-import { getBalanceKind, getScrapedAccountType, MAX_PASSKEYS } from "@badger/shared-data";
+import { getBalanceKind, getScrapedAccountType, MAX_PASSKEYS, parseSyncErrorCode } from "@badger/shared-data";
 import { syncErrorCodeOf, withSyncErrorCode } from "./sync-error-code.util";
 
 const CONNECTION_SELECT = {
@@ -24,6 +24,13 @@ const CONNECTION_SELECT = {
     isActive: true,
     lastSyncedAt: true,
     createdAt: true,
+    // Only the latest finished run; `toConnectionResponse` turns it into `latestJob`.
+    scraperJobs: {
+        where: { finishedAt: { not: null }, status: { in: ["success", "failed"] } },
+        orderBy: { finishedAt: "desc" as const },
+        take: 1,
+        select: { syncJobId: true, status: true, errorCode: true, finishedAt: true },
+    },
 };
 
 export const SYNC_PASSKEY_SELECT = {
@@ -39,6 +46,39 @@ export const SYNC_PASSKEY_SELECT = {
 const SYNC_JOB_INCLUDE = {
     scraperJobs: { orderBy: { createdAt: "asc" as const } },
 };
+
+const DEFAULT_SYNC_JOB_PAGE_SIZE = 10;
+
+type ConnectionRow = {
+    scraperJobs: { syncJobId: string; status: string; errorCode: string | null; finishedAt: Date | null }[];
+};
+
+/** Drops the raw `scraperJobs` rows from a connection and exposes its latest finished run as `latestJob`. */
+function toConnectionResponse<T extends ConnectionRow>({ scraperJobs, ...connection }: T) {
+    const latest = scraperJobs[0];
+    return {
+        ...connection,
+        latestJob: latest
+            ? {
+                  syncJobId: latest.syncJobId,
+                  status: latest.status,
+                  errorCode: parseSyncErrorCode(latest.errorCode),
+                  finishedAt: latest.finishedAt,
+              }
+            : null,
+    };
+}
+
+/** Narrows each scraper job's stored `errorCode` to a known code (or null). */
+function toSyncJobResponse<T extends { scraperJobs: { errorCode: string | null }[] }>(job: T) {
+    return {
+        ...job,
+        scraperJobs: job.scraperJobs.map((scraperJob) => ({
+            ...scraperJob,
+            errorCode: parseSyncErrorCode(scraperJob.errorCode),
+        })),
+    };
+}
 
 @Injectable()
 export class BankSyncService {
@@ -160,7 +200,7 @@ export class BankSyncService {
     }
 
     async getConnections(userId: string) {
-        return this.prisma.scraperConnection.findMany({
+        const rows = await this.prisma.scraperConnection.findMany({
             where: {
                 userId,
                 deletedAt: null,
@@ -168,6 +208,7 @@ export class BankSyncService {
             select: CONNECTION_SELECT,
             orderBy: { createdAt: "desc" },
         });
+        return rows.map(toConnectionResponse);
     }
 
     async createConnection(userId: string, dto: CreateScraperConnectionDto) {
@@ -193,7 +234,7 @@ export class BankSyncService {
 
         const encrypted = this.credentialCryptoService.encrypt(JSON.stringify(dto.credentials), dto.pin);
 
-        return this.prisma.scraperConnection.create({
+        const created = await this.prisma.scraperConnection.create({
             data: {
                 userId,
                 companyId: dto.companyId,
@@ -206,6 +247,7 @@ export class BankSyncService {
             },
             select: CONNECTION_SELECT,
         });
+        return toConnectionResponse(created);
     }
 
     async updateConnection(userId: string, id: string, dto: UpdateScraperConnectionDto) {
@@ -246,11 +288,12 @@ export class BankSyncService {
             updateData.credentialsSalt = encrypted.salt;
         }
 
-        return this.prisma.scraperConnection.update({
+        const updated = await this.prisma.scraperConnection.update({
             where: { id },
             data: updateData,
             select: CONNECTION_SELECT,
         });
+        return toConnectionResponse(updated);
     }
 
     async deleteConnection(userId: string, id: string): Promise<void> {
@@ -563,14 +606,34 @@ export class BankSyncService {
             include: SYNC_JOB_INCLUDE,
         });
         if (!job) throw new NotFoundException("Job not found");
-        return job;
+        return toSyncJobResponse(job);
     }
 
     async getActiveJob(userId: string) {
-        return this.prisma.syncJob.findFirst({
+        const job = await this.prisma.syncJob.findFirst({
             where: { userId, status: { in: ["pending", "running"] } },
             orderBy: { createdAt: "desc" },
             include: SYNC_JOB_INCLUDE,
         });
+        return job ? toSyncJobResponse(job) : null;
+    }
+
+    /** Run history across all of the user's connections, newest first, cursor-paged by job id. */
+    async listJobs(
+        userId: string,
+        { limit = DEFAULT_SYNC_JOB_PAGE_SIZE, cursor }: { limit?: number; cursor?: string },
+    ) {
+        // One extra row tells us whether another page exists.
+        const rows = await this.prisma.syncJob.findMany({
+            where: { userId },
+            orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+            take: limit + 1,
+            ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+            include: SYNC_JOB_INCLUDE,
+        });
+        return {
+            items: rows.slice(0, limit).map(toSyncJobResponse),
+            nextCursor: rows.length > limit ? rows[limit - 1].id : null,
+        };
     }
 }

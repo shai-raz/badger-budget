@@ -19,3 +19,6 @@ Scrapes Israeli banks with `israeli-bank-scrapers` (IBS) + `puppeteer-extra` (st
 ## Dates
 
 IBS sets `moment.tz.setDefault('Asia/Jerusalem')` globally on first scrape, which leaks into every later `moment()` in the process. Scraped dates are converted to UTC midnight of the provider's local day (`scraped-date.util.ts`, zone from `SOURCE_TIMEZONE_BY_COMPANY`). Never pass `new Date(txn.date)` to a `@db.Date` column.
+
+- Every failure path must set `errorCode` (`withSyncErrorCode` / `syncErrorCodeOf`); the web copy map is total over `SYNC_ERROR_CODES`.
+- `SyncRecoveryService` marks every pending/running run interrupted on boot, which assumes one API instance.

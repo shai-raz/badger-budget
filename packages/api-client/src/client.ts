@@ -26,6 +26,7 @@ import type {
     ICreateScraperConnection,
     IUpdateScraperConnection,
     ISyncJob,
+    ISyncJobPage,
     SpendingReport,
     MonthlySpending,
     ReportCompareMode,
@@ -775,6 +776,11 @@ export class ApiClient {
 
     async getSyncJob(jobId: string) {
         const response = await this.client.get<ISyncJob>(`/bank-sync/sync/jobs/${jobId}`);
+        return response.data;
+    }
+
+    async listSyncJobs(params: { limit?: number; cursor?: string } = {}): Promise<ISyncJobPage> {
+        const response = await this.client.get<ISyncJobPage>("/bank-sync/sync/jobs", { params });
         return response.data;
     }
 
