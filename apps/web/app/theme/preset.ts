@@ -1,5 +1,5 @@
 import Aura from "@primeuix/themes/aura";
-import type { ColorThemeName } from "@badger/shared-data";
+import { COLOR_THEMES, type ColorThemeName } from "@badger/shared-data";
 import { BUDGET_LEVEL_TOKENS, THEMES, type ThemeDefinition } from "./themes";
 
 // Builds the PrimeVue preset for a theme: the Aura base with the theme's primary
@@ -119,12 +119,12 @@ export function buildPreset(def: ThemeDefinition) {
     };
 }
 
-// One PrimeVue preset per shipped theme. Typed as a full Record, so a name in
-// COLOR_THEMES without a preset is a type error.
-export const themePresets: Record<ColorThemeName, ReturnType<typeof buildPreset>> = {
-    noir: buildPreset(THEMES.noir),
-    ocean: buildPreset(THEMES.ocean),
-};
+// One PrimeVue preset per shipped theme, built from COLOR_THEMES so a new theme needs
+// only its name there and its definition in THEMES.
+export const themePresets = Object.fromEntries(COLOR_THEMES.map((name) => [name, buildPreset(THEMES[name])])) as Record<
+    ColorThemeName,
+    ReturnType<typeof buildPreset>
+>;
 
 // Custom Aura preset with black and white base palette
 const customAuraPreset = themePresets.noir;

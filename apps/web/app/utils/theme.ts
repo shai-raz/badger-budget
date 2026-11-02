@@ -7,7 +7,7 @@ export type ColorModePreference = ColorMode | "system";
 
 // Kept as-is on purpose (decision Q1): renaming it would drop existing users' saved choice.
 export const THEME_STORAGE_KEY = "theme-preference";
-// The saved colour theme (Noir / Ocean). Separate from the light/dark key above.
+// The saved colour theme name (a COLOR_THEMES entry). Separate from the light/dark key above.
 export const COLOR_THEME_STORAGE_KEY = "color-theme";
 export const PREFERS_DARK_QUERY = "(prefers-color-scheme: dark)";
 
