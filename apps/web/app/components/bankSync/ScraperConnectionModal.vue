@@ -270,13 +270,13 @@ const handleSave = async () => {
             </div>
 
             <template v-if="selectedProvider">
-                <div
+                <Message
                     v-if="isEditMode"
-                    class="flex items-center gap-2 p-3 rounded-md bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-sm"
+                    severity="info"
+                    icon="pi pi-info-circle"
                 >
-                    <i class="pi pi-info-circle" />
-                    <span>Leave credentials blank to keep existing ones. Fill them all to update.</span>
-                </div>
+                    Leave credentials blank to keep existing ones. Fill them all to update.
+                </Message>
 
                 <div
                     v-for="field in selectedProvider.loginFields"
@@ -336,12 +336,15 @@ const handleSave = async () => {
                     />
                 </div>
                 <div v-else>
-                    <p
+                    <Message
                         v-if="pinFallbackReason"
-                        class="text-sm text-orange-600 dark:text-orange-400 mb-2"
+                        severity="warn"
+                        variant="simple"
+                        size="small"
+                        class="mb-2"
                     >
                         {{ pinFallbackReason }}
-                    </p>
+                    </Message>
                     <label class="block text-sm font-medium mb-2">
                         Sync PIN
                         <span v-if="!isEditMode || credentialsTouched">*</span>

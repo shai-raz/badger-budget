@@ -28,6 +28,7 @@ const router = useRouter();
 // the loaded rows), plus an "Uncategorized" pseudo-option. The page owns these
 // in one place; the filters panel and chips both read from here.
 const UNCATEGORIZED_VALUE = "uncategorized";
+// Kept as hex: FiltersPanel's chipStyle parses it with hexToRgba, which a var() would break.
 const UNCATEGORIZED_COLOR = "#9CA3AF"; // neutral gray, matches surface-400
 
 const { data: categoriesData, isPending: isCategoriesPending } = useGetCategoriesQuery();

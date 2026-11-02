@@ -38,7 +38,7 @@ const { openRecent } = useWhatsNewDialog();
                 text
                 rounded
                 :aria-label="`Switch to ${themeStore.isDark ? 'light' : 'dark'} mode`"
-                @click="themeStore.toggleTheme()"
+                @click="themeStore.toggleDarkMode()"
             />
         </div>
 

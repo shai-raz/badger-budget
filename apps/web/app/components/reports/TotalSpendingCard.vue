@@ -16,7 +16,7 @@ const isMonthlyAvg = defineModel<boolean>("isMonthlyAvg", { default: false });
 // the tail is merged into a grey "Other" segment. The categories list next to
 // this card still shows every category.
 const MAX_SEGMENTS = 6;
-const OTHER_COLOR = "#9ca3af";
+const OTHER_COLOR = "var(--p-surface-400)";
 
 interface Segment {
     label: string;

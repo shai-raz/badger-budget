@@ -91,6 +91,20 @@ describe("topCategoriesWithOther", () => {
         expect(slices[0]!.color).toBe("#9ca3af");
     });
 
+    it("paints the Other slice with the passed otherColor", () => {
+        const categories = [
+            category({ categoryId: "a", amount: 100 }),
+            category({ categoryId: "b", amount: 50 }),
+            category({ categoryId: "c", amount: 25 }),
+            category({ categoryId: "d", amount: 10 }),
+            category({ categoryId: "e", amount: 5 }),
+        ];
+
+        const slices = topCategoriesWithOther(categories, 190, 4, "#abcdef");
+
+        expect(slices[4]).toMatchObject({ name: "Other", color: "#abcdef", amount: 5 });
+    });
+
     it("uses a distinct color for Other than Uncategorized", () => {
         expect(OTHER_COLOR.toLowerCase()).not.toBe(UNCATEGORIZED_CATEGORY.color.toLowerCase());
     });

@@ -8,6 +8,6 @@ export default defineNuxtPlugin(() => {
 
     // unhead dedupes meta by name, so this replaces the static theme-color from nuxt.config.
     useHead({
-        meta: [{ name: "theme-color", content: computed(() => THEME_COLOR[themeStore.theme]) }],
+        meta: [{ name: "theme-color", content: computed(() => THEME_COLOR[themeStore.colorMode]) }],
     });
 });

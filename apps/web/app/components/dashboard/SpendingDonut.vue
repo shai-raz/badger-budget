@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SpendingReport } from "@badger/types";
 import Chart from "primevue/chart";
+import { chartColors } from "~/theme/themes";
 import { formatCurrencyRounded } from "~/utils/currency";
 import { topCategoriesWithOther } from "~/utils/spendingBreakdown";
 
@@ -9,12 +10,15 @@ const props = defineProps<{
 }>();
 
 // The theme store is the single source of truth for dark mode (app/stores/theme.ts).
-// Only the dataset's border color (drawn between slices) needs to react to it; slice
-// colors are category colors, which read fine on both surfaces.
+// The chart's border color (drawn between slices) and the "Other" slice come from the theme,
+// since Chart.js needs hex. Slice colors are category colors, which read fine on both surfaces.
 const themeStore = useThemeStore();
 const isDark = computed(() => themeStore.isDark);
+const colors = computed(() => chartColors(themeStore.definition, themeStore.colorMode));
 
-const slices = computed(() => topCategoriesWithOther(props.report.categories, props.report.total));
+const slices = computed(() =>
+    topCategoriesWithOther(props.report.categories, props.report.total, 4, colors.value.other),
+);
 
 const chartData = computed(() => ({
     labels: slices.value.map((slice) => slice.name),
@@ -22,7 +26,7 @@ const chartData = computed(() => ({
         {
             data: slices.value.map((slice) => slice.amount),
             backgroundColor: slices.value.map((slice) => slice.color),
-            borderColor: isDark.value ? "#111111" : "#ffffff", // surface-900 / surface-0 (Chart.js needs hex)
+            borderColor: colors.value.sliceBorder,
             borderWidth: 2,
         },
     ],

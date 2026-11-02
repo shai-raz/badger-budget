@@ -25,18 +25,20 @@ export function budgetProgressLevel(pct: number): BudgetLevel {
     return "ok";
 }
 
-// Progress bar fill per level. Read by BudgetsBudgetProgressBar only.
+// Progress bar fill per level, as the preset's `--p-budget-*` tokens (BUDGET_LEVEL_TOKENS in theme/themes.ts).
+// Read by BudgetsBudgetProgressBar only.
 export const BUDGET_LEVEL_COLOR: Record<BudgetLevel, string> = {
-    ok: "#10b981",
-    warning: "#f59e0b",
-    over: "#ef4444",
+    ok: "var(--p-budget-ok)",
+    warning: "var(--p-budget-warning)",
+    over: "var(--p-budget-over)",
 };
 
-// Text colour for a level's "Spent"/"Used" figures. "ok" stays the inherited colour.
+// Text colour for a level's "Spent"/"Used" figures. "ok" stays the inherited colour, "over" is the
+// expense token, and "warning" stays a plain amber status colour.
 export const BUDGET_LEVEL_TEXT_CLASS: Record<BudgetLevel, string> = {
     ok: "",
     warning: "text-amber-500",
-    over: "text-rose-500",
+    over: "text-expense",
 };
 
 /** "Ends today" for 0, "1 day left" for 1, "N days left" otherwise. */

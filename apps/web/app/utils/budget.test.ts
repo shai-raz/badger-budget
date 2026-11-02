@@ -36,14 +36,18 @@ describe("budgetProgressLevel", () => {
 });
 
 describe("BUDGET_LEVEL_COLOR", () => {
-    it("has green, amber and red progress fills", () => {
-        expect(BUDGET_LEVEL_COLOR).toEqual({ ok: "#10b981", warning: "#f59e0b", over: "#ef4444" });
+    it("points the progress fills at the budget tokens", () => {
+        expect(BUDGET_LEVEL_COLOR).toEqual({
+            ok: "var(--p-budget-ok)",
+            warning: "var(--p-budget-warning)",
+            over: "var(--p-budget-over)",
+        });
     });
 });
 
 describe("BUDGET_LEVEL_TEXT_CLASS", () => {
-    it("keeps the inherited colour when ok, then amber and rose", () => {
-        expect(BUDGET_LEVEL_TEXT_CLASS).toEqual({ ok: "", warning: "text-amber-500", over: "text-rose-500" });
+    it("keeps the inherited colour when ok, then amber and expense", () => {
+        expect(BUDGET_LEVEL_TEXT_CLASS).toEqual({ ok: "", warning: "text-amber-500", over: "text-expense" });
     });
 });
 

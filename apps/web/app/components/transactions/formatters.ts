@@ -20,8 +20,8 @@ export const transactionAmountClass = (transaction: TransactionLike) =>
     transaction.type === "transfer"
         ? "text-surface-600 dark:text-surface-300"
         : transaction.type === "income"
-          ? "text-teal-500"
-          : "text-rose-500";
+          ? "text-income"
+          : "text-expense";
 
 export const transactionTypeSeverity = (transaction: TransactionLike): "success" | "info" | "danger" =>
     transaction.type === "income" ? "success" : transaction.type === "transfer" ? "info" : "danger";

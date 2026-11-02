@@ -2,13 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     getThemeStorage,
     PREFERS_DARK_QUERY,
-    readSavedTheme,
+    readSavedColorMode,
     resolveIsDark,
-    saveTheme,
+    saveColorMode,
     THEME_COLOR,
     THEME_INIT_SCRIPT,
     THEME_STORAGE_KEY,
-    type ThemeName,
+    type ColorMode,
 } from "./theme";
 
 afterEach(() => {
@@ -35,21 +35,21 @@ describe("resolveIsDark", () => {
     });
 });
 
-describe("readSavedTheme", () => {
+describe("readSavedColorMode", () => {
     it.each(["dark", "light"] as const)("returns %s when stored", (value) => {
-        expect(readSavedTheme(fakeStorage(() => value))).toBe(value);
+        expect(readSavedColorMode(fakeStorage(() => value))).toBe(value);
     });
 
     it.each(["auto", "", "Dark", "null"])("ignores stored value %j", (value) => {
-        expect(readSavedTheme(fakeStorage(() => value))).toBeNull();
+        expect(readSavedColorMode(fakeStorage(() => value))).toBeNull();
     });
 
     it("returns null when nothing is stored", () => {
-        expect(readSavedTheme(fakeStorage(() => null))).toBeNull();
+        expect(readSavedColorMode(fakeStorage(() => null))).toBeNull();
     });
 
     it("returns null when there is no storage", () => {
-        expect(readSavedTheme(null)).toBeNull();
+        expect(readSavedColorMode(null)).toBeNull();
     });
 
     it("returns null when getItem throws", () => {
@@ -59,20 +59,20 @@ describe("readSavedTheme", () => {
             },
             setItem: vi.fn(),
         };
-        expect(readSavedTheme(storage)).toBeNull();
+        expect(readSavedColorMode(storage)).toBeNull();
     });
 
     it("reads the shared storage key", () => {
         const storage = fakeStorage();
-        readSavedTheme(storage);
+        readSavedColorMode(storage);
         expect(storage.getItem).toHaveBeenCalledWith(THEME_STORAGE_KEY);
     });
 });
 
-describe("saveTheme", () => {
-    it.each(["dark", "light"] as ThemeName[])("writes %s under the storage key", (theme) => {
+describe("saveColorMode", () => {
+    it.each(["dark", "light"] as ColorMode[])("writes %s under the storage key", (theme) => {
         const storage = fakeStorage();
-        saveTheme(storage, theme);
+        saveColorMode(storage, theme);
         expect(storage.setItem).toHaveBeenCalledWith(THEME_STORAGE_KEY, theme);
     });
 
@@ -83,11 +83,11 @@ describe("saveTheme", () => {
                 throw new Error("QuotaExceededError");
             },
         };
-        expect(() => saveTheme(storage, "dark")).not.toThrow();
+        expect(() => saveColorMode(storage, "dark")).not.toThrow();
     });
 
     it("is a no-op without storage", () => {
-        expect(() => saveTheme(null, "light")).not.toThrow();
+        expect(() => saveColorMode(null, "light")).not.toThrow();
     });
 });
 
@@ -162,7 +162,7 @@ describe("THEME_INIT_SCRIPT", () => {
             if (getItemThrows) throw new Error("SecurityError");
             return saved;
         });
-        return resolveIsDark(readSavedTheme(storage), prefersDark);
+        return resolveIsDark(readSavedColorMode(storage), prefersDark);
     }
 
     it.each(["dark", "light", null, "junk"])("agrees with the store rule for saved=%j", (saved) => {

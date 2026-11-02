@@ -160,6 +160,50 @@ describe("design contract: dark-mode text colours", () => {
     });
 });
 
+describe("design contract: amount colours come from theme tokens", () => {
+    // Amount and budget colours read the theme (text-income, text-income-strong, text-expense), so a theme can
+    // recolour them. Raw teal and rose steps are banned in components, pages, layouts and utils, except for the
+    // two allow-listed files below, whose colours are not amounts.
+    const RAW_AMOUNT_COLOUR = /text-teal-\d|text-rose-500/;
+    const ALLOW_LIST = [
+        // The Delete menu item: a destructive status colour, not an amount.
+        "pages/accounts/index.vue",
+        // File-type icons: teal for images, rose for PDFs. A file kind, not an amount.
+        "utils/attachments.ts",
+    ];
+    const sourceFiles = ["components", "pages", "layouts", "utils"].flatMap((dir) =>
+        readdirSync(`${appDir}/${dir}`, { recursive: true, encoding: "utf8" })
+            .map(toPosix)
+            .filter((rel) => /\.(vue|ts)$/.test(rel) && !rel.endsWith(".test.ts"))
+            .map((rel) => `${dir}/${rel}`),
+    );
+    const readSource = (rel: string) => readFileSync(`${appDir}/${rel}`, "utf8");
+
+    it("scans the amount-bearing components, pages and utils", () => {
+        expect(sourceFiles).toEqual(
+            expect.arrayContaining(["components/transactions/formatters.ts", "pages/transactions/[id].vue"]),
+        );
+    });
+
+    it("keeps raw teal and rose amount colours out of the scanned sources", () => {
+        const offenders = sourceFiles.filter(
+            (rel) => !ALLOW_LIST.includes(rel) && RAW_AMOUNT_COLOUR.test(readSource(rel)),
+        );
+        expect(offenders).toEqual([]);
+    });
+
+    it.each(ALLOW_LIST)("%s still uses a raw colour, so its allow-list entry is needed", (rel) => {
+        expect(RAW_AMOUNT_COLOUR.test(readSource(rel))).toBe(true);
+    });
+
+    it("matches a raw teal or rose class and not the theme tokens", () => {
+        expect(RAW_AMOUNT_COLOUR.test("text-teal-500")).toBe(true);
+        expect(RAW_AMOUNT_COLOUR.test("text-teal-600")).toBe(true);
+        expect(RAW_AMOUNT_COLOUR.test("text-rose-500")).toBe(true);
+        expect(RAW_AMOUNT_COLOUR.test("text-income text-income-strong text-expense")).toBe(false);
+    });
+});
+
 describe("design contract: spending donut follows the theme store", () => {
     // The theme store is the one source of dark mode; a DOM observer on <html>.class would drift from it.
     const source = readFileSync(`${appDir}/components/dashboard/SpendingDonut.vue`, "utf8");
@@ -172,6 +216,21 @@ describe("design contract: spending donut follows the theme store", () => {
 
     it("keys the Chart remount on the store's dark flag", () => {
         expect(source).toContain(`:key="isDark ? 'dark' : 'light'"`);
+    });
+});
+
+describe("design contract: status callouts use PrimeVue Message", () => {
+    // The bank-sync edit hint and PIN fallback are status callouts, so they render through Message (info stays blue).
+    const source = readFileSync(`${appDir}/components/bankSync/ScraperConnectionModal.vue`, "utf8");
+
+    it("renders the edit hint through an info Message, not a hand-rolled blue box", () => {
+        expect(source).toMatch(/<Message\s+v-if="isEditMode"\s+severity="info"/);
+        expect(source).not.toContain("bg-blue-50");
+    });
+
+    it("renders the PIN fallback reason through a warn Message, not orange text", () => {
+        expect(source).toMatch(/<Message\s+v-if="pinFallbackReason"\s+severity="warn"/);
+        expect(source).not.toContain("text-orange-600");
     });
 });
 
