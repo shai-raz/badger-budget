@@ -1,6 +1,40 @@
 {
     "releases": [
         {
+            "version": "0.10.0",
+            "date": "2026-11-02",
+            "items": [
+                {
+                    "type": "refactor",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "turn amount, budget and chart colors into theme tokens",
+                    "pr": 81
+                },
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "save each user's color theme on their account",
+                    "pr": 82
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "add a color theme picker with Noir and Ocean",
+                    "pr": 83
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "add the Forest, Sunset and Rose color themes",
+                    "pr": 84
+                }
+            ]
+        },
+        {
             "version": "0.9.0",
             "date": "2026-10-31",
             "items": [
