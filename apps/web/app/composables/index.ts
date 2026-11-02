@@ -29,6 +29,7 @@ export {
     useDeleteScraperConnectionMutation,
 } from "./bankSync/useBankSync";
 export { useSyncUnlock } from "./bankSync/useSyncUnlock";
+export { useConnectionEditor } from "./bankSync/useConnectionEditor";
 export {
     cashWithdrawalPatternKeys,
     useGetCashWithdrawalPatterns,

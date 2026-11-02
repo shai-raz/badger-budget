@@ -21,28 +21,14 @@ const {
 } = useScraperConnectionsQuery();
 const updateConnectionMutation = useUpdateScraperConnectionMutation();
 const deleteConnectionMutation = useDeleteScraperConnectionMutation();
-const showConnectionModal = ref(false);
-const editingConnection = ref<IScraperConnectionResponse | null>(null);
+const { openCreate, openEdit } = useConnectionEditor();
 
 const connectionCountLabel = computed(() => {
     const count = scraperConnections.value?.length ?? 0;
     return count === 1 ? "1 connection" : `${count} connections`;
 });
 
-const handleAddConnection = () => {
-    editingConnection.value = null;
-    showConnectionModal.value = true;
-};
-
-const handleEditConnection = (connection: IScraperConnectionResponse) => {
-    editingConnection.value = connection;
-    showConnectionModal.value = true;
-};
-
-const handleConnectionModalClose = () => {
-    showConnectionModal.value = false;
-    editingConnection.value = null;
-};
+const handleAddConnection = () => openCreate();
 
 const handleToggleConnection = async (connection: IScraperConnectionResponse) => {
     try {
@@ -117,7 +103,7 @@ const menuItems = computed(() => {
         {
             label: "Edit",
             icon: "pi pi-pencil",
-            command: () => handleEditConnection(connection),
+            command: () => openEdit(connection),
         },
         {
             label: "Delete",
@@ -208,12 +194,6 @@ const connectionDetails = (connection: IScraperConnectionResponse) => {
             ref="menu"
             :model="menuItems"
             popup
-        />
-
-        <BankSyncScraperConnectionModal
-            v-model:visible="showConnectionModal"
-            :connection="editingConnection"
-            @close="handleConnectionModalClose"
         />
     </div>
 </template>

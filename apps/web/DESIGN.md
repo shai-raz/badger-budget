@@ -30,7 +30,7 @@ Rules and tokens for the web UI. Read before any UI change. How the app is built
 
 - Title: sentence case, in the page-title colour (global `pt.dialog` in `nuxt.config.ts`). Compact dialogs and ConfirmDialog step down to `text-lg`.
 - Close: PrimeVue's plain ✕ (`text rounded secondary`, 40px), with no circle or extra ring.
-- Focus: a create form autofocuses its first field. An edit form focuses the dialog itself, so no keyboard opens and no ✕ ring shows, and Tab still reaches the first field.
+- Focus: a create form autofocuses its first field. An edit form focuses the dialog itself (except when opened to fix a login), so no keyboard opens and no ✕ ring shows, and Tab still reaches the first field.
 - Layout: single column, a large amount input first where the form has one (`TransactionForm`, budget form). Mobile: fullscreen below `md`, with Cancel/Save pinned in the footer under the scrolling body.
 - Errors: an API error is a `Message` banner above the form, and the dialog stays open. Inline field errors use the `TransactionForm` `labelClass` and `errorClass`.
 - Button labels are sentence case: "Save changes", "Delete budget", "Enter sync PIN".

@@ -10,6 +10,8 @@ import { STALE_PIN_MESSAGE, unlockFallbackMessage } from "~/utils/syncPasskeyWeb
 const props = defineProps<{
     visible: boolean;
     connection?: IScraperConnectionResponse | null;
+    /** Edit only: focus the first login field instead of the dialog, for opening the modal to fix a login. */
+    focusLogin?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -23,6 +25,8 @@ const createMutation = useCreateScraperConnectionMutation();
 const updateMutation = useUpdateScraperConnectionMutation();
 
 const isEditMode = computed(() => !!props.connection);
+// The first login field takes focus on create, and on edit only when opened to fix a login.
+const autofocusLogin = computed(() => !isEditMode.value || !!props.focusLogin);
 
 // Form state
 const selectedCompanyId = ref<string | null>(null);
@@ -227,7 +231,7 @@ const handleSave = async () => {
         :header="isEditMode ? 'Edit bank connection' : 'Add bank connection'"
         :busy="saving"
         :api-error="apiError"
-        :initial-focus="isEditMode ? 'dialog' : 'field'"
+        :initial-focus="isEditMode && !focusLogin ? 'dialog' : 'field'"
         :save-label="isEditMode ? 'Save changes' : 'Add connection'"
         :save-disabled="!canSave"
         @update:visible="handleClose"
@@ -279,7 +283,7 @@ const handleSave = async () => {
                 </Message>
 
                 <div
-                    v-for="field in selectedProvider.loginFields"
+                    v-for="(field, index) in selectedProvider.loginFields"
                     :key="field"
                 >
                     <label class="block text-sm font-medium mb-2">
@@ -298,7 +302,10 @@ const handleSave = async () => {
                         toggle-mask
                         class="w-full"
                         input-class="w-full"
-                        :input-props="{ autocomplete: 'new-password' }"
+                        :input-props="{
+                            autocomplete: 'new-password',
+                            autofocus: index === 0 && autofocusLogin,
+                        }"
                     />
                     <InputText
                         v-else
@@ -306,6 +313,7 @@ const handleSave = async () => {
                         :placeholder="fieldLabel(field)"
                         class="w-full"
                         autocomplete="new-password"
+                        :autofocus="index === 0 && autofocusLogin"
                     />
                 </div>
 
