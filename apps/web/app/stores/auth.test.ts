@@ -5,7 +5,14 @@ import { useAuthStore } from "./auth";
 
 vi.mock("../composables/useApiClient", () => ({ useApiClient: () => ({}) }));
 
-const baseUser = { id: "u1", email: "a@example.com", firstName: "A", lastName: "B" };
+const baseUser = {
+    id: "u1",
+    email: "a@example.com",
+    firstName: "A",
+    lastName: "B",
+    colorTheme: null,
+    isDemo: false,
+};
 
 describe("auth store isAdmin", () => {
     beforeEach(() => {

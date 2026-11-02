@@ -25,6 +25,8 @@ model User {
   demoDataThrough      DateTime? @map("demo_data_through") @db.Date
   // Last app version whose What's New the user has seen; null = never stamped. Only ever raised (see system/changelog.ts).
   lastSeenVersion      String?   @map("last_seen_version") @db.VarChar(64)
+  // Web colour theme name (COLOR_THEMES in @badger/shared-data); null = default. Not an enum so adding a theme needs no migration.
+  colorTheme           String?   @map("color_theme") @db.VarChar(32)
   // Backfill (migration 20261026120000_user_role) and the create rule (first real user, see auth) keep exactly one
   // live non-demo ADMIN; the demo user is never ADMIN.
   role                 UserRole  @default(USER)
