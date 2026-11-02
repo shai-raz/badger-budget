@@ -31,20 +31,24 @@ const connectionCountLabel = computed(() => {
 
 const handleAddConnection = () => openCreate();
 
-// The row whose toggle is saving; its switch stays disabled until the update settles.
-const pendingToggleId = ref<string | null>(null);
+// Switch values being saved, by connection id. A row's switch shows its pending value and stays disabled until the save
+// settles, after the list has refetched, so a second click can't race the first.
+const pendingToggles = ref<Partial<Record<string, boolean>>>({});
+const pendingToggle = (connection: IScraperConnectionResponse) => pendingToggles.value[connection.id];
 
-const handleToggleConnection = async (connection: IScraperConnectionResponse) => {
-    pendingToggleId.value = connection.id;
+// PrimeVue's switch flips itself on click and only resyncs when its bound value changes. Binding the pending value
+// (then the server's, once settled) means a failed save always moves the bound value back.
+const handleToggleConnection = async (connection: IScraperConnectionResponse, isActive: boolean) => {
+    pendingToggles.value = { ...pendingToggles.value, [connection.id]: isActive };
     try {
         await updateConnectionMutation.mutateAsync({
             id: connection.id,
-            data: { isActive: !connection.isActive },
+            data: { isActive },
         });
         toast.add({
             severity: "success",
             summary: "Updated",
-            detail: `Connection ${connection.isActive ? "paused" : "resumed"}`,
+            detail: `Connection ${isActive ? "resumed" : "paused"}`,
             life: 3000,
         });
     } catch (err) {
@@ -55,7 +59,9 @@ const handleToggleConnection = async (connection: IScraperConnectionResponse) =>
             life: 5000,
         });
     } finally {
-        pendingToggleId.value = null;
+        pendingToggles.value = Object.fromEntries(
+            Object.entries(pendingToggles.value).filter(([id]) => id !== connection.id),
+        );
     }
 };
 
@@ -170,11 +176,11 @@ const formatDate = (date: Date) =>
                         </p>
                     </div>
                     <ToggleSwitch
-                        :model-value="conn.isActive"
-                        :disabled="pendingToggleId === conn.id"
+                        :model-value="pendingToggle(conn) ?? conn.isActive"
+                        :disabled="pendingToggle(conn) !== undefined"
                         :aria-label="`Sync ${conn.displayName}`"
                         class="shrink-0"
-                        @update:model-value="handleToggleConnection(conn)"
+                        @update:model-value="(value) => handleToggleConnection(conn, value === true)"
                     />
                     <Button
                         icon="pi pi-ellipsis-v"
