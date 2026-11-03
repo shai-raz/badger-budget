@@ -8,7 +8,8 @@ import {
     isLedgerAccountType,
     parseAccountType,
 } from "@badger/shared-data";
-import type { ILedgerBalanceUpdateResponse } from "@badger/types";
+import type { AccountRuleUsageResponse, ILedgerBalanceUpdateResponse } from "@badger/types";
+import { accountRuleUsage, removeAccountFromRules } from "../rules/rule-cleanup";
 import { CreateAccountDto, UpdateAccountDto } from "./dto/account.dto";
 import { UpdateLedgerBalanceDto } from "./dto/update-ledger-balance.dto";
 import { AccountResponseDto } from "../transactions/dto/account-response.dto";
@@ -278,10 +279,19 @@ export class AccountsService {
             );
         }
 
-        // Soft delete
-        return this.prisma.account.update({
-            where: { id },
-            data: { deletedAt: new Date() },
+        // Soft delete, with the account taken out of the rules that test it, in one transaction.
+        return this.prisma.$transaction(async (tx) => {
+            await removeAccountFromRules(tx, userId, id);
+            return tx.account.update({
+                where: { id },
+                data: { deletedAt: new Date() },
+            });
         });
+    }
+
+    /** The rules that test this account, and what deleting it does to each. */
+    async getRuleUsage(id: string, userId: string): Promise<AccountRuleUsageResponse> {
+        await this.findOne(id, userId); // Ownership check
+        return { rules: await accountRuleUsage(this.prisma, userId, id) };
     }
 }
