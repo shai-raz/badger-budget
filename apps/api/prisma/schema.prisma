@@ -489,6 +489,7 @@ model SyncJob {
   @@index([userId])
   @@index([status])
   @@index([userId, status])
+  @@index([userId, startedAt])
   @@map("sync_jobs")
 }
 
@@ -502,6 +503,7 @@ model ScraperJob {
   transactionsSynced  Int       @default(0) @map("transactions_synced")
   accountsSynced      Int       @default(0) @map("accounts_synced")
   error               String?   @db.Text
+  errorCode           String?   @map("error_code") @db.VarChar(40)
   startedAt           DateTime? @map("started_at") @db.Timestamp(6)
   finishedAt          DateTime? @map("finished_at") @db.Timestamp(6)
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
@@ -512,7 +514,7 @@ model ScraperJob {
   balanceSnapshots  AccountBalanceSnapshot[]
 
   @@index([syncJobId])
-  @@index([scraperConnectionId])
+  @@index([scraperConnectionId, finishedAt])
   @@map("scraper_jobs")
 }
 

@@ -22,7 +22,8 @@ describe("BankSyncService passkeys", () => {
     const mockPrisma = {
         userSyncSecret: { findUnique: jest.fn(), upsert: jest.fn(), create: jest.fn() },
         scraperConnection: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
-        syncJob: { findFirst: jest.fn() },
+        scraperJob: { findFirst: jest.fn() },
+        syncJob: { findFirst: jest.fn(), findMany: jest.fn() },
         syncPasskey: { findMany: jest.fn(), count: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
         $transaction: jest.fn(),
     };
@@ -245,6 +246,181 @@ describe("BankSyncService passkeys", () => {
                 credentials: creds,
             } as never);
             expect(mockPrisma.userSyncSecret.findUnique).toHaveBeenCalledTimes(1);
+        });
+    });
+    describe("getConnections latestJob", () => {
+        const finishedAt = new Date("2026-01-02T10:00:00Z");
+
+        it("flattens the latest finished run into latestJob and drops scraperJobs", async () => {
+            mockPrisma.scraperConnection.findMany.mockResolvedValue([{ id: "c1", displayName: "Bank" }]);
+            mockPrisma.scraperJob.findFirst.mockResolvedValue({
+                syncJobId: "job-1",
+                status: "failed",
+                errorCode: "INVALID_PASSWORD",
+                finishedAt,
+            });
+
+            const [connection] = await service.getConnections(userId);
+
+            expect(connection).not.toHaveProperty("scraperJobs");
+            expect(connection.latestJob).toEqual({
+                syncJobId: "job-1",
+                status: "failed",
+                errorCode: "INVALID_PASSWORD",
+                finishedAt,
+            });
+        });
+
+        it("sets latestJob to null when the connection has no finished run", async () => {
+            mockPrisma.scraperConnection.findMany.mockResolvedValue([{ id: "c1" }]);
+            mockPrisma.scraperJob.findFirst.mockResolvedValue(null);
+
+            const [connection] = await service.getConnections(userId);
+
+            expect(connection.latestJob).toBeNull();
+        });
+
+        it("keeps a null errorCode for a successful run", async () => {
+            mockPrisma.scraperConnection.findMany.mockResolvedValue([{ id: "c1" }]);
+            mockPrisma.scraperJob.findFirst.mockResolvedValue({
+                syncJobId: "job-1",
+                status: "success",
+                errorCode: null,
+                finishedAt,
+            });
+
+            const [connection] = await service.getConnections(userId);
+
+            expect(connection.latestJob?.errorCode).toBeNull();
+        });
+
+        it("turns an unknown stored code into UNKNOWN", async () => {
+            mockPrisma.scraperConnection.findMany.mockResolvedValue([{ id: "c1" }]);
+            mockPrisma.scraperJob.findFirst.mockResolvedValue({
+                syncJobId: "job-1",
+                status: "failed",
+                errorCode: "NOT_A_CODE",
+                finishedAt,
+            });
+
+            const [connection] = await service.getConnections(userId);
+
+            expect(connection.latestJob?.errorCode).toBe("UNKNOWN");
+        });
+
+        it("does not nest a take on the connection query; the connection select has no scraperJobs", async () => {
+            mockPrisma.scraperConnection.findMany.mockResolvedValue([]);
+
+            await service.getConnections(userId);
+
+            const { select } = mockPrisma.scraperConnection.findMany.mock.calls[0][0];
+            expect(select).not.toHaveProperty("scraperJobs");
+        });
+
+        it("reads each connection's latest finished run with one bounded lookup", async () => {
+            mockPrisma.scraperConnection.findMany.mockResolvedValue([{ id: "c1" }, { id: "c2" }]);
+            mockPrisma.scraperJob.findFirst.mockResolvedValue(null);
+
+            await service.getConnections(userId);
+
+            expect(mockPrisma.scraperJob.findFirst).toHaveBeenCalledTimes(2);
+            expect(mockPrisma.scraperJob.findFirst).toHaveBeenNthCalledWith(1, {
+                where: {
+                    scraperConnectionId: "c1",
+                    finishedAt: { not: null },
+                    status: { in: ["success", "failed"] },
+                },
+                orderBy: { finishedAt: "desc" },
+                select: { syncJobId: true, status: true, errorCode: true, finishedAt: true },
+            });
+            expect(mockPrisma.scraperJob.findFirst).toHaveBeenNthCalledWith(
+                2,
+                expect.objectContaining({ where: expect.objectContaining({ scraperConnectionId: "c2" }) }),
+            );
+        });
+
+        it("updateConnection returns the updated connection with its latestJob", async () => {
+            mockPrisma.scraperConnection.findFirst.mockResolvedValue({ id: "c1", userId });
+            mockPrisma.scraperConnection.update.mockResolvedValue({ id: "c1", displayName: "New" });
+            mockPrisma.scraperJob.findFirst.mockResolvedValue({
+                syncJobId: "job-2",
+                status: "success",
+                errorCode: null,
+                finishedAt,
+            });
+
+            const result = await service.updateConnection(userId, "c1", { displayName: "New" } as never);
+
+            expect(result).toEqual({
+                id: "c1",
+                displayName: "New",
+                latestJob: { syncJobId: "job-2", status: "success", errorCode: null, finishedAt },
+            });
+            expect(mockPrisma.scraperJob.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({ where: expect.objectContaining({ scraperConnectionId: "c1" }) }),
+            );
+        });
+    });
+
+    describe("listJobs", () => {
+        const job = (id: string) => ({
+            id,
+            userId,
+            status: "success",
+            scraperJobs: [{ id: `${id}-s`, status: "success", errorCode: null }],
+        });
+
+        it("filters by userId, newest first, and fetches one row beyond the limit", async () => {
+            mockPrisma.syncJob.findMany.mockResolvedValue([]);
+
+            await service.listJobs(userId, { limit: 5 });
+
+            expect(mockPrisma.syncJob.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { userId },
+                    orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+                    take: 6,
+                }),
+            );
+            expect(mockPrisma.syncJob.findMany.mock.calls[0][0]).not.toHaveProperty("cursor");
+        });
+
+        it("passes the cursor and skips the cursor row itself", async () => {
+            mockPrisma.syncJob.findMany.mockResolvedValue([]);
+
+            await service.listJobs(userId, { limit: 5, cursor: "job-9" });
+
+            expect(mockPrisma.syncJob.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ take: 6, cursor: { id: "job-9" }, skip: 1 }),
+            );
+        });
+
+        it("returns nextCursor from the last kept row when an extra row exists", async () => {
+            mockPrisma.syncJob.findMany.mockResolvedValue([job("job-1"), job("job-2"), job("job-3")]);
+
+            const page = await service.listJobs(userId, { limit: 2 });
+
+            expect(page.items.map((j) => j.id)).toEqual(["job-1", "job-2"]);
+            expect(page.nextCursor).toBe("job-2");
+        });
+
+        it("returns a null nextCursor on the last page", async () => {
+            mockPrisma.syncJob.findMany.mockResolvedValue([job("job-1")]);
+
+            const page = await service.listJobs(userId, { limit: 2 });
+
+            expect(page.items.map((j) => j.id)).toEqual(["job-1"]);
+            expect(page.nextCursor).toBeNull();
+        });
+
+        it("turns an unknown stored scraper errorCode into UNKNOWN", async () => {
+            mockPrisma.syncJob.findMany.mockResolvedValue([
+                { id: "job-1", scraperJobs: [{ id: "s1", status: "failed", errorCode: "NOT_A_CODE" }] },
+            ]);
+
+            const page = await service.listJobs(userId, { limit: 5 });
+
+            expect(page.items[0].scraperJobs[0].errorCode).toBe("UNKNOWN");
         });
     });
 });

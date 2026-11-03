@@ -23,7 +23,7 @@ describe("Connection sync", () => {
         userSyncSecret: { findUnique: jest.fn() },
         scraperConnection: { findFirst: jest.fn(), findMany: jest.fn(), update: jest.fn() },
         syncJob: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
-        scraperJob: { create: jest.fn(), update: jest.fn(), findMany: jest.fn() },
+        scraperJob: { create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findMany: jest.fn() },
     };
     const crypto = { verifyPin: jest.fn(), decrypt: jest.fn() };
     const scraper = { scrapeConnection: jest.fn() };
@@ -156,6 +156,63 @@ describe("Connection sync", () => {
         await finish();
         expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
         expect(prisma.syncJob.create).toHaveBeenCalledTimes(1);
+    });
+
+    it("saves an IBS failure's errorType as the scraper job's errorCode", async () => {
+        scraper.scrapeConnection.mockRejectedValue(
+            Object.assign(new Error("Scraper failed: INVALID_PASSWORD"), { errorType: "INVALID_PASSWORD" }),
+        );
+        prisma.scraperJob.findMany.mockResolvedValue([{ status: "failed" }]);
+        await service.triggerConnectionSync("user-1", connection.id, "1234");
+        await finish();
+        expect(prisma.scraperJob.update).toHaveBeenCalledWith({
+            where: { id: "child-1" },
+            data: expect.objectContaining({ status: "failed", errorCode: "INVALID_PASSWORD" }),
+        });
+    });
+
+    it("saves CREDENTIALS_UNREADABLE when the stored credentials cannot be decrypted", async () => {
+        crypto.decrypt.mockImplementation(() => {
+            throw new Error("Unsupported state or unable to authenticate data");
+        });
+        prisma.scraperJob.findMany.mockResolvedValue([{ status: "failed" }]);
+        await service.triggerConnectionSync("user-1", connection.id, "1234");
+        await finish();
+        expect(scraper.scrapeConnection).not.toHaveBeenCalled();
+        expect(prisma.scraperJob.update).toHaveBeenCalledWith({
+            where: { id: "child-1" },
+            data: expect.objectContaining({ status: "failed", errorCode: "CREDENTIALS_UNREADABLE" }),
+        });
+    });
+
+    it("saves IMPORT_FAILED when importing the scraped transactions throws", async () => {
+        importer.importTransactions.mockRejectedValue(new Error("db down"));
+        prisma.scraperJob.findMany.mockResolvedValue([{ status: "failed" }]);
+        await service.triggerConnectionSync("user-1", connection.id, "1234");
+        await finish();
+        expect(prisma.scraperJob.update).toHaveBeenCalledWith({
+            where: { id: "child-1" },
+            data: expect.objectContaining({ status: "failed", errorCode: "IMPORT_FAILED", error: "db down" }),
+        });
+    });
+
+    it("marks the sync failed and closes its scraper jobs when a scraper job cannot be created", async () => {
+        prisma.scraperJob.create.mockRejectedValue(new Error("db down"));
+        await service.triggerConnectionSync("user-1", connection.id, "1234");
+        await finish();
+        expect(scraper.scrapeConnection).not.toHaveBeenCalled();
+        expect(prisma.syncJob.update).toHaveBeenLastCalledWith({
+            where: { id: "job-1" },
+            data: expect.objectContaining({ status: "failed", error: "db down" }),
+        });
+        expect(prisma.scraperJob.updateMany).toHaveBeenCalledWith({
+            where: { syncJobId: "job-1", status: "pending" },
+            data: expect.objectContaining({ status: "failed", errorCode: "SYNC_START_FAILED", error: "db down" }),
+        });
+        expect(prisma.scraperJob.updateMany).toHaveBeenCalledWith({
+            where: { syncJobId: "job-1", status: "running" },
+            data: expect.objectContaining({ status: "failed", errorCode: "UNKNOWN", error: "db down" }),
+        });
     });
 
     it("forwards the authenticated user and request fields from the endpoint", async () => {

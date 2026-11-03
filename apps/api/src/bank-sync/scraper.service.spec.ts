@@ -5,6 +5,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { ScraperService } from "./scraper.service";
 import { resolveDebugArtifactsDir } from "../config/data-dir";
+import { syncErrorCodeOf } from "./sync-error-code.util";
 
 jest.mock("../config/data-dir", () => ({ resolveDebugArtifactsDir: jest.fn(() => "") }));
 
@@ -216,6 +217,37 @@ describe("ScraperService proxy routing", () => {
 
         await expect(service.scrapeConnection("visaCal", {}, 30)).rejects.toThrow(/^Scraper failed: GENERIC/);
         expect(mockCreateScraper).toHaveBeenCalledTimes(2);
+    });
+
+    it("tags a failed local browser launch with SYNC_START_FAILED", async () => {
+        delete env.BROWSERLESS_URL;
+        mockLaunch.mockRejectedValueOnce(new Error("Failed to launch the browser"));
+
+        const error = await service.scrapeConnection("max", {}, 30).catch((e: unknown) => e);
+
+        expect(error).toMatchObject({ message: "Failed to launch the browser" });
+        expect(syncErrorCodeOf(error)).toBe("SYNC_START_FAILED");
+        expect(mockCreateScraper).not.toHaveBeenCalled();
+    });
+
+    it("tags a failed Browserless connect with SYNC_START_FAILED", async () => {
+        mockConnect.mockRejectedValueOnce(new Error("connect ECONNREFUSED"));
+
+        const error = await service.scrapeConnection("max", {}, 30).catch((e: unknown) => e);
+
+        expect(error).toMatchObject({ message: "connect ECONNREFUSED" });
+        expect(syncErrorCodeOf(error)).toBe("SYNC_START_FAILED");
+        expect(mockCreateScraper).not.toHaveBeenCalled();
+    });
+
+    it("propagates the direct attempt's IBS errorType after a proxied failure", async () => {
+        scrapeOutcomes = [fail("TIMEOUT"), fail("INVALID_PASSWORD")];
+
+        const error = await service.scrapeConnection("visaCal", {}, 30).catch((e: unknown) => e);
+
+        expect(mockCreateScraper).toHaveBeenCalledTimes(2);
+        expect(error).toMatchObject({ errorType: "INVALID_PASSWORD" });
+        expect(syncErrorCodeOf(error)).toBe("INVALID_PASSWORD");
     });
 
     it.each(["INVALID_PASSWORD", "CHANGE_PASSWORD", "ACCOUNT_BLOCKED"])("does not retry on %s", async (errorType) => {

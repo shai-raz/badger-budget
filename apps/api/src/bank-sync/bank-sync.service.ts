@@ -13,7 +13,8 @@ import { ImportCandidate } from "../transactions/transaction-import.service";
 import { ScrapedAccountBalance } from "./scraped-balance.util";
 import { AccountBalanceService } from "../accounts/account-balance.service";
 import { AccountsService } from "../accounts/accounts.service";
-import { getBalanceKind, getScrapedAccountType, MAX_PASSKEYS } from "@badger/shared-data";
+import { getBalanceKind, getScrapedAccountType, MAX_PASSKEYS, parseSyncErrorCode } from "@badger/shared-data";
+import { syncErrorCodeOf, withSyncErrorCode } from "./sync-error-code.util";
 
 const CONNECTION_SELECT = {
     id: true,
@@ -24,6 +25,10 @@ const CONNECTION_SELECT = {
     lastSyncedAt: true,
     createdAt: true,
 };
+
+// A connection's latest finished run, read per connection in `toConnectionResponses`. Not a nested
+// `take: 1` on CONNECTION_SELECT: Prisma 6 applies a nested take in memory, so it reads every finished run.
+const LATEST_JOB_SELECT = { syncJobId: true, status: true, errorCode: true, finishedAt: true } as const;
 
 export const SYNC_PASSKEY_SELECT = {
     id: true,
@@ -38,6 +43,36 @@ export const SYNC_PASSKEY_SELECT = {
 const SYNC_JOB_INCLUDE = {
     scraperJobs: { orderBy: { createdAt: "asc" as const } },
 };
+
+const DEFAULT_SYNC_JOB_PAGE_SIZE = 10;
+
+type LatestJobRow = { syncJobId: string; status: string; errorCode: string | null; finishedAt: Date | null };
+
+/** Exposes a connection's latest finished run as `latestJob` (null when it has none). */
+function toConnectionResponse<T extends object>(connection: T, latest: LatestJobRow | null) {
+    return {
+        ...connection,
+        latestJob: latest
+            ? {
+                  syncJobId: latest.syncJobId,
+                  status: latest.status,
+                  errorCode: parseSyncErrorCode(latest.errorCode),
+                  finishedAt: latest.finishedAt,
+              }
+            : null,
+    };
+}
+
+/** Narrows each scraper job's stored `errorCode` to a known code (or null). */
+function toSyncJobResponse<T extends { scraperJobs: { errorCode: string | null }[] }>(job: T) {
+    return {
+        ...job,
+        scraperJobs: job.scraperJobs.map((scraperJob) => ({
+            ...scraperJob,
+            errorCode: parseSyncErrorCode(scraperJob.errorCode),
+        })),
+    };
+}
 
 @Injectable()
 export class BankSyncService {
@@ -159,7 +194,7 @@ export class BankSyncService {
     }
 
     async getConnections(userId: string) {
-        return this.prisma.scraperConnection.findMany({
+        const rows = await this.prisma.scraperConnection.findMany({
             where: {
                 userId,
                 deletedAt: null,
@@ -167,6 +202,25 @@ export class BankSyncService {
             select: CONNECTION_SELECT,
             orderBy: { createdAt: "desc" },
         });
+        return this.toConnectionResponses(rows);
+    }
+
+    /** One bounded `findFirst` per connection (the user has only a handful), so each read stays O(1) in run history. */
+    private async toConnectionResponses<T extends { id: string }>(connections: T[]) {
+        return Promise.all(
+            connections.map(async (connection) => {
+                const latest = await this.prisma.scraperJob.findFirst({
+                    where: {
+                        scraperConnectionId: connection.id,
+                        finishedAt: { not: null },
+                        status: { in: ["success", "failed"] },
+                    },
+                    orderBy: { finishedAt: "desc" },
+                    select: LATEST_JOB_SELECT,
+                });
+                return toConnectionResponse(connection, latest);
+            }),
+        );
     }
 
     async createConnection(userId: string, dto: CreateScraperConnectionDto) {
@@ -192,7 +246,7 @@ export class BankSyncService {
 
         const encrypted = this.credentialCryptoService.encrypt(JSON.stringify(dto.credentials), dto.pin);
 
-        return this.prisma.scraperConnection.create({
+        const created = await this.prisma.scraperConnection.create({
             data: {
                 userId,
                 companyId: dto.companyId,
@@ -205,6 +259,8 @@ export class BankSyncService {
             },
             select: CONNECTION_SELECT,
         });
+        // A new connection has no runs yet.
+        return toConnectionResponse(created, null);
     }
 
     async updateConnection(userId: string, id: string, dto: UpdateScraperConnectionDto) {
@@ -245,11 +301,13 @@ export class BankSyncService {
             updateData.credentialsSalt = encrypted.salt;
         }
 
-        return this.prisma.scraperConnection.update({
+        const updated = await this.prisma.scraperConnection.update({
             where: { id },
             data: updateData,
             select: CONNECTION_SELECT,
         });
+        const [response] = await this.toConnectionResponses([updated]);
+        return response;
     }
 
     async deleteConnection(userId: string, id: string): Promise<void> {
@@ -328,24 +386,24 @@ export class BankSyncService {
         pin: string,
         defaultCurrencyCode?: string,
     ): Promise<void> {
-        await this.prisma.syncJob.update({ where: { id: jobId }, data: { status: "running" } });
-
-        // Create a ScraperJob row for each connection (snapshot companyId/displayName)
         const scraperJobIds = new Map<string, string>(); // connectionId → scraperJobId
-        for (const conn of connections) {
-            const scraperJob = await this.prisma.scraperJob.create({
-                data: {
-                    syncJobId: jobId,
-                    scraperConnectionId: conn.id,
-                    companyId: conn.companyId,
-                    displayName: conn.displayName,
-                    status: "pending",
-                },
-            });
-            scraperJobIds.set(conn.id, scraperJob.id);
-        }
-
         try {
+            await this.prisma.syncJob.update({ where: { id: jobId }, data: { status: "running" } });
+
+            // Create a ScraperJob row for each connection (snapshot companyId/displayName)
+            for (const conn of connections) {
+                const scraperJob = await this.prisma.scraperJob.create({
+                    data: {
+                        syncJobId: jobId,
+                        scraperConnectionId: conn.id,
+                        companyId: conn.companyId,
+                        displayName: conn.displayName,
+                        status: "pending",
+                    },
+                });
+                scraperJobIds.set(conn.id, scraperJob.id);
+            }
+
             const concurrency = Math.max(
                 1,
                 parseInt(this.configService.get<string>("BANK_SYNC_CONCURRENCY", "3"), 10) || 3,
@@ -367,17 +425,22 @@ export class BankSyncService {
                         data: { status: "running", startedAt: new Date() },
                     });
 
-                    const credentials: Record<string, string> = JSON.parse(
-                        this.credentialCryptoService.decrypt(
-                            {
-                                ciphertext: connection.credentialsCt,
-                                iv: connection.credentialsIv,
-                                authTag: connection.credentialsAuthTag,
-                                salt: connection.credentialsSalt,
-                            },
-                            pin,
-                        ),
-                    );
+                    let credentials: Record<string, string>;
+                    try {
+                        credentials = JSON.parse(
+                            this.credentialCryptoService.decrypt(
+                                {
+                                    ciphertext: connection.credentialsCt,
+                                    iv: connection.credentialsIv,
+                                    authTag: connection.credentialsAuthTag,
+                                    salt: connection.credentialsSalt,
+                                },
+                                pin,
+                            ),
+                        );
+                    } catch (e) {
+                        throw withSyncErrorCode(e, "CREDENTIALS_UNREADABLE");
+                    }
 
                     const { candidates, balances } = await this.scraperService.scrapeConnection(
                         connection.companyId,
@@ -397,7 +460,12 @@ export class BankSyncService {
                     this.logger.error(`Scrape failed for ${result.item.displayName}: ${errorMessage}`);
                     await this.prisma.scraperJob.update({
                         where: { id: scraperJobId },
-                        data: { status: "failed", error: errorMessage, finishedAt: new Date() },
+                        data: {
+                            status: "failed",
+                            error: errorMessage,
+                            errorCode: syncErrorCodeOf(result.error),
+                            finishedAt: new Date(),
+                        },
                     });
                 }
             }
@@ -498,7 +566,12 @@ export class BankSyncService {
                     this.logger.error(`Import failed for ${connection.displayName}: ${errorMessage}`);
                     await this.prisma.scraperJob.update({
                         where: { id: scraperJobId },
-                        data: { status: "failed", error: errorMessage, finishedAt: new Date() },
+                        data: {
+                            status: "failed",
+                            error: errorMessage,
+                            errorCode: "IMPORT_FAILED",
+                            finishedAt: new Date(),
+                        },
                     });
                 }
             }
@@ -523,13 +596,20 @@ export class BankSyncService {
             });
         } catch (error) {
             // Catastrophic unexpected failure
+            const message = (error as Error).message ?? "Unknown error";
+            const finishedAt = new Date();
             await this.prisma.syncJob.update({
                 where: { id: jobId },
-                data: {
-                    status: "failed",
-                    error: (error as Error).message ?? "Unknown error",
-                    finishedAt: new Date(),
-                },
+                data: { status: "failed", error: message, finishedAt },
+            });
+            // Close this run's unfinished scraper jobs so none is left pending or running.
+            await this.prisma.scraperJob.updateMany({
+                where: { syncJobId: jobId, status: "pending" },
+                data: { status: "failed", errorCode: "SYNC_START_FAILED", error: message, finishedAt },
+            });
+            await this.prisma.scraperJob.updateMany({
+                where: { syncJobId: jobId, status: "running" },
+                data: { status: "failed", errorCode: "UNKNOWN", error: message, finishedAt },
             });
         }
     }
@@ -540,14 +620,34 @@ export class BankSyncService {
             include: SYNC_JOB_INCLUDE,
         });
         if (!job) throw new NotFoundException("Job not found");
-        return job;
+        return toSyncJobResponse(job);
     }
 
     async getActiveJob(userId: string) {
-        return this.prisma.syncJob.findFirst({
+        const job = await this.prisma.syncJob.findFirst({
             where: { userId, status: { in: ["pending", "running"] } },
             orderBy: { createdAt: "desc" },
             include: SYNC_JOB_INCLUDE,
         });
+        return job ? toSyncJobResponse(job) : null;
+    }
+
+    /** Run history across all of the user's connections, newest first, cursor-paged by job id. */
+    async listJobs(
+        userId: string,
+        { limit = DEFAULT_SYNC_JOB_PAGE_SIZE, cursor }: { limit?: number; cursor?: string },
+    ) {
+        // One extra row tells us whether another page exists.
+        const rows = await this.prisma.syncJob.findMany({
+            where: { userId },
+            orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+            take: limit + 1,
+            ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+            include: SYNC_JOB_INCLUDE,
+        });
+        return {
+            items: rows.slice(0, limit).map(toSyncJobResponse),
+            nextCursor: rows.length > limit ? rows[limit - 1].id : null,
+        };
     }
 }

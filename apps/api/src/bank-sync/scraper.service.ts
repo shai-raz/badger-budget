@@ -5,15 +5,16 @@ import puppeteerExtra from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
-import { getSourceTimezone } from "@badger/shared-data";
+import { getSourceTimezone, isIbsErrorCode, type IbsErrorCode } from "@badger/shared-data";
 import { ImportCandidate } from "../transactions/transaction-import.service";
 import { resolveDebugArtifactsDir } from "../config/data-dir";
 import { DebugArtifactService } from "./debug-artifact.service";
 import { toSourceCalendarDate, legacyStoredDate } from "./scraped-date.util";
 import { extractAccountBalances, ScrapedAccountBalance } from "./scraped-balance.util";
+import { withSyncErrorCode } from "./sync-error-code.util";
 
 // IBS ScraperErrorTypes values for credential errors (the enum isn't exported from the package root): never retried, since repeating bad credentials risks locking the account.
-const NO_RETRY_ERROR_TYPES = new Set<string>(["INVALID_PASSWORD", "CHANGE_PASSWORD", "ACCOUNT_BLOCKED"]);
+const NO_RETRY_ERROR_TYPES = new Set<IbsErrorCode>(["INVALID_PASSWORD", "CHANGE_PASSWORD", "ACCOUNT_BLOCKED"]);
 
 export interface ScrapeConnectionResult {
     candidates: ImportCandidate[];
@@ -46,9 +47,14 @@ export class ScraperService {
         // page, on both paths: needed because some banks detect and block headless browsers. IBS would launch
         // plain puppeteer, so we launch the local Chromium ourselves and hand it over as `browser`.
         puppeteerExtra.use(StealthPlugin());
-        const browser = browserlessUrl
-            ? await puppeteerExtra.connect({ browserWSEndpoint: browserlessUrl })
-            : await this.launchLocalBrowser();
+        let browser: Awaited<ReturnType<typeof puppeteerExtra.connect>>;
+        try {
+            browser = browserlessUrl
+                ? await puppeteerExtra.connect({ browserWSEndpoint: browserlessUrl })
+                : await this.launchLocalBrowser();
+        } catch (e) {
+            throw withSyncErrorCode(e, "SYNC_START_FAILED");
+        }
 
         // Visa Cal's bot protection (Akamai) often rejects datacenter IPs, so Cal can be routed through an
         // Israeli proxy (CAL_PROXY_URL). It gets its own browser context (which IBS doesn't close for us),
@@ -71,7 +77,7 @@ export class ScraperService {
                     );
                 } catch (e) {
                     const errorType = (e as { errorType?: string } | null)?.errorType;
-                    if (errorType && NO_RETRY_ERROR_TYPES.has(errorType)) throw e;
+                    if (isIbsErrorCode(errorType) && NO_RETRY_ERROR_TYPES.has(errorType)) throw e;
                     const reason = errorType ?? (e instanceof Error ? e.message : String(e));
                     this.logger.warn(`visaCal via CAL_PROXY_URL failed (${reason}), retrying directly`);
                 } finally {
