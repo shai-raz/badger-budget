@@ -7,7 +7,7 @@ import { useBankSyncFlow } from "~/composables/bankSync/useBankSyncFlow";
 import { useSyncJobQuery, useScraperConnectionsQuery } from "~/composables/bankSync/useBankSync";
 import { useConnectionEditor } from "~/composables/bankSync/useConnectionEditor";
 import { providerName } from "~/utils/bankConnections";
-import { SYNC_ERROR_ACTION_LABEL, syncErrorCopy } from "~/utils/syncErrors";
+import { syncErrorCopy } from "~/utils/syncErrors";
 import type { SyncErrorAction } from "~/utils/syncErrors";
 import { formatDuration, initialExpanded, runResult, runScope, runSyncedCount } from "~/utils/syncRuns";
 
@@ -79,11 +79,6 @@ const actionFor = (job: IScraperJob): SyncErrorAction | null => {
     if (!connection || !action) return null;
     if (action === "retry" && !connection.isActive) return null;
     return action;
-};
-
-const actionLabelFor = (job: IScraperJob): string | null => {
-    const action = actionFor(job);
-    return action ? SYNC_ERROR_ACTION_LABEL[action] : null;
 };
 
 // requestSync does nothing while a sync runs, so Retry is disabled then, as it is on the failure strip.
@@ -198,12 +193,10 @@ const onVisibleChange = (value: boolean) => {
                         >
                             <p class="text-sm">{{ syncErrorCopy(job.errorCode).explain }}</p>
 
-                            <div v-if="actionLabelFor(job)">
-                                <Button
-                                    :label="actionLabelFor(job) ?? undefined"
+                            <div v-if="actionFor(job)">
+                                <BankSyncActionButton
+                                    :action="actionFor(job) as SyncErrorAction"
                                     :disabled="actionDisabledFor(job)"
-                                    outlined
-                                    size="small"
                                     @click="onAction(job)"
                                 />
                             </div>

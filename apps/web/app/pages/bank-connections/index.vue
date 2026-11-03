@@ -183,7 +183,7 @@ const openMenu = ({ connection, event }: { connection: IScraperConnectionRespons
                     />
                     <BankSyncFailureStrip
                         :connection="conn"
-                        class="col-span-full md:col-span-1"
+                        class="col-span-full"
                     />
                 </div>
             </div>

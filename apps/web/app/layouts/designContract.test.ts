@@ -746,6 +746,13 @@ describe("design contract: failure strip", () => {
         expect(source).not.toMatch(/#[0-9a-fA-F]{3,6}/);
     });
 
+    it("takes its action button from the shared component, which the run dialog also uses", () => {
+        expect(source).toContain("<BankSyncActionButton");
+        expect(readFileSync(`${appDir}/components/bankSync/SyncRunDialog.vue`, "utf8")).toContain(
+            "<BankSyncActionButton",
+        );
+    });
+
     it("nests no button inside a button", () => {
         expect(nestsButton(source)).toBe(false);
     });
@@ -753,5 +760,33 @@ describe("design contract: failure strip", () => {
     it("flags a button nested inside a button", () => {
         expect(nestsButton('<button type="button"><Button label="Retry" /></button>')).toBe(true);
         expect(nestsButton('<button type="button" /><Button label="Retry" />')).toBe(false);
+    });
+});
+
+describe("design contract: bank connection row", () => {
+    const page = readFileSync(`${appDir}/pages/bank-connections/index.vue`, "utf8");
+
+    // The failure strip is the row's second line, so it spans every column at every width, the toggle and menu included.
+    it("spans the failure strip across the whole row at every width", () => {
+        expect(page).toContain('class="col-span-full"');
+        expect(page).not.toContain("md:col-span-1");
+    });
+});
+
+describe("design contract: sync error action button", () => {
+    const source = readFileSync(`${appDir}/components/bankSync/ActionButton.vue`, "utf8");
+
+    it("draws no hex colour literal, colours come from the sync-error theme tokens", () => {
+        expect(source).not.toMatch(/#[0-9a-fA-F]{3,6}/);
+    });
+
+    // A soft, small outline in the strip's own border and text tokens, not a neutral outline.
+    it("is a small light outline in the sync-error border and text tokens", () => {
+        expect(source).toContain("h-7");
+        expect(source).toContain("rounded-md");
+        expect(source).toContain("text-xs");
+        expect(source).toContain("border-[color:var(--p-sync-error-border)]");
+        expect(source).toContain("text-[color:var(--p-sync-error-color)]");
+        expect(source).toContain("bg-transparent");
     });
 });

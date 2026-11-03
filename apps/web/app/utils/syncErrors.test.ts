@@ -1,7 +1,7 @@
 import { SYNC_ERROR_CODES } from "@badger/shared-data";
 import type { SyncErrorCode } from "@badger/shared-data";
 import { describe, expect, it } from "vitest";
-import { SYNC_ERROR_COPY, syncErrorCopy } from "./syncErrors";
+import { SYNC_ERROR_ACTION, SYNC_ERROR_COPY, syncErrorCopy } from "./syncErrors";
 
 describe("SYNC_ERROR_COPY", () => {
     it.each(SYNC_ERROR_CODES)("has copy for %s", (code) => {
@@ -60,5 +60,13 @@ describe("syncErrorCopy", () => {
         const copy = syncErrorCopy("SOME_CODE_FROM_A_NEWER_API");
         expect(copy).toBe(SYNC_ERROR_COPY.UNKNOWN);
         expect(copy.short).toBe("Something went wrong");
+    });
+});
+
+describe("SYNC_ERROR_ACTION", () => {
+    // The strip and the run dialog both read this map, so the icon is set here once.
+    it("gives Update login the key icon and Retry the refresh icon", () => {
+        expect(SYNC_ERROR_ACTION["update-login"]).toEqual({ label: "Update login", icon: "pi pi-key" });
+        expect(SYNC_ERROR_ACTION.retry).toEqual({ label: "Retry", icon: "pi pi-refresh" });
     });
 });
