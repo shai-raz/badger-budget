@@ -213,7 +213,7 @@ describe("SyncRunDialog actions", () => {
 
         expect(editor.openEdit).not.toHaveBeenCalled();
         finishHide(wrapper);
-        expect(editor.openEdit).toHaveBeenCalledWith(expect.objectContaining({ id: "conn-b" }), { focusLogin: true });
+        expect(editor.openEdit).toHaveBeenCalledWith(expect.objectContaining({ id: "conn-b" }), { updateLogin: true });
         expect(flow.requestSync).not.toHaveBeenCalled();
     });
 

@@ -51,7 +51,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     flow.busy!.value = false;
     useSyncRunDialog().state.value = { visible: false, jobId: null, expandConnectionId: null };
-    useConnectionEditor().state.value = { visible: false, connection: null, focusLogin: false };
+    useConnectionEditor().state.value = { visible: false, connection: null, updateLogin: false };
 });
 
 afterEach(() => {
@@ -92,7 +92,7 @@ describe("FailureStrip", () => {
         expect(useConnectionEditor().state.value).toEqual({
             visible: true,
             connection: expect.objectContaining({ id: "conn-b" }),
-            focusLogin: true,
+            updateLogin: true,
         });
         expect(flow.requestSync).not.toHaveBeenCalled();
     });

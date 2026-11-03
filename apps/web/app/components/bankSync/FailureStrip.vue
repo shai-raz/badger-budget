@@ -18,7 +18,7 @@ const copy = computed(() => failureStripFor(props.connection));
 
 const onAction = () => {
     const action = copy.value?.action;
-    if (action === "update-login") openEdit(props.connection, { focusLogin: true });
+    if (action === "update-login") openEdit(props.connection, { updateLogin: true });
     else if (action === "retry") requestSync({ connectionId: props.connection.id });
 };
 

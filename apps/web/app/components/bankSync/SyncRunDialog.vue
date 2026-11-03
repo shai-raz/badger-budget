@@ -113,7 +113,7 @@ const onAction = (job: IScraperJob) => {
     const connection = connectionFor(job);
     const action = actionFor(job);
     if (!connection || !action) return;
-    if (action === "update-login") closeThen(() => openEdit(connection, { focusLogin: true }));
+    if (action === "update-login") closeThen(() => openEdit(connection, { updateLogin: true }));
     else closeThen(() => requestSync({ connectionId: connection.id }));
 };
 
