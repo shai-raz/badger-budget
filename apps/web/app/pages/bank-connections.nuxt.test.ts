@@ -82,8 +82,6 @@ describe("bank connections page toggle", () => {
 
         await vi.waitFor(() => expect(toggleSwitch(wrapper).attributes("disabled")).toBeUndefined());
         expect(toggleSwitch(wrapper).attributes("aria-checked")).toBe("true");
-        expect(toastAdd).toHaveBeenCalledWith(
-            expect.objectContaining({ severity: "success", detail: "Connection resumed" }),
-        );
+        expect(toastAdd).not.toHaveBeenCalled();
     });
 });

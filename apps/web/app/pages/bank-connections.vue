@@ -45,12 +45,6 @@ const handleToggleConnection = async (connection: IScraperConnectionResponse, is
             id: connection.id,
             data: { isActive },
         });
-        toast.add({
-            severity: "success",
-            summary: "Updated",
-            detail: `Connection ${isActive ? "resumed" : "paused"}`,
-            life: 3000,
-        });
     } catch (err) {
         toast.add({
             severity: "error",
