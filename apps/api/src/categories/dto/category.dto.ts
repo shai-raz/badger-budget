@@ -54,9 +54,9 @@ export class DeleteCategoryDto {
 
     @ApiPropertyOptional({
         default: true,
-        description: "When transferring, also re-point mapping rules (true) or delete them (false).",
+        description: "When transferring, also re-point rules to the target (true) or soft-delete them (false).",
     })
     @IsOptional()
     @IsBoolean()
-    moveMappingRules?: boolean;
+    moveRules?: boolean;
 }

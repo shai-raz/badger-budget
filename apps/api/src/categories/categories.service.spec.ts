@@ -28,11 +28,13 @@ describe("CategoriesService", () => {
             deleteMany: jest.fn(),
             updateMany: jest.fn(),
         },
-        categoryMappingRule: {
+        rule: {
             findMany: jest.fn(),
             updateMany: jest.fn(),
-            deleteMany: jest.fn(),
             count: jest.fn(),
+        },
+        ruleAction: {
+            updateMany: jest.fn(),
         },
         // remove() detaches dependents inside a transaction. Hand the callback
         // the same mock so `tx.category.update` and `prisma.category.update`
@@ -49,9 +51,9 @@ describe("CategoriesService", () => {
         mockPrismaService.budgetCategory.updateMany.mockResolvedValue({ count: 0 });
         mockPrismaService.transaction.updateMany.mockResolvedValue({ count: 0 });
         mockPrismaService.budget.updateMany.mockResolvedValue({ count: 0 });
-        mockPrismaService.categoryMappingRule.findMany.mockResolvedValue([]);
-        mockPrismaService.categoryMappingRule.updateMany.mockResolvedValue({ count: 0 });
-        mockPrismaService.categoryMappingRule.deleteMany.mockResolvedValue({ count: 0 });
+        mockPrismaService.rule.findMany.mockResolvedValue([]);
+        mockPrismaService.rule.updateMany.mockResolvedValue({ count: 0 });
+        mockPrismaService.ruleAction.updateMany.mockResolvedValue({ count: 0 });
     };
 
     const mockCategory = {
@@ -73,6 +75,27 @@ describe("CategoriesService", () => {
         name: "Groceries",
         isSystem: true,
     };
+
+    /** A stored rule row (as the rules module reads it) with one set_category action pointing at categoryId. */
+    const ruleRow = (
+        id: string,
+        categoryId: string,
+        conditions: { field: string; operator: string; value: string }[] = [
+            { field: "description", operator: "contains", value: "coffee" },
+        ],
+    ) => ({
+        id,
+        userId: "test-user",
+        name: id,
+        priority: 1,
+        stopOnMatch: false,
+        isActive: true,
+        createdAt: new Date("2026-01-01"),
+        updatedAt: new Date("2026-01-01"),
+        deletedAt: null,
+        conditions: conditions.map((c, position) => ({ id: id + "-c" + position, ...c, position })),
+        actions: [{ id: id + "-a0", type: "set_category", value: categoryId, position: 0 }],
+    });
 
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
@@ -272,15 +295,20 @@ describe("CategoriesService", () => {
                 data: { categoryId: null },
             });
 
-            // Join rows and mapping rules are deleted (nothing is re-pointed).
+            // Join rows are deleted and rules soft-deleted (nothing is re-pointed).
             expect(mockPrismaService.budgetCategory.deleteMany).toHaveBeenCalledWith({
                 where: { categoryId: "category-id" },
             });
             expect(mockPrismaService.budgetCategory.updateMany).not.toHaveBeenCalled();
-            expect(mockPrismaService.categoryMappingRule.deleteMany).toHaveBeenCalledWith({
-                where: { categoryId: "category-id", userId: "test-user" },
+            expect(mockPrismaService.rule.updateMany).toHaveBeenCalledWith({
+                where: {
+                    userId: "test-user",
+                    deletedAt: null,
+                    actions: { some: { type: "set_category", value: "category-id" } },
+                },
+                data: { deletedAt: expect.any(Date) },
             });
-            expect(mockPrismaService.categoryMappingRule.updateMany).not.toHaveBeenCalled();
+            expect(mockPrismaService.ruleAction.updateMany).not.toHaveBeenCalled();
 
             expect(mockPrismaService.category.update).toHaveBeenCalledWith({
                 where: { id: "category-id" },
@@ -292,6 +320,12 @@ describe("CategoriesService", () => {
             mockPrismaService.category.findFirst
                 .mockResolvedValueOnce(mockCategory)
                 .mockResolvedValueOnce(mockTargetCategory);
+            // Sources load before targets; the source rule is unique, so it moves.
+            mockPrismaService.rule.findMany
+                .mockResolvedValueOnce([
+                    ruleRow("rule-keep", "category-id", [{ field: "description", operator: "equals", value: "rent" }]),
+                ])
+                .mockResolvedValueOnce([]);
             mockPrismaService.budgetCategory.findMany.mockResolvedValue([]);
             mockPrismaService.category.update.mockResolvedValue({
                 ...mockCategory,
@@ -319,12 +353,12 @@ describe("CategoriesService", () => {
             // No budget already linked to the target -> no dedupe delete.
             expect(mockPrismaService.budgetCategory.deleteMany).not.toHaveBeenCalled();
 
-            // Mapping rules move by default.
-            expect(mockPrismaService.categoryMappingRule.updateMany).toHaveBeenCalledWith({
-                where: { categoryId: "category-id", userId: "test-user" },
-                data: { categoryId: "target-id" },
+            // Rules move by default: the set_category action is re-pointed, nothing is soft-deleted.
+            expect(mockPrismaService.ruleAction.updateMany).toHaveBeenCalledWith({
+                where: { ruleId: { in: ["rule-keep"] }, type: "set_category", value: "category-id" },
+                data: { value: "target-id" },
             });
-            expect(mockPrismaService.categoryMappingRule.deleteMany).not.toHaveBeenCalled();
+            expect(mockPrismaService.rule.updateMany).not.toHaveBeenCalled();
 
             expect(mockPrismaService.category.update).toHaveBeenCalledWith({
                 where: { id: "category-id" },
@@ -361,18 +395,18 @@ describe("CategoriesService", () => {
             expect(deleteOrder).toBeLessThan(updateOrder);
         });
 
-        it("should delete duplicate mapping rules before re-pointing the rest when transferring", async () => {
+        it("should soft-delete duplicate rules before re-pointing the rest when transferring", async () => {
             mockPrismaService.category.findFirst
                 .mockResolvedValueOnce(mockCategory)
                 .mockResolvedValueOnce(mockTargetCategory);
-            // One source rule duplicates an existing target rule; the other is unique.
-            mockPrismaService.categoryMappingRule.findMany
-                .mockResolvedValueOnce([{ field: "description", operator: "contains", value: "coffee" }]) // target rules
+            // Source rules: one duplicates a rule already on the target, the other is unique.
+            // Sources load before targets.
+            mockPrismaService.rule.findMany
                 .mockResolvedValueOnce([
-                    // source rules
-                    { id: "rule-dup", field: "description", operator: "contains", value: "coffee" },
-                    { id: "rule-keep", field: "description", operator: "equals", value: "rent" },
-                ]);
+                    ruleRow("rule-dup", "category-id"),
+                    ruleRow("rule-keep", "category-id", [{ field: "description", operator: "equals", value: "rent" }]),
+                ])
+                .mockResolvedValueOnce([ruleRow("rule-target", "target-id")]);
             mockPrismaService.category.update.mockResolvedValue({
                 ...mockCategory,
                 deletedAt: new Date(),
@@ -382,21 +416,22 @@ describe("CategoriesService", () => {
                 transferToCategoryId: "target-id",
             });
 
-            expect(mockPrismaService.categoryMappingRule.deleteMany).toHaveBeenCalledWith({
+            expect(mockPrismaService.rule.updateMany).toHaveBeenCalledWith({
                 where: { id: { in: ["rule-dup"] } },
+                data: { deletedAt: expect.any(Date) },
             });
-            expect(mockPrismaService.categoryMappingRule.updateMany).toHaveBeenCalledWith({
-                where: { categoryId: "category-id", userId: "test-user" },
-                data: { categoryId: "target-id" },
+            expect(mockPrismaService.ruleAction.updateMany).toHaveBeenCalledWith({
+                where: { ruleId: { in: ["rule-keep"] }, type: "set_category", value: "category-id" },
+                data: { value: "target-id" },
             });
 
             // The dedupe cleanup must run before the re-point.
-            const deleteOrder = mockPrismaService.categoryMappingRule.deleteMany.mock.invocationCallOrder[0];
-            const updateOrder = mockPrismaService.categoryMappingRule.updateMany.mock.invocationCallOrder[0];
+            const deleteOrder = mockPrismaService.rule.updateMany.mock.invocationCallOrder[0];
+            const updateOrder = mockPrismaService.ruleAction.updateMany.mock.invocationCallOrder[0];
             expect(deleteOrder).toBeLessThan(updateOrder);
         });
 
-        it("should delete mapping rules instead of moving them when moveMappingRules is false", async () => {
+        it("should soft-delete rules instead of moving them when moveRules is false", async () => {
             mockPrismaService.category.findFirst
                 .mockResolvedValueOnce(mockCategory)
                 .mockResolvedValueOnce(mockTargetCategory);
@@ -408,7 +443,7 @@ describe("CategoriesService", () => {
 
             await service.remove("category-id", "test-user", {
                 transferToCategoryId: "target-id",
-                moveMappingRules: false,
+                moveRules: false,
             });
 
             // Transactions and budgets still re-point to the target.
@@ -421,11 +456,16 @@ describe("CategoriesService", () => {
                 data: { categoryId: "target-id" },
             });
 
-            // Mapping rules are dropped, not moved.
-            expect(mockPrismaService.categoryMappingRule.deleteMany).toHaveBeenCalledWith({
-                where: { categoryId: "category-id", userId: "test-user" },
+            // Rules are soft-deleted, not moved.
+            expect(mockPrismaService.rule.updateMany).toHaveBeenCalledWith({
+                where: {
+                    userId: "test-user",
+                    deletedAt: null,
+                    actions: { some: { type: "set_category", value: "category-id" } },
+                },
+                data: { deletedAt: expect.any(Date) },
             });
-            expect(mockPrismaService.categoryMappingRule.updateMany).not.toHaveBeenCalled();
+            expect(mockPrismaService.ruleAction.updateMany).not.toHaveBeenCalled();
         });
 
         it("should throw BadRequestException when transferring a category to itself", async () => {
@@ -453,19 +493,26 @@ describe("CategoriesService", () => {
     });
 
     describe("getUsageCount", () => {
-        it("should return per-source counts and a total including mapping rules", async () => {
+        it("should return per-source counts and a total including rules", async () => {
             mockPrismaService.category.findFirst.mockResolvedValue(mockCategory);
             mockPrismaService.transaction.count.mockResolvedValue(3);
             mockPrismaService.budget.count.mockResolvedValue(2);
-            mockPrismaService.categoryMappingRule.count.mockResolvedValue(4);
+            mockPrismaService.rule.count.mockResolvedValue(4);
 
             const result = await service.getUsageCount("category-id", "test-user");
 
             expect(result).toEqual({
                 transactionCount: 3,
                 budgetCount: 2,
-                mappingRuleCount: 4,
+                ruleCount: 4,
                 totalCount: 9,
+            });
+            expect(mockPrismaService.rule.count).toHaveBeenCalledWith({
+                where: {
+                    userId: "test-user",
+                    deletedAt: null,
+                    actions: { some: { type: "set_category", value: "category-id" } },
+                },
             });
 
             // Budget usage must include both the legacy scalar link and the join-table link.

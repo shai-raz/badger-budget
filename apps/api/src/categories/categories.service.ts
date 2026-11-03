@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException 
 import { PrismaService } from "../prisma/prisma.service";
 import { defaultCategoryIcon } from "@badger/shared-data";
 import { CreateCategoryDto, UpdateCategoryDto, DeleteCategoryDto } from "./dto/category.dto";
+import { countCategoryRules, deleteCategoryRules, moveCategoryRules } from "../rules/rule-cleanup";
 
 @Injectable()
 export class CategoriesService {
@@ -117,7 +118,7 @@ export class CategoriesService {
         }
 
         // Only meaningful when moving. Defaults to true.
-        const moveMappingRules = dto.moveMappingRules !== false;
+        const moveRules = dto.moveRules !== false;
 
         return this.prisma.$transaction(async (tx) => {
             // Transactions: re-point or detach. No deletedAt filter so trashed rows move too (matches prior behavior).
@@ -156,35 +157,11 @@ export class CategoriesService {
                 await tx.budgetCategory.deleteMany({ where: { categoryId: id } });
             }
 
-            // Mapping rules (hard-delete model).
-            if (moving && moveMappingRules) {
-                const target = targetId as string;
-                // No unique constraint on (field, operator, value), so a source rule that
-                // duplicates one already on the target would create a redundant second active
-                // rule. Drop those source rules before re-pointing the rest.
-                const targetRules = await tx.categoryMappingRule.findMany({
-                    where: { categoryId: target, userId },
-                    select: { field: true, operator: true, value: true },
-                });
-                if (targetRules.length > 0) {
-                    const targetKeys = new Set(targetRules.map((r) => `${r.field}\0${r.operator}\0${r.value}`));
-                    const sourceRules = await tx.categoryMappingRule.findMany({
-                        where: { categoryId: id, userId },
-                        select: { id: true, field: true, operator: true, value: true },
-                    });
-                    const duplicateIds = sourceRules
-                        .filter((r) => targetKeys.has(`${r.field}\0${r.operator}\0${r.value}`))
-                        .map((r) => r.id);
-                    if (duplicateIds.length > 0) {
-                        await tx.categoryMappingRule.deleteMany({ where: { id: { in: duplicateIds } } });
-                    }
-                }
-                await tx.categoryMappingRule.updateMany({
-                    where: { categoryId: id, userId },
-                    data: { categoryId: target },
-                });
+            // Rules: re-point to the target (dropping duplicates), or soft-delete them.
+            if (moving && moveRules) {
+                await moveCategoryRules(tx, userId, id, targetId as string);
             } else {
-                await tx.categoryMappingRule.deleteMany({ where: { categoryId: id, userId } });
+                await deleteCategoryRules(tx, userId, id);
             }
 
             // Soft delete the category.
@@ -199,7 +176,7 @@ export class CategoriesService {
         // Verify category exists and user has access
         await this.findOne(id, userId);
 
-        const [transactionCount, budgetCount, mappingRuleCount] = await Promise.all([
+        const [transactionCount, budgetCount, ruleCount] = await Promise.all([
             this.prisma.transaction.count({
                 where: { categoryId: id, userId, deletedAt: null },
             }),
@@ -210,16 +187,14 @@ export class CategoriesService {
                     OR: [{ categoryId: id }, { budgetCategories: { some: { categoryId: id } } }],
                 },
             }),
-            this.prisma.categoryMappingRule.count({
-                where: { categoryId: id },
-            }),
+            countCategoryRules(this.prisma, userId, id),
         ]);
 
         return {
             transactionCount,
             budgetCount,
-            mappingRuleCount,
-            totalCount: transactionCount + budgetCount + mappingRuleCount,
+            ruleCount,
+            totalCount: transactionCount + budgetCount + ruleCount,
         };
     }
 }

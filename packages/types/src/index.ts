@@ -91,15 +91,16 @@ export interface UpdateCategoryDto extends Partial<CreateCategoryDto> {}
 export interface CategoryUsageResponse {
     transactionCount: number;
     budgetCount: number;
-    mappingRuleCount: number;
+    /** Live rules whose set_category action targets the category. */
+    ruleCount: number;
     totalCount: number;
 }
 
 export interface DeleteCategoryOptions {
-    /** When set, transactions/budgets/mapping-rules move to this category instead of becoming uncategorized. */
+    /** When set, transactions, budgets and rules move to this category instead of becoming uncategorized. */
     transferToCategoryId?: string;
-    /** Only meaningful when transferring. Default true on the server. When false, mapping rules are deleted instead of re-pointed. */
-    moveMappingRules?: boolean;
+    /** Only meaningful when transferring. Default true on the server. When false, rules are deleted instead of re-pointed. */
+    moveRules?: boolean;
 }
 
 // Category Mapping Rules
