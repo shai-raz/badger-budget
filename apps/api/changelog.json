@@ -1,6 +1,47 @@
 {
     "releases": [
         {
+            "version": "0.11.0",
+            "date": "2026-11-03",
+            "items": [
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "record a sync error code per bank and list past syncs",
+                    "pr": 88
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "toggle bank connections on and off, auto-sync after a login update",
+                    "pr": 89
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "show why a bank sync failed",
+                    "pr": 90
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "add a sync history page and a failing-sync dot on the header Sync button",
+                    "pr": 91
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "show which bank connections are syncing",
+                    "pr": 93
+                }
+            ]
+        },
+        {
             "version": "0.10.0",
             "date": "2026-11-02",
             "items": [
