@@ -1,5 +1,6 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/vue-query";
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/vue-query";
 import { useApiClient } from "../useApiClient";
+import { HISTORY_FIRST_PAGE, nextHistoryPageParam } from "../../utils/syncRuns";
 import type {
     IScraperConnectionResponse,
     ISyncJob,
@@ -16,6 +17,7 @@ export const bankSyncKeys = {
     connections: () => ["bank-sync", "connections"] as const,
     pinStatus: () => ["bank-sync", "pin-status"] as const,
     passkeys: () => ["bank-sync", "passkeys"] as const,
+    history: () => ["bank-sync", "history"] as const,
 };
 
 export function useActiveSyncJobQuery() {
@@ -49,6 +51,18 @@ export function useScraperConnectionsQuery() {
     return useQuery({
         queryKey: bankSyncKeys.connections(),
         queryFn: (): Promise<IScraperConnectionResponse[]> => apiClient.getScraperConnections(),
+    });
+}
+
+/** Connection-independent run history, newest first, paged by cursor (10 rows, then 50 per "Show older syncs"). */
+export function useSyncHistoryQuery() {
+    const apiClient = useApiClient();
+
+    return useInfiniteQuery({
+        queryKey: bankSyncKeys.history(),
+        queryFn: ({ pageParam }) => apiClient.listSyncJobs(pageParam),
+        initialPageParam: { cursor: undefined as string | undefined, limit: HISTORY_FIRST_PAGE },
+        getNextPageParam: (last) => nextHistoryPageParam(last),
     });
 }
 

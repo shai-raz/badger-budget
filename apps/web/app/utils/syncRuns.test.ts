@@ -1,11 +1,14 @@
-import type { IScraperConnectionResponse, IScraperJob, ISyncJob, SyncJobStatus } from "@badger/types";
+import type { IScraperConnectionResponse, IScraperJob, ISyncJob, ISyncJobPage, SyncJobStatus } from "@badger/types";
 import { describe, expect, it } from "vitest";
 import {
     failingConnections,
     failureStripFor,
     formatDuration,
+    HISTORY_FIRST_PAGE,
+    HISTORY_MORE_PAGE,
     initialExpanded,
     isFailingConnection,
+    nextHistoryPageParam,
     runProblemSummary,
     runResult,
     runScope,
@@ -257,5 +260,22 @@ describe("initialExpanded", () => {
     it("expands nothing when no connection is asked for", () => {
         expect(initialExpanded(run("partial", jobs))).toEqual(new Set());
         expect(initialExpanded(run("partial", jobs), null)).toEqual(new Set());
+    });
+});
+
+describe("history paging", () => {
+    const page = (nextCursor: string | null): ISyncJobPage => ({ items: [], nextCursor });
+
+    it("shows 10 runs first, then 50 per older page", () => {
+        expect(HISTORY_FIRST_PAGE).toBe(10);
+        expect(HISTORY_MORE_PAGE).toBe(50);
+    });
+
+    it("asks for the next 50 runs after the page's cursor", () => {
+        expect(nextHistoryPageParam(page("run-10"))).toEqual({ cursor: "run-10", limit: 50 });
+    });
+
+    it("has no next page once the API returns a null cursor", () => {
+        expect(nextHistoryPageParam(page(null))).toBeUndefined();
     });
 });

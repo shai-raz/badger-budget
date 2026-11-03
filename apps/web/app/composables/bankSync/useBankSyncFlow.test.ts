@@ -37,7 +37,7 @@ vi.mock("./useSyncUnlock", () => ({
     }),
 }));
 vi.mock("./useBankSync", () => ({
-    bankSyncKeys: { passkeys: () => ["bank-sync", "passkeys"] },
+    bankSyncKeys: { passkeys: () => ["bank-sync", "passkeys"], history: () => ["bank-sync", "history"] },
     useTriggerSyncMutation: () => ({ isPending: ref(false), mutateAsync: mocks.full }),
     useTriggerConnectionSyncMutation: () => ({ isPending: ref(false), mutateAsync: mocks.single }),
     useActiveSyncJobQuery: () => ({ data: ref(null), refetch: vi.fn() }),
@@ -158,6 +158,11 @@ describe("syncConnectionWithPin", () => {
         expect(flow.activeJobId.value).toBe("single-job");
     });
 
+    it("refreshes the history list so the new run shows as Syncing", async () => {
+        await flow.syncConnectionWithPin("bank-4", "1234", { typed: true });
+        expect(mocks.invalidate).toHaveBeenCalledWith({ queryKey: ["bank-sync", "history"] });
+    });
+
     it("refuses while a sync is running, with an info toast and no mutation", async () => {
         await flow.syncConnectionWithPin("bank-4", "1234", { typed: false });
         const started = await flow.syncConnectionWithPin("bank-5", "5678", { typed: false });
@@ -267,6 +272,25 @@ describe("sync result toasts", () => {
         );
         expect(flow.activeJobId.value).toBeNull();
         expect(flow.syncedCount.value).toBeNull();
+    });
+
+    it.each(["success", "partial", "failed", "interrupted"] as const)(
+        "refreshes the history list when the run ends as %s",
+        async (status) => {
+            await flow.syncConnectionWithPin("bank-1", "1234", { typed: true });
+            mocks.invalidate.mockClear();
+            mocks.jobData.value = syncJob({ status });
+            await settle();
+            expect(mocks.invalidate).toHaveBeenCalledWith({ queryKey: ["bank-sync", "history"] });
+        },
+    );
+
+    it("leaves the history list alone while the run is still going", async () => {
+        await flow.syncConnectionWithPin("bank-1", "1234", { typed: true });
+        mocks.invalidate.mockClear();
+        mocks.jobData.value = syncJob({ status: "running" });
+        await settle();
+        expect(mocks.invalidate).not.toHaveBeenCalledWith({ queryKey: ["bank-sync", "history"] });
     });
 
     it("keeps the success toast outside the sync-result group", async () => {

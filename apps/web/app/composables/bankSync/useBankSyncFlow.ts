@@ -123,6 +123,10 @@ function createBankSyncFlow() {
         if (!job || job.id !== activeJobId.value) return;
 
         syncedCount.value = job.transactionsSynced ?? null;
+        // Any terminal status moves the run from Syncing to its result in the history list.
+        if (job.status !== "pending" && job.status !== "running") {
+            queryClient.invalidateQueries({ queryKey: bankSyncKeys.history() });
+        }
 
         if (job.status === "success") {
             toast.add({
@@ -313,6 +317,8 @@ function createBankSyncFlow() {
         offerPin = typed ? syncPin : null;
         activeJobId.value = result.jobId;
         syncedCount.value = null;
+        // The new run appears in the history list as Syncing.
+        queryClient.invalidateQueries({ queryKey: bankSyncKeys.history() });
     };
 
     const openPinFallback = (reason: string) => {
