@@ -38,8 +38,12 @@ export function useRulePreviewCount(draft: Ref<RuleEditorDraft>) {
     });
 
     const preview = computed<RulePreviewResponse | null>(() => query.data.value ?? null);
+    // Compared by value: `refDebounced` holds its value in a reactive ref, so the settled object is a proxy and
+    // never `===` the computed one. A name edit leaves the request unchanged, so it does not count as checking.
     const checking = computed(
-        () => params.value !== null && (settled.value !== params.value || query.isFetching.value),
+        () =>
+            params.value !== null &&
+            (JSON.stringify(settled.value) !== JSON.stringify(params.value) || query.isFetching.value),
     );
 
     return { preview, checking };

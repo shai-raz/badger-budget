@@ -120,4 +120,33 @@ describe("useRulePreviewCount", () => {
             }),
         );
     });
+
+    it("is checking right after a condition change and settled 400ms later", async () => {
+        const draft = ref<RuleEditorDraft>(completeDraft());
+        const { checking } = useRulePreviewCount(draft);
+        await flush();
+        vi.advanceTimersByTime(400);
+        expect(checking.value).toBe(false);
+
+        draft.value = {
+            ...draft.value,
+            conditions: [{ ...newCondition("description"), value: "costa" }],
+        };
+        await flush();
+        expect(checking.value).toBe(true);
+
+        vi.advanceTimersByTime(400);
+        expect(checking.value).toBe(false);
+    });
+
+    it("is not checking when only the name changes, since the name is not part of the request", async () => {
+        const draft = ref<RuleEditorDraft>(completeDraft());
+        const { checking } = useRulePreviewCount(draft);
+        await flush();
+        vi.advanceTimersByTime(400);
+
+        draft.value = { ...draft.value, name: "Coffee", nameTouched: true };
+        await flush();
+        expect(checking.value).toBe(false);
+    });
 });
