@@ -119,6 +119,7 @@ const handleApply = async () => {
         :show-save="!nothingToChange"
         :cancel-label="nothingToChange ? 'Close' : 'Cancel'"
         width="45rem"
+        :fill-body="!nothingToChange"
         @update:visible="emit('update:visible', $event)"
         @save="handleApply"
     >

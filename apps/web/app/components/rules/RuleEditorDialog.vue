@@ -276,6 +276,7 @@ onMounted(() => {
         :back-label="view === 'review' ? BACK_TO_RULE_LABEL : undefined"
         :cancel-label="view === 'review' ? 'Back' : undefined"
         width="45rem"
+        :fill-body="view === 'review'"
         @update:visible="onVisibleChange"
         @save="handleSave"
         @back="backToForm"

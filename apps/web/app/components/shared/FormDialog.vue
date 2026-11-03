@@ -37,6 +37,11 @@ interface Props {
      * (or nowhere) whatever has focus. Needed when the stacked dialog's overlays are teleported outside its mask.
      */
     suspendEscape?: boolean;
+    /**
+     * Below md, where the dialog is fullscreen, the body fills the height instead of scrolling as a whole, so a list
+     * in it can take the rest of the screen and scroll on its own (`flex-1 min-h-0 overflow-y-auto` on the list).
+     */
+    fillBody?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -51,6 +56,7 @@ const props = withDefaults(defineProps<Props>(), {
     width: "36rem",
     isolateEscape: false,
     suspendEscape: false,
+    fillBody: false,
 });
 
 const emit = defineEmits<{
@@ -79,9 +85,12 @@ const onMaskKeydown = (event: KeyboardEvent) => {
 // so a click on the dimmed area or on the dialog's non-focusable parts (labels, gaps, the title) keeps focus within
 // the mask. Without that, focus drops to <body>, the keydown never reaches the mask, and Escape reaches the dialog
 // underneath. Keydown from inside the root bubbles through the mask, so one handler there covers both.
-const dialogPt = computed(() =>
-    props.isolateEscape ? { mask: { tabindex: -1, onKeydown: onMaskKeydown } } : undefined,
-);
+const dialogPt = computed(() => ({
+    ...(props.isolateEscape ? { mask: { tabindex: -1, onKeydown: onMaskKeydown } } : {}),
+    ...(props.fillBody
+        ? { content: { class: "max-md:flex max-md:min-h-0 max-md:flex-col max-md:overflow-hidden" } }
+        : {}),
+}));
 </script>
 
 <template>
@@ -119,6 +128,7 @@ const dialogPt = computed(() =>
 
         <div
             class="flex flex-col gap-4 outline-none"
+            :class="{ 'max-md:min-h-0 max-md:flex-1': fillBody }"
             v-bind="bodyFocus"
         >
             <Message

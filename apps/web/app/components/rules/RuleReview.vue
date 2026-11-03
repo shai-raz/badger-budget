@@ -92,7 +92,9 @@ const rowMeta = (item: RulePreviewItem) =>
 </script>
 
 <template>
-    <div class="flex flex-col gap-3">
+    <!-- Desktop: the list is a bordered box capped at 24rem. Phone (fullscreen dialog, so page rules): flush divided
+         rows to the dialog edges, filling the rest of the screen. The dialog must set FormDialog fill-body. -->
+    <div class="flex flex-col gap-3 max-md:min-h-0 max-md:flex-1">
         <p class="text-sm">
             <span class="font-semibold tabular-nums">{{ wouldChangeCount }}</span>
             {{ wouldChangeCount === 1 ? "transaction would move to" : "transactions would move to" }}
@@ -132,7 +134,7 @@ const rowMeta = (item: RulePreviewItem) =>
             </Button>
         </div>
 
-        <div class="flex items-center gap-3 px-1 text-sm">
+        <div class="flex items-center gap-3 px-1 text-sm max-md:px-0">
             <Checkbox
                 :model-value="headState === 'all'"
                 :indeterminate="headState === 'some'"
@@ -153,7 +155,7 @@ const rowMeta = (item: RulePreviewItem) =>
 
         <div
             ref="scrollEl"
-            class="max-h-[24rem] overflow-y-auto rounded-lg border border-surface-200 dark:border-surface-700"
+            class="overflow-y-auto border-surface-200 max-md:-mx-5 max-md:min-h-0 max-md:flex-1 max-md:border-y md:max-h-[24rem] md:rounded-lg md:border dark:border-surface-700"
         >
             <div
                 v-if="isLoading"
@@ -176,7 +178,7 @@ const rowMeta = (item: RulePreviewItem) =>
                 <li
                     v-for="item in items"
                     :key="item.id"
-                    class="flex items-center gap-3 border-b border-surface-200 px-3 py-2.5 last:border-b-0 dark:border-surface-700"
+                    class="flex items-center gap-3 border-b border-surface-200 px-3 py-2.5 last:border-b-0 max-md:px-5 dark:border-surface-700"
                     :class="isTicked(item) ? '' : 'opacity-60'"
                 >
                     <Checkbox
