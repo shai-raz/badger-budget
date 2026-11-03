@@ -2,22 +2,23 @@ import type { ITransactionResponse } from "@badger/types";
 import { useTransferActions, MIRROR_ACTION_TOOLTIP } from "./useTransferActions";
 import { useReimbursementPicker } from "./useReimbursementPicker";
 import { linkMenuItem } from "../../utils/reimbursement";
+import { useRuleEditorDialog } from "../useRuleEditorDialog";
 
 /**
  * Shared row-actions chrome for transaction lists: the overflow menu model plus
- * the Edit / Apply category rule / Mark Card Payoff modal state and handlers. Extracted so
+ * the Edit / Create rule / Mark Card Payoff modal state and handlers. Extracted so
  * every transaction list (the Transactions page's `ListRows.vue`, the budget detail page)
  * drives identical behavior without duplicating logic.
  */
 export function useTransactionRowActions() {
     const showEditModal = ref(false);
-    const showApplyRuleModal = ref(false);
     const showMarkCardPayoffModal = ref(false);
     const selectedTransaction = ref<ITransactionResponse | null>(null);
     const menu = ref();
 
     const { menuItems: transferMenuItems } = useTransferActions(selectedTransaction);
     const picker = useReimbursementPicker();
+    const { openFromTransaction } = useRuleEditorDialog();
 
     /** Link / mark-as-reimbursement item; empty for transfers and cash-wallet mirrors. */
     const linkMenuItems = computed(() => {
@@ -39,9 +40,12 @@ export function useTransactionRowActions() {
                 },
             },
             {
-                label: "Apply category rule",
+                label: "Create rule",
                 icon: "pi pi-bolt",
-                command: () => (showApplyRuleModal.value = true),
+                command: () => {
+                    const tx = selectedTransaction.value;
+                    if (tx) openFromTransaction(tx);
+                },
                 ...lock,
             },
             {
@@ -63,12 +67,11 @@ export function useTransactionRowActions() {
         menu.value?.toggle(event);
     };
 
-    /** Swap the Edit dialog for the Apply category rule dialog, for the same row. */
-    const openApplyRuleFromEdit = async (tx: ITransactionResponse) => {
-        selectedTransaction.value = tx;
+    /** Swap the Edit dialog for the rule editor, prefilled from the same transaction. */
+    const openCreateRuleFromEdit = async (tx: ITransactionResponse) => {
         showEditModal.value = false;
         await nextTick();
-        showApplyRuleModal.value = true;
+        openFromTransaction(tx);
     };
 
     /** Open the Edit Transaction dialog directly for a given row. */
@@ -82,10 +85,9 @@ export function useTransactionRowActions() {
         menuItems,
         selectedTransaction,
         showEditModal,
-        showApplyRuleModal,
         showMarkCardPayoffModal,
         openMenu,
         openEdit,
-        openApplyRuleFromEdit,
+        openCreateRuleFromEdit,
     };
 }

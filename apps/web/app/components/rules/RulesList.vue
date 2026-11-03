@@ -29,6 +29,8 @@ const props = defineProps<{
 const emit = defineEmits<{
     toggle: [rule: IRule, isActive: boolean];
     actions: [event: Event, rule: IRule];
+    edit: [rule: IRule];
+    create: [];
 }>();
 
 /** True while the phone reorder mode is open. The page reads it to hide its header "+". */
@@ -270,6 +272,8 @@ watch(trimmedQuery, cancelKeyboardPick);
                 icon="pi-bolt"
                 title="No rules yet"
                 text="Rules set a category on new transactions for you. Create one here, or from a transaction's ⋮ menu."
+                action-label="New rule"
+                @action="emit('create')"
             />
         </template>
 
@@ -322,6 +326,7 @@ watch(trimmedQuery, cancelKeyboardPick);
                 :reordering="phoneReordering"
                 @toggle="(isActive) => emit('toggle', rule, isActive)"
                 @actions="(event) => emit('actions', event, rule)"
+                @open="emit('edit', rule)"
             >
                 <template
                     v-if="isDesktop || phoneReordering"
@@ -336,6 +341,7 @@ watch(trimmedQuery, cancelKeyboardPick);
                         class="rule-grip shrink-0 cursor-grab text-muted-color"
                         aria-label="Drag to reorder"
                         :disabled="trimmedQuery !== ''"
+                        @click.stop
                         @keydown="onGripKeydown($event, rule)"
                         @focusout="onGripFocusout(rule.id)"
                     />

@@ -194,8 +194,6 @@ if (canRestore) {
     );
 }
 
-const isApplyingRules = ref<boolean>(false);
-
 const createDialogVisible = ref(false);
 const createPrefill = ref<TransactionFormPrefill | undefined>(undefined);
 
@@ -233,15 +231,6 @@ watch([() => route.query, accountsData, categoriesData], applyCreateQuery, { imm
 const handleTransactionClick = (transaction: ITransactionResponse) => {
     router.push(`/transactions/${transaction.id}`);
 };
-
-const handleApplyingRules = (applying: boolean) => {
-    isApplyingRules.value = applying;
-};
-
-// Expose method for child components
-defineExpose({
-    handleApplyingRules,
-});
 </script>
 
 <template>
@@ -297,17 +286,6 @@ defineExpose({
             v-else
             class="flex min-h-0 flex-1 flex-col"
         >
-            <!-- Applying Rules Message -->
-            <Message
-                v-if="isApplyingRules"
-                severity="info"
-                :closable="false"
-                class="mx-4 mb-4 shrink-0 md:mx-0"
-            >
-                <i class="pi pi-spin pi-spinner mr-2"></i>
-                Applying category rules to transactions...
-            </Message>
-
             <!-- Metrics strip fed by the summary endpoint (reacts to filters, never
                  to the show-hidden toggle). The bottom margins below are md-only:
                  on mobile these sections are full-bleed and sit flush, separated
@@ -375,7 +353,6 @@ defineExpose({
                 class="min-h-0 flex-1"
                 @load-more="fetchNextPage"
                 @transaction-click="handleTransactionClick"
-                @applying-rules="handleApplyingRules"
             />
         </div>
 

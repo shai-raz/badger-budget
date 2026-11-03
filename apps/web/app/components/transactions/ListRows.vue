@@ -25,7 +25,6 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
     transactionClick: [transaction: ITransactionResponse];
-    applyingRules: [isApplying: boolean];
     loadMore: [];
 }>();
 
@@ -50,7 +49,7 @@ useIntersectionObserver(
     { root: scrollEl, rootMargin: "300px" },
 );
 
-// Shared overflow menu + Edit / Apply category rule / Mark Card Payoff modals. The custom
+// Shared overflow menu + Edit / Create rule / Mark Card Payoff modals. The custom
 // rows have no inline pencil, so every action is surfaced through the menu.
 const actionsHost = ref<InstanceType<typeof TransactionActionsHost> | null>(null);
 
@@ -134,9 +133,6 @@ defineExpose({ scrollToTop, getScrollTop, scrollToOffset });
 
         <!-- Overlays only (popup menu + modals, all teleported to body), so this
              contributes no flex item and no layout of its own. -->
-        <TransactionActionsHost
-            ref="actionsHost"
-            @applying-rules="emit('applyingRules', $event)"
-        />
+        <TransactionActionsHost ref="actionsHost" />
     </div>
 </template>

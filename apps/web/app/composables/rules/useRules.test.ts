@@ -1,13 +1,21 @@
 import type { IRule } from "@badger/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useDeleteRuleMutation, useReorderRulesMutation, useSetRuleActiveMutation } from "./useRules";
+import { transactionKeys } from "../transactions/useTransactions";
+import {
+    useDeleteRuleMutation,
+    useReorderRulesMutation,
+    useSaveRuleMutation,
+    useSetRuleActiveMutation,
+    type SaveRuleInput,
+} from "./useRules";
 
 interface MutationOptions<V> {
     mutationFn: (variables: V) => Promise<unknown>;
     onMutate?: (variables: V) => Promise<{ previous?: IRule[] }>;
     onError?: (error: unknown, variables: V, context?: { previous?: IRule[] }) => void;
     onSettled?: () => void;
+    onSuccess?: (result: { appliedCount: number | null }) => void;
 }
 
 const invalidateQueries = vi.fn();
@@ -135,5 +143,48 @@ describe("useDeleteRuleMutation", () => {
         options.onSettled?.();
         expect(apiClient.deleteRule).toHaveBeenCalledWith("r1");
         expect(invalidatedKeys()).toEqual([listKey]);
+    });
+});
+
+vi.mock("../useBudgets", () => ({ budgetKeys: { all: ["budgets"] } }));
+vi.mock("../accounts/accountKeys", () => ({ accountKeys: { all: ["accounts"] } }));
+vi.mock("../reports/useSpendingReport", () => ({ reportKeys: { all: ["reports"] } }));
+vi.mock("../transactions/useTransactions", () => ({ transactionKeys: { all: ["transactions"] } }));
+
+describe("useSaveRuleMutation", () => {
+    const saveClient = {
+        createRule: vi.fn(async () => ({ rule: ruleFixture("new", 4), appliedCount: null })),
+        updateRule: vi.fn(async () => ({ rule: ruleFixture("r1", 1), appliedCount: null })),
+    };
+    const dto = { name: "Coffee", conditions: [], actions: [], stopOnMatch: false };
+
+    beforeEach(() => {
+        vi.stubGlobal("useApiClient", () => saveClient);
+    });
+
+    it("creates a rule when no id is given", async () => {
+        const options = optionsFor<SaveRuleInput>(useSaveRuleMutation);
+        await options.mutationFn({ dto });
+        expect(saveClient.createRule).toHaveBeenCalledWith(dto);
+        expect(saveClient.updateRule).not.toHaveBeenCalled();
+    });
+
+    it("updates the rule with the given id", async () => {
+        const options = optionsFor<SaveRuleInput>(useSaveRuleMutation);
+        await options.mutationFn({ id: "r1", dto });
+        expect(saveClient.updateRule).toHaveBeenCalledWith("r1", dto);
+        expect(saveClient.createRule).not.toHaveBeenCalled();
+    });
+
+    it("refreshes only rules when nothing was applied", () => {
+        const options = optionsFor<SaveRuleInput>(useSaveRuleMutation);
+        options.onSuccess?.({ appliedCount: null });
+        expect(invalidatedKeys()).toEqual([["rules"]]);
+    });
+
+    it("also refreshes transactions and their dependants when rows were applied", () => {
+        const options = optionsFor<SaveRuleInput>(useSaveRuleMutation);
+        options.onSuccess?.({ appliedCount: 3 });
+        expect(invalidatedKeys()).toEqual([["rules"], transactionKeys.all, ["budgets"], ["accounts"], ["reports"]]);
     });
 });

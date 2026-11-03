@@ -58,7 +58,7 @@ const filteredBudgetTransactions = computed<ITransactionResponse[]>(() => {
     return budgetPeriodTransactions(budgetTransactions.value, analytics.value);
 });
 
-// Shared overflow menu + Edit / Apply category rule / Mark Card Payoff modals for the rows.
+// Shared overflow menu + Edit / Create rule / Mark Card Payoff modals for the rows.
 const actionsHost = ref<InstanceType<typeof TransactionActionsHost> | null>(null);
 
 const handleEdit = () => {
