@@ -1,6 +1,47 @@
 {
     "releases": [
         {
+            "version": "0.12.0",
+            "date": "2026-11-03",
+            "items": [
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "rules with several conditions and actions",
+                    "pr": 96
+                },
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "move category mapping rules onto the rules engine",
+                    "pr": 97
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "Settings › Rules page with reorder",
+                    "pr": 98
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "rule editor with create from a transaction",
+                    "pr": 99
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "review and apply rules to existing transactions",
+                    "pr": 100
+                }
+            ]
+        },
+        {
             "version": "0.11.0",
             "date": "2026-11-03",
             "items": [
