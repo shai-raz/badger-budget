@@ -1,4 +1,5 @@
 // User-facing copy for a failed bank sync, keyed by the error code the API records.
+import { isSyncErrorCode } from "@badger/shared-data";
 import type { SyncErrorCode } from "@badger/shared-data";
 
 /** What the user can do next: fix the login, or run the sync again. `null` means nothing to press. */
@@ -76,7 +77,10 @@ export const SYNC_ERROR_COPY: Record<SyncErrorCode, SyncErrorCopy> = {
     },
 };
 
-/** Copy for a sync error code. A missing code (no error recorded) reads as UNKNOWN. */
-export function syncErrorCopy(code: SyncErrorCode | null | undefined): SyncErrorCopy {
-    return SYNC_ERROR_COPY[code ?? "UNKNOWN"];
+/**
+ * Copy for a sync error code. A missing code (no error recorded) reads as UNKNOWN, and so does a code
+ * this build doesn't know: a cached PWA bundle can run against a newer API that has added one.
+ */
+export function syncErrorCopy(code: string | null | undefined): SyncErrorCopy {
+    return isSyncErrorCode(code) ? SYNC_ERROR_COPY[code] : SYNC_ERROR_COPY.UNKNOWN;
 }

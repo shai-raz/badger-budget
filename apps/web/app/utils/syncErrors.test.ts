@@ -55,4 +55,10 @@ describe("syncErrorCopy", () => {
     it.each([null, undefined])("reads a missing code (%s) as UNKNOWN", (code) => {
         expect(syncErrorCopy(code)).toBe(SYNC_ERROR_COPY.UNKNOWN);
     });
+
+    it("reads a code this build doesn't know as UNKNOWN instead of crashing", () => {
+        const copy = syncErrorCopy("SOME_CODE_FROM_A_NEWER_API");
+        expect(copy).toBe(SYNC_ERROR_COPY.UNKNOWN);
+        expect(copy.short).toBe("Something went wrong");
+    });
 });
