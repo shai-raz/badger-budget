@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
-import type { IRule } from "@badger/types";
+import type { CreateRuleDto, IRule, UpdateRuleDto } from "@badger/types";
+import { budgetKeys } from "../useBudgets";
+import { accountKeys } from "../accounts/accountKeys";
+import { reportKeys } from "../reports/useSpendingReport";
+import { transactionKeys } from "../transactions/useTransactions";
 import { ruleKeys } from "./ruleKeys";
+
+/** A new rule has no id; an edit carries the id of the rule it replaces. */
+export type SaveRuleInput = { id: string; dto: UpdateRuleDto } | { id?: undefined; dto: CreateRuleDto };
 
 export function useRulesQuery() {
     const apiClient = useApiClient();
@@ -79,6 +86,27 @@ export function useDeleteRuleMutation() {
         mutationFn: (id: string) => apiClient.deleteRule(id),
         onSettled: () => {
             queryClient.invalidateQueries({ queryKey: ruleKeys.lists() });
+        },
+    });
+}
+
+/** Creates a rule, or updates one when an id is given. With `dto.apply` the save also applies the rule, and the transaction caches refresh when any rows changed. */
+export function useSaveRuleMutation() {
+    const apiClient = useApiClient();
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (input: SaveRuleInput) =>
+            input.id === undefined ? apiClient.createRule(input.dto) : apiClient.updateRule(input.id, input.dto),
+        onSuccess: ({ appliedCount }) => {
+            queryClient.invalidateQueries({ queryKey: ruleKeys.all });
+
+            if (appliedCount !== null && appliedCount > 0) {
+                queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+                queryClient.invalidateQueries({ queryKey: budgetKeys.all });
+                queryClient.invalidateQueries({ queryKey: accountKeys.all });
+                queryClient.invalidateQueries({ queryKey: reportKeys.all });
+            }
         },
     });
 }
