@@ -10,6 +10,10 @@ interface InfiniteOptions {
     enabled: Ref<boolean>;
     queryFn: (ctx: { pageParam: number }) => Promise<unknown>;
     getNextPageParam: (last: RulePreviewResponse) => number | undefined;
+    placeholderData: (
+        previousData: unknown,
+        previousQuery: { queryKey: readonly unknown[] } | undefined,
+    ) => { pages: RulePreviewResponse[] } | undefined;
 }
 
 let options: InfiniteOptions;
@@ -25,10 +29,10 @@ vi.mock("@tanstack/vue-query", () => ({
             hasNextPage: ref(false),
             isFetchingNextPage: ref(false),
             isLoading: ref(false),
+            isPlaceholderData: ref(false),
             error: ref(null),
         };
     },
-    keepPreviousData: "keep-previous",
 }));
 
 vi.mock("../useApiClient", () => ({
@@ -147,5 +151,37 @@ describe("useRulePreviewList", () => {
         expect(list.items.value).toEqual([]);
         expect(list.wouldChangeCount.value).toBe(0);
         expect(list.counts.value).toBeNull();
+    });
+
+    describe("placeholder data while a list loads", () => {
+        const otherDraft: RuleDraft = {
+            conditions: [{ field: "description", operator: "contains", value: "pret" }],
+            actions: [{ type: "set_category", value: "cat-lunch" }],
+        };
+        const previous = { pages: [page({ items: [item("a")] })] };
+
+        it("keeps the last rows while the same draft changes its filter", () => {
+            useRulePreviewList(ref<RuleDraft | null>(draft), ref<RulePreviewFilter>("uncategorized"), ref(""));
+            const kept = options.placeholderData(previous, { queryKey: keyFor("all", "") });
+            expect(kept).toBe(previous);
+        });
+
+        it("keeps the last rows while the same draft changes its search", () => {
+            useRulePreviewList(ref<RuleDraft | null>(draft), ref<RulePreviewFilter>("all"), ref("star"));
+            const kept = options.placeholderData(previous, { queryKey: keyFor("all", "") });
+            expect(kept).toBe(previous);
+        });
+
+        it("keeps nothing from another rule's draft, however the filter reads", () => {
+            useRulePreviewList(ref<RuleDraft | null>(draft), ref<RulePreviewFilter>("all"), ref(""));
+            const other = ruleKeys.preview({ ...otherDraft, filter: "all", search: "" });
+            expect(options.placeholderData(previous, { queryKey: other })).toBeUndefined();
+        });
+
+        it("keeps nothing when there is no earlier list to hold", () => {
+            useRulePreviewList(ref<RuleDraft | null>(draft), ref<RulePreviewFilter>("all"), ref(""));
+            expect(options.placeholderData(undefined, undefined)).toBeUndefined();
+            expect(options.placeholderData(previous, { queryKey: ruleKeys.previews() })).toBeUndefined();
+        });
     });
 });

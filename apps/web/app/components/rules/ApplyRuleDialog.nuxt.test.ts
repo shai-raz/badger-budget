@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockNuxtImport, mountSuspended } from "@nuxt/test-utils/runtime";
 import { flushPromises, type VueWrapper } from "@vue/test-utils";
-import { computed, ref, toValue, watch, type MaybeRefOrGetter } from "vue";
+import { computed, reactive, ref, toValue, watch, type MaybeRefOrGetter } from "vue";
 import Checkbox from "primevue/checkbox";
 import type { Category, IRule, RuleDraft, RulePreviewItem } from "@badger/types";
 import ApplyRuleDialog from "./ApplyRuleDialog.vue";
@@ -14,7 +14,10 @@ const list = vi.hoisted(() => ({
     matchCount: 0,
     counts: null as { all: number; uncategorized: number; categorized: number } | null,
     draft: null as RuleDraft | null,
+    placeholder: false,
 }));
+// The mock reads through a reactive view, so a test can change the list while the dialog stays mounted.
+const state = reactive(list);
 
 vi.mock("primevue/usetoast", () => ({ useToast: () => toast }));
 mockNuxtImport("useApiClient", () => () => api);
@@ -28,15 +31,16 @@ vi.mock("~/composables/rules/useRulePreviewList", () => ({
             { immediate: true },
         );
         return {
-            items: computed(() => list.items),
-            wouldChangeCount: computed(() => list.total),
-            matchCount: computed(() => list.matchCount),
-            alreadyTargetCount: computed(() => list.matchCount - list.total),
-            counts: computed(() => list.counts),
+            items: computed(() => state.items),
+            wouldChangeCount: computed(() => state.total),
+            matchCount: computed(() => state.matchCount),
+            alreadyTargetCount: computed(() => state.matchCount - state.total),
+            counts: computed(() => state.counts),
             fetchNextPage: vi.fn(),
             hasNextPage: ref(false),
             isFetchingNextPage: ref(false),
             isLoading: ref(false),
+            isPlaceholderData: computed(() => state.placeholder),
             error: ref(null),
         };
     },
@@ -64,6 +68,14 @@ const rule: IRule = {
     updatedAt: "2026-01-01T00:00:00.000Z",
     conditions: [{ id: "cond-1", field: "description", operator: "contains", value: "coffee", position: 0 }],
     actions: [{ id: "act-1", type: "set_category", value: "cat-coffee", position: 0 }],
+};
+
+// A second rule in the same category, so only its name and conditions tell the two dialogs apart.
+const ruleB: IRule = {
+    ...rule,
+    id: "rule-2",
+    name: "Bakeries",
+    conditions: [{ id: "cond-2", field: "description", operator: "contains", value: "bakery", position: 0 }],
 };
 
 const row = (id: string, description: string): RulePreviewItem => ({
@@ -113,6 +125,7 @@ beforeEach(() => {
     list.total = 3;
     list.matchCount = 4;
     list.counts = { all: 3, uncategorized: 3, categorized: 0 };
+    list.placeholder = false;
 });
 
 afterEach(() => {
@@ -176,6 +189,38 @@ describe("ApplyRuleDialog", () => {
 
         await wrapper.setProps({ visible: true });
         expect(list.draft).not.toBeNull();
+    });
+
+    it("shows neither 'Nothing to change' nor a count while another rule's list is only placeholder data", async () => {
+        // Rule A matches transactions that already have the category, so the dialog says nothing to change.
+        list.items = [];
+        list.total = 0;
+        list.matchCount = 3;
+        const wrapper = await mountDialog();
+        expect(document.body.textContent).toContain("Nothing to change");
+
+        await wrapper.setProps({ visible: false });
+        // Opening rule B: its first page is still loading, so the list holds rule A's totals as placeholder data.
+        state.placeholder = true;
+        await wrapper.setProps({ visible: true, rule: ruleB });
+        await flushPromises();
+
+        expect(document.body.textContent).not.toContain("Nothing to change");
+        expect(document.body.textContent).not.toContain("All 3 transactions");
+        expect(buttonLabelled("Apply")?.disabled).toBe(true);
+        expect(buttonLabelled("Apply to 0")).toBeUndefined();
+        expect(api.applyRule).not.toHaveBeenCalled();
+
+        // Rule B's first page lands: its own totals and rows take over.
+        state.placeholder = false;
+        state.items = [row("d", "Bakery Lane")];
+        state.total = 1;
+        state.matchCount = 1;
+        await flushPromises();
+
+        expect(document.body.textContent).toContain("Bakeries");
+        expect(document.body.textContent).not.toContain("Nothing to change");
+        expect(buttonLabelled("Apply to 1")?.disabled).toBe(false);
     });
 
     it("disables Apply when no transaction is selected", async () => {

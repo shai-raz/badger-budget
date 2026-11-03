@@ -54,7 +54,11 @@ const reviewCategory = computed(() => ({
     icon: category.value?.icon ?? null,
 }));
 
-const { wouldChangeCount, matchCount, counts, isLoading } = useRulePreviewList(draft, filter, search);
+const { wouldChangeCount, matchCount, counts, isLoading, isPlaceholderData } = useRulePreviewList(
+    draft,
+    filter,
+    search,
+);
 
 // Every open, and every other rule, starts from all rows ticked and no error on screen.
 watch(
@@ -66,8 +70,10 @@ watch(
 );
 
 const selected = computed(() => selectedCount(selection.value, wouldChangeCount.value));
-// The totals come from the first page, so nothing is said until it has landed.
-const nothingToChange = computed(() => counts.value !== null && !isLoading.value && wouldChangeCount.value === 0);
+// The totals come from the first page of this rule's own list. Until that has landed, nothing is said about
+// them: a placeholder would be another rule's numbers, or the last filter's.
+const settled = computed(() => counts.value !== null && !isLoading.value && !isPlaceholderData.value);
+const nothingToChange = computed(() => settled.value && wouldChangeCount.value === 0);
 const busy = computed(() => applyRule.isPending.value);
 const header = computed(() => `Apply "${props.rule?.name ?? ""}"`);
 
@@ -105,8 +111,8 @@ const handleApply = async () => {
         initial-focus="dialog"
         :busy="busy"
         :api-error="apiError"
-        :save-label="`Apply to ${selected}`"
-        :save-disabled="selected === 0"
+        :save-label="settled ? `Apply to ${selected}` : 'Apply'"
+        :save-disabled="!settled || selected === 0"
         :show-save="!nothingToChange"
         :cancel-label="nothingToChange ? 'Close' : 'Cancel'"
         width="45rem"
