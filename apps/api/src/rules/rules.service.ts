@@ -151,10 +151,18 @@ export class RulesService {
         };
     }
 
-    /** Sets the category of the transactions a saved rule would change, limited to the selection. */
+    /**
+     * Sets the category of the transactions a saved rule would change, limited to the selection. The stored rule is
+     * re-checked like a draft, because categories can be deleted after the rule was saved.
+     */
     async apply(id: string, userId: string, selection: ApplyRuleSelectionDto): Promise<ApplyRuleResponse> {
         const rule = await this.findOne(id, userId);
-        const count = await applyRuleSelection(this.prisma, userId, rule, selection);
+        const draft = await assertValidDraft(this.prisma, userId, rule);
+        // A stored set_category row dropped as invalid would leave no target, and apply would uncategorize.
+        if (!draft.actions.some((action) => action.type === "set_category")) {
+            throw new BadRequestException("Choose a category that exists.");
+        }
+        const count = await applyRuleSelection(this.prisma, userId, draft, selection);
         return { count };
     }
 

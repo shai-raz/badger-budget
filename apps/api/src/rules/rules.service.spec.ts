@@ -697,6 +697,30 @@ describe("RulesService", () => {
                 );
                 expect(mockPrisma.transaction.updateMany).not.toHaveBeenCalled();
             });
+
+            it("rejects with 400 and writes nothing when the rule's category was deleted", async () => {
+                mockPrisma.category.findMany.mockResolvedValue([]);
+
+                await expect(service.apply(RULE_ID, USER_ID, { mode: "allExcept", ids: [] })).rejects.toThrow(
+                    BadRequestException,
+                );
+                expect(mockPrisma.transaction.updateMany).not.toHaveBeenCalled();
+            });
+
+            it("rejects with 400 and writes nothing when a stored set_category row was dropped as invalid", async () => {
+                mockPrisma.rule.findFirst.mockResolvedValue(
+                    ruleRow({
+                        actions: [
+                            { id: "a1", ruleId: RULE_ID, type: "retired_action", value: CATEGORY_ID, position: 0 },
+                        ],
+                    }),
+                );
+
+                await expect(service.apply(RULE_ID, USER_ID, { mode: "allExcept", ids: [] })).rejects.toThrow(
+                    BadRequestException,
+                );
+                expect(mockPrisma.transaction.updateMany).not.toHaveBeenCalled();
+            });
         });
 
         describe("save and apply", () => {
