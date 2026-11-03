@@ -11,7 +11,7 @@ definePageMeta({
 });
 
 const toast = useToast();
-const { busy: syncBusy, requestSync } = useBankSyncFlow();
+const { busy: syncBusy, requestSync, connectionSyncState } = useBankSyncFlow();
 const confirm = useConfirm();
 
 const {
@@ -109,6 +109,7 @@ const menuItems = computed(() => {
         {
             label: "Delete",
             icon: "pi pi-trash",
+            disabled: connectionSyncState(connection.id) !== null,
             command: () => handleDeleteConnection(connection),
         },
     ];
@@ -163,11 +164,15 @@ const openMenu = ({ connection, event }: { connection: IScraperConnectionRespons
                         <div class="flex min-w-0 items-center gap-2">
                             <span class="truncate font-semibold">{{ conn.displayName }}</span>
                         </div>
-                        <BankSyncConnectionSubtitle :connection="conn" />
+                        <BankSyncConnectionSubtitle
+                            :connection="conn"
+                            :sync-state="connectionSyncState(conn.id)"
+                        />
                     </div>
+                    <!-- A connection in the running sync can't be paused or deleted, and its old failure is hidden while it retries. -->
                     <ToggleSwitch
                         :model-value="pendingToggle(conn) ?? conn.isActive"
-                        :disabled="pendingToggle(conn) !== undefined"
+                        :disabled="pendingToggle(conn) !== undefined || connectionSyncState(conn.id) !== null"
                         :aria-label="`Sync ${conn.displayName}`"
                         class="shrink-0"
                         @update:model-value="(value) => handleToggleConnection(conn, value === true)"
@@ -182,6 +187,7 @@ const openMenu = ({ connection, event }: { connection: IScraperConnectionRespons
                         @click="(event) => openMenu({ connection: conn, event })"
                     />
                     <BankSyncFailureStrip
+                        v-if="connectionSyncState(conn.id) === null"
                         :connection="conn"
                         class="col-span-full"
                     />

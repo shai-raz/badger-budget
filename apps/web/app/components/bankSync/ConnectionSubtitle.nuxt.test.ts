@@ -76,4 +76,40 @@ describe("ConnectionSubtitle", () => {
 
         expect(text(wrapper)).toBe("Visa Cal · Synced 1m ago");
     });
+
+    it("shows Syncing… with a spinning icon while the connection is running", async () => {
+        const wrapper = await mountSuspended(ConnectionSubtitle, {
+            props: { connection: connection({ lastSyncedAt: null }), syncState: "running" },
+        });
+
+        expect(text(wrapper)).toBe("Visa Cal · Syncing…");
+        const icon = wrapper.find("i.pi-spinner.pi-spin");
+        expect(icon.exists()).toBe(true);
+        expect(icon.attributes("aria-hidden")).toBe("true");
+        expect(wrapper.classes()).toContain("text-color");
+        expect(wrapper.text()).not.toContain("Synced");
+    });
+
+    it("shows Waiting to sync with a clock icon while the connection is queued", async () => {
+        const wrapper = await mountSuspended(ConnectionSubtitle, {
+            props: { connection: connection({ lastSyncedAt: null }), syncState: "pending" },
+        });
+
+        expect(text(wrapper)).toBe("Visa Cal · Waiting to sync");
+        const icon = wrapper.find("i.pi-clock");
+        expect(icon.exists()).toBe(true);
+        expect(icon.attributes("aria-hidden")).toBe("true");
+        expect(wrapper.classes()).toContain("text-muted-color");
+        expect(wrapper.classes()).not.toContain("font-medium");
+    });
+
+    it("shows the normal sync line when there is no sync state", async () => {
+        const wrapper = await mountSuspended(ConnectionSubtitle, {
+            props: { connection: connection({ lastSyncedAt: null }), syncState: null },
+        });
+
+        expect(text(wrapper)).toBe("Visa Cal · Never synced");
+        expect(wrapper.find(".pi-spinner").exists()).toBe(false);
+        expect(wrapper.find(".pi-clock").exists()).toBe(false);
+    });
 });
