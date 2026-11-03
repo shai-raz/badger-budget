@@ -6,7 +6,7 @@ import { autoRuleName, type MatchableCondition } from "@badger/utils";
 // The migration is hand-written SQL, so these tests read it and pin the parts that must agree with the TypeScript
 // vocabulary and naming. The SQL itself is run against a real database when the migration is applied.
 const sql = readFileSync(
-    join(__dirname, "../../prisma/migrations/20261103130000_migrate_category_mapping_rules/migration.sql"),
+    join(__dirname, "../../prisma/migrations/20261103150000_migrate_category_mapping_rules/migration.sql"),
     "utf8",
 );
 
