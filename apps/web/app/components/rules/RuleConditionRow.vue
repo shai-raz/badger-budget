@@ -96,8 +96,11 @@ const onValueSelect = (value: string) => patch({ value });
 </script>
 
 <template>
-    <div class="flex items-start gap-2">
-        <div class="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-[minmax(0,10rem)_minmax(0,11rem)_minmax(0,1fr)]">
+    <!-- Phone: a bordered card with Field and the remove button on top, then Operator and Value side by side. -->
+    <div
+        class="grid grid-cols-[8.5rem_minmax(0,1fr)_auto] items-start gap-2 max-sm:rounded-lg max-sm:border max-sm:border-surface-200 max-sm:p-3 sm:flex dark:max-sm:border-surface-700"
+    >
+        <div class="contents min-w-0 flex-1 gap-2 sm:grid sm:grid-cols-[minmax(0,10rem)_minmax(0,11rem)_minmax(0,1fr)]">
             <Select
                 :input-id="fieldId"
                 :model-value="condition.field"
@@ -105,7 +108,7 @@ const onValueSelect = (value: string) => patch({ value });
                 option-label="label"
                 option-value="value"
                 aria-label="Field"
-                class="w-full"
+                class="w-full max-sm:col-span-2"
                 @update:model-value="onFieldChange"
             />
 
@@ -116,11 +119,11 @@ const onValueSelect = (value: string) => patch({ value });
                 option-label="label"
                 option-value="value"
                 aria-label="Operator"
-                class="w-full"
+                class="w-full max-sm:col-start-1 max-sm:row-start-2"
                 @update:model-value="onOperatorChange"
             />
 
-            <div class="flex min-w-0 flex-col gap-1">
+            <div class="flex min-w-0 flex-col gap-1 max-sm:col-start-2 max-sm:row-start-2">
                 <InputText
                     v-if="valueKind === 'text'"
                     :id="valueId"
@@ -230,7 +233,7 @@ const onValueSelect = (value: string) => patch({ value });
             severity="secondary"
             size="small"
             aria-label="Remove condition"
-            class="mt-1 shrink-0"
+            class="mt-1 shrink-0 max-sm:col-start-3 max-sm:row-start-1"
             :disabled="!removable"
             @click="emit('remove')"
         />
