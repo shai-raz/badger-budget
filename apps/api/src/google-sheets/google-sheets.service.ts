@@ -6,7 +6,6 @@ import { CardPayoffPatternsService } from "../card-payoff-patterns/card-payoff-p
 import { ConfigService } from "@nestjs/config";
 import { SyncResultDto } from "./dto";
 import { Decimal } from "@prisma/client/runtime/library";
-import { findMatchingCategoryId } from "@badger/utils";
 import { TransactionImportService, ImportCandidate } from "../transactions/transaction-import.service";
 
 interface SheetRow {
@@ -463,28 +462,5 @@ export class GoogleSheetsService {
         // Try default parsing
         const date = new Date(dateStr);
         return isNaN(date.getTime()) ? null : date;
-    }
-
-    private async matchCategoryByRules(
-        userId: string,
-        transactionData: { originalCategory?: string; description?: string; amount?: number },
-    ): Promise<string | null> {
-        // Get active category mapping rules
-        const rules = await this.prisma.categoryMappingRule.findMany({
-            where: {
-                userId,
-                isActive: true,
-            },
-            orderBy: [{ priority: "asc" }, { createdAt: "desc" }],
-        });
-
-        return findMatchingCategoryId(
-            {
-                description: transactionData.description || "",
-                originalCategory: transactionData.originalCategory,
-                amount: transactionData.amount,
-            },
-            rules as any,
-        );
     }
 }

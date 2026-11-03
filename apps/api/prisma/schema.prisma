@@ -39,7 +39,6 @@ model User {
   budgets                Budget[]
   transactions           Transaction[]
   transactionAttachments TransactionAttachment[]
-  categoryMappingRules CategoryMappingRule[]
   rules                Rule[]
   cardPayoffPatterns   CardPayoffPattern[]
   cashWithdrawalPatterns CashWithdrawalPattern[]
@@ -139,36 +138,12 @@ model Category {
   budgets              Budget[]
   budgetCategories     BudgetCategory[]
   transactions         Transaction[]
-  categoryMappingRules CategoryMappingRule[]
 
   @@index([userId])
   @@index([isSystem])
   @@index([userId, deletedAt])
   @@unique([userId, name, deletedAt])
   @@map("categories")
-}
-
-model CategoryMappingRule {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
-  categoryId  String   @map("category_id") @db.Uuid
-  field       String   @db.VarChar(50) // original_category or description
-  operator    String   @db.VarChar(20) // equals, contains, starts_with, ends_with
-  value       String   @db.VarChar(255)
-  priority    Int      @default(0)
-  stopOnMatch Boolean  @default(true) @map("stop_on_match")
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
-
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([categoryId])
-  @@index([isActive])
-  @@index([userId, isActive, priority])
-  @@map("category_mapping_rules")
 }
 
 model Rule {
