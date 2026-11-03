@@ -4,15 +4,20 @@ import type { BankProvider } from "@badger/shared-data";
 import type { IScraperConnectionResponse } from "@badger/types";
 import { formatTimeAgoCompact, isStale } from "./relativeTime";
 
-/** A credential change on an active connection syncs it straight after the save. Name-only edits and paused connections never do. */
+/**
+ * Only an edit opened from Update login, with changed credentials on an active connection, syncs after the save.
+ * Name-only edits, paused connections and ⋮ Edit never sync.
+ */
 export function shouldAutoSyncAfterSave({
+    updateLogin,
     credentialsChanged,
     isActive,
 }: {
+    updateLogin: boolean;
     credentialsChanged: boolean;
     isActive: boolean;
 }): boolean {
-    return credentialsChanged && isActive;
+    return updateLogin && credentialsChanged && isActive;
 }
 
 /** Display name of a bank provider; unknown ids fall back to the raw id. */

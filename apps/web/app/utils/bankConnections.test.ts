@@ -3,14 +3,18 @@ import { connectionSubtitle, providerName, shouldAutoSyncAfterSave } from "./ban
 
 describe("shouldAutoSyncAfterSave", () => {
     it.each([
-        { credentialsChanged: true, isActive: true, expected: true },
-        { credentialsChanged: true, isActive: false, expected: false },
-        { credentialsChanged: false, isActive: true, expected: false },
-        { credentialsChanged: false, isActive: false, expected: false },
+        { updateLogin: true, credentialsChanged: true, isActive: true, expected: true },
+        { updateLogin: true, credentialsChanged: true, isActive: false, expected: false },
+        { updateLogin: true, credentialsChanged: false, isActive: true, expected: false },
+        { updateLogin: true, credentialsChanged: false, isActive: false, expected: false },
+        { updateLogin: false, credentialsChanged: true, isActive: true, expected: false },
+        { updateLogin: false, credentialsChanged: true, isActive: false, expected: false },
+        { updateLogin: false, credentialsChanged: false, isActive: true, expected: false },
+        { updateLogin: false, credentialsChanged: false, isActive: false, expected: false },
     ])(
-        "credentialsChanged=$credentialsChanged isActive=$isActive -> $expected",
-        ({ credentialsChanged, isActive, expected }) => {
-            expect(shouldAutoSyncAfterSave({ credentialsChanged, isActive })).toBe(expected);
+        "updateLogin=$updateLogin credentialsChanged=$credentialsChanged isActive=$isActive -> $expected",
+        ({ updateLogin, credentialsChanged, isActive, expected }) => {
+            expect(shouldAutoSyncAfterSave({ updateLogin, credentialsChanged, isActive })).toBe(expected);
         },
     );
 });

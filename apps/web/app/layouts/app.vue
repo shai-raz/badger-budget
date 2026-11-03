@@ -91,7 +91,7 @@ useHead({ bodyAttrs: { class: "app-layout-body" } });
         <BankSyncScraperConnectionModal
             :visible="connectionEditor.visible"
             :connection="connectionEditor.connection"
-            :focus-login="connectionEditor.focusLogin"
+            :update-login="connectionEditor.updateLogin"
             @update:visible="closeConnectionEditor"
             @close="closeConnectionEditor"
         />

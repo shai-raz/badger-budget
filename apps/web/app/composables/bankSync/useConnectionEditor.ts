@@ -2,29 +2,30 @@ import type { IScraperConnectionResponse } from "@badger/types";
 
 /**
  * Opens the bank connection add/edit modal. Shared state so any page can open it while the modal stays mounted once
- * in layouts/app.vue. `focusLogin` starts an edit on the first login field instead of the dialog.
+ * in layouts/app.vue. `updateLogin` marks an edit opened from an "Update login" action: it focuses the first login
+ * field, and syncs the connection after a credential change.
  */
 export const useConnectionEditor = () => {
     const state = useState<{
         visible: boolean;
         connection: IScraperConnectionResponse | null;
-        focusLogin: boolean;
+        updateLogin: boolean;
     }>("connection-editor", () => ({
         visible: false,
         connection: null,
-        focusLogin: false,
+        updateLogin: false,
     }));
 
     return {
         state,
         openCreate: () => {
-            state.value = { visible: true, connection: null, focusLogin: false };
+            state.value = { visible: true, connection: null, updateLogin: false };
         },
-        openEdit: (connection: IScraperConnectionResponse, opts?: { focusLogin?: boolean }) => {
-            state.value = { visible: true, connection, focusLogin: opts?.focusLogin ?? false };
+        openEdit: (connection: IScraperConnectionResponse, opts?: { updateLogin?: boolean }) => {
+            state.value = { visible: true, connection, updateLogin: opts?.updateLogin ?? false };
         },
         close: () => {
-            state.value = { visible: false, connection: null, focusLogin: false };
+            state.value = { visible: false, connection: null, updateLogin: false };
         },
     };
 };

@@ -63,10 +63,10 @@ function typeInto(input: HTMLInputElement | null, value: string) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-async function openEdit(options: { connection?: IScraperConnectionResponse; focusLogin?: boolean } = {}) {
+async function openEdit(options: { connection?: IScraperConnectionResponse; updateLogin?: boolean } = {}) {
     // Mounted hidden: the form is prefilled when the parent opens the dialog, which the watcher only sees on a change.
     const wrapper = await mountSuspended(ScraperConnectionModal, {
-        props: { visible: false, connection: options.connection ?? connection(true), focusLogin: options.focusLogin },
+        props: { visible: false, connection: options.connection ?? connection(true), updateLogin: options.updateLogin },
     });
     mounted.push(wrapper);
     await wrapper.setProps({ visible: true });
@@ -97,7 +97,7 @@ afterEach(() => {
 describe("ScraperConnectionModal auto-sync after a save", () => {
     it("syncs an active connection with the PIN it saved after a credential change", async () => {
         api.updateScraperConnection.mockResolvedValue(connection(true));
-        await openEdit();
+        await openEdit({ updateLogin: true });
 
         typeInto(usernameInput(), "alice");
         typeInto(passwordInput(), "hunter2");
@@ -128,9 +128,28 @@ describe("ScraperConnectionModal auto-sync after a save", () => {
         expect(flow.syncConnectionWithPin).not.toHaveBeenCalled();
     });
 
+    it("does not sync a credential change from a plain edit", async () => {
+        api.updateScraperConnection.mockResolvedValue(connection(true));
+        await openEdit();
+
+        typeInto(usernameInput(), "alice");
+        typeInto(passwordInput(), "hunter2");
+        typeInto(pinInput(), "1234");
+        await clickSave();
+
+        await vi.waitFor(() => expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: "success" })));
+        expect(api.updateScraperConnection).toHaveBeenCalledWith("c1", {
+            displayName: "Visa Cal",
+            scrapeLookbackDays: 30,
+            pin: "1234",
+            credentials: { username: "alice", password: "hunter2" },
+        });
+        expect(flow.syncConnectionWithPin).not.toHaveBeenCalled();
+    });
+
     it("does not sync a credential change on a paused connection", async () => {
         api.updateScraperConnection.mockResolvedValue(connection(false));
-        await openEdit({ connection: connection(false) });
+        await openEdit({ connection: connection(false), updateLogin: true });
 
         typeInto(usernameInput(), "alice");
         typeInto(passwordInput(), "hunter2");
@@ -148,7 +167,7 @@ describe("ScraperConnectionModal auto-sync after a save", () => {
         api.getSyncPinStatus.mockResolvedValue({ hasPinSet: true });
         api.getSyncPasskeys.mockResolvedValue([passkey]);
         api.updateScraperConnection.mockResolvedValue(connection(true));
-        await openEdit();
+        await openEdit({ updateLogin: true });
         await vi.waitFor(() => expect(buttonWithText("Use PIN instead")).not.toBeNull());
 
         typeInto(usernameInput(), "alice");
@@ -163,7 +182,7 @@ describe("ScraperConnectionModal auto-sync after a save", () => {
 
 describe("ScraperConnectionModal login focus", () => {
     it("focuses only the first login field when opened to fix a login", async () => {
-        await openEdit({ focusLogin: true });
+        await openEdit({ updateLogin: true });
 
         expect(hasAutofocus(usernameInput())).toBe(true);
         expect(hasAutofocus(passwordInput())).toBe(false);

@@ -12,8 +12,11 @@ import { useBankSyncFlow } from "~/composables/bankSync/useBankSyncFlow";
 const props = defineProps<{
     visible: boolean;
     connection?: IScraperConnectionResponse | null;
-    /** Edit only: focus the first login field instead of the dialog, for opening the modal to fix a login. */
-    focusLogin?: boolean;
+    /**
+     * Edit only: opened from Update login. Focuses the first login field instead of the dialog, and syncs the
+     * connection after a credential change.
+     */
+    updateLogin?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -29,7 +32,7 @@ const { syncConnectionWithPin } = useBankSyncFlow();
 
 const isEditMode = computed(() => !!props.connection);
 // The first login field takes focus on create, and on edit only when opened to fix a login.
-const autofocusLogin = computed(() => !isEditMode.value || !!props.focusLogin);
+const autofocusFirstLogin = computed(() => !isEditMode.value || !!props.updateLogin);
 
 // Form state
 const selectedCompanyId = ref<string | null>(null);
@@ -193,7 +196,13 @@ const handleSave = async () => {
                 detail: "Bank connection updated successfully",
                 life: 3000,
             });
-            if (shouldAutoSyncAfterSave({ credentialsChanged, isActive: updated.isActive })) {
+            if (
+                shouldAutoSyncAfterSave({
+                    updateLogin: !!props.updateLogin,
+                    credentialsChanged,
+                    isActive: updated.isActive,
+                })
+            ) {
                 void syncConnectionWithPin(updated.id, pin, { typed: !pinFromPasskey });
             }
         } else {
@@ -238,7 +247,7 @@ const handleSave = async () => {
         :header="isEditMode ? 'Edit bank connection' : 'Add bank connection'"
         :busy="saving"
         :api-error="apiError"
-        :initial-focus="isEditMode && !focusLogin ? 'dialog' : 'field'"
+        :initial-focus="isEditMode && !updateLogin ? 'dialog' : 'field'"
         :save-label="isEditMode ? 'Save changes' : 'Add connection'"
         :save-disabled="!canSave"
         @update:visible="handleClose"
@@ -311,7 +320,7 @@ const handleSave = async () => {
                         input-class="w-full"
                         :input-props="{
                             autocomplete: 'new-password',
-                            autofocus: index === 0 && autofocusLogin,
+                            autofocus: index === 0 && autofocusFirstLogin,
                         }"
                     />
                     <InputText
@@ -320,7 +329,7 @@ const handleSave = async () => {
                         :placeholder="fieldLabel(field)"
                         class="w-full"
                         autocomplete="new-password"
-                        :autofocus="index === 0 && autofocusLogin"
+                        :autofocus="index === 0 && autofocusFirstLogin"
                     />
                 </div>
 
