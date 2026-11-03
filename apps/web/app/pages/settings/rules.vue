@@ -76,9 +76,8 @@ const confirmDelete = (rule: IRule) => {
         header: `Delete "${rule.name}"?`,
         message: "It stops running on new transactions. Transactions it already categorized keep their category.",
         icon: "pi pi-exclamation-triangle",
-        rejectLabel: "Cancel",
-        acceptLabel: "Delete rule",
-        acceptClass: "p-button-danger",
+        rejectProps: { label: "Cancel", severity: "secondary", text: true },
+        acceptProps: { label: "Delete rule", severity: "danger" },
         accept: () => {
             deleteRule(rule.id, {
                 onSuccess: () => {

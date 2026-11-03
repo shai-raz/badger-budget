@@ -35,10 +35,10 @@ const STOP_TOOLTIP = "Rules below this one won't run on transactions it matches.
         <span
             v-if="parts.stop"
             v-tooltip.top="STOP_TOOLTIP"
-            class="whitespace-nowrap"
+            class="whitespace-nowrap font-semibold text-color"
             :title="STOP_TOOLTIP"
             >,&nbsp;<i
-                class="pi pi-stop-circle"
+                class="pi pi-stop-circle text-xs"
                 aria-hidden="true"
             ></i
             >&nbsp;then stop</span
