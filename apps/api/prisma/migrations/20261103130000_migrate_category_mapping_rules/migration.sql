@@ -3,7 +3,9 @@
 -- One-way: there is no down migration. Deliberately not copied:
 --   * inactive rows (every rule a user deleted was soft-deleted to is_active = false);
 --   * combinations the old matcher could never apply: an amount with a text operator, an amount value that is
---     not a non-negative number, and rules pointing at a soft-deleted category.
+--     not a non-negative number, and rules pointing at a soft-deleted category;
+--   * amounts with more than two decimals. The rules API rejects them, and a rounded cents match would change what
+--     an "equals" rule matches.
 --
 -- Each copied rule gets one condition, one set_category action and stop on match. Priorities are renumbered 1..n per
 -- user in the old effective order (priority ASC, created_at DESC), so the run order is unchanged.
@@ -26,7 +28,7 @@ WITH src AS (
     WHERE r.is_active = true
       AND (
         (r.field IN ('description', 'originalCategory') AND r.operator IN ('contains', 'equals', 'startsWith', 'endsWith'))
-        OR (r.field = 'amount' AND r.operator IN ('greaterThan', 'lessThan', 'equals') AND trim(r.value) ~ '^[0-9]+(\.[0-9]+)?$')
+        OR (r.field = 'amount' AND r.operator IN ('greaterThan', 'lessThan', 'equals') AND trim(r.value) ~ '^[0-9]+(\.[0-9]{1,2})?$')
       )
 )
 INSERT INTO rules (id, user_id, name, priority, stop_on_match, is_active, created_at, updated_at, deleted_at)
@@ -70,7 +72,7 @@ WITH src AS (
     WHERE r.is_active = true
       AND (
         (r.field IN ('description', 'originalCategory') AND r.operator IN ('contains', 'equals', 'startsWith', 'endsWith'))
-        OR (r.field = 'amount' AND r.operator IN ('greaterThan', 'lessThan', 'equals') AND trim(r.value) ~ '^[0-9]+(\.[0-9]+)?$')
+        OR (r.field = 'amount' AND r.operator IN ('greaterThan', 'lessThan', 'equals') AND trim(r.value) ~ '^[0-9]+(\.[0-9]{1,2})?$')
       )
 )
 INSERT INTO rule_conditions (rule_id, field, operator, value, position)
@@ -84,7 +86,7 @@ WITH src AS (
     WHERE r.is_active = true
       AND (
         (r.field IN ('description', 'originalCategory') AND r.operator IN ('contains', 'equals', 'startsWith', 'endsWith'))
-        OR (r.field = 'amount' AND r.operator IN ('greaterThan', 'lessThan', 'equals') AND trim(r.value) ~ '^[0-9]+(\.[0-9]+)?$')
+        OR (r.field = 'amount' AND r.operator IN ('greaterThan', 'lessThan', 'equals') AND trim(r.value) ~ '^[0-9]+(\.[0-9]{1,2})?$')
       )
 )
 INSERT INTO rule_actions (rule_id, type, value, position)

@@ -26,6 +26,11 @@ describe("legacy category mapping rule migration", () => {
         expect(sql).toContain("'FM999,999,999,990.00'");
     });
 
+    it("copies only amounts with at most two decimals, the limit RulesService enforces, in every copy step", () => {
+        const pattern = String.raw`'^[0-9]+(\.[0-9]{1,2})?$'`;
+        expect(sql.split(pattern)).toHaveLength(4);
+    });
+
     it("truncates the name to the rule name limit", () => {
         expect(sql).toContain(`${RULE_NAME_MAX_LENGTH}))`);
     });
