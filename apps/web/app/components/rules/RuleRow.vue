@@ -2,15 +2,20 @@
 /**
  * One row on the Rules page: name, the rule's sentence, its on/off switch and the ⋮ trigger. The row
  * reports intent only; the page owns the mutations and the shared ⋮ menu. An off rule dims its text.
+ * While reordering, the switch and ⋮ give way to the `move` slot.
  */
 import type { IRule } from "@badger/types";
 import { ruleSentenceParts, type RuleDisplayContext } from "~/utils/ruleSentence";
 import RuleSentence from "./RuleSentence.vue";
 
-const props = defineProps<{
-    rule: IRule;
-    context: RuleDisplayContext;
-}>();
+const props = withDefaults(
+    defineProps<{
+        rule: IRule;
+        context: RuleDisplayContext;
+        reordering?: boolean;
+    }>(),
+    { reordering: false },
+);
 
 const emit = defineEmits<{
     toggle: [isActive: boolean];
@@ -30,19 +35,24 @@ const parts = computed(() => ruleSentenceParts(props.rule, props.context));
             <span class="truncate text-sm font-semibold">{{ rule.name }}</span>
             <RuleSentence :parts="parts" />
         </div>
-        <ToggleSwitch
-            :model-value="rule.isActive"
-            aria-label="Rule on"
-            @update:model-value="emit('toggle', $event)"
-        />
-        <Button
-            icon="pi pi-ellipsis-v"
-            text
-            rounded
-            size="small"
-            aria-label="Rule actions"
-            class="shrink-0 text-muted-color"
-            @click="emit('actions', $event)"
-        />
+        <template v-if="reordering">
+            <slot name="move" />
+        </template>
+        <template v-else>
+            <ToggleSwitch
+                :model-value="rule.isActive"
+                aria-label="Rule on"
+                @update:model-value="emit('toggle', $event)"
+            />
+            <Button
+                icon="pi pi-ellipsis-v"
+                text
+                rounded
+                size="small"
+                aria-label="Rule actions"
+                class="shrink-0 text-muted-color"
+                @click="emit('actions', $event)"
+            />
+        </template>
     </div>
 </template>
