@@ -18,6 +18,8 @@ interface InfiniteOptions {
 
 let options: InfiniteOptions;
 let data: Ref<{ pages: RulePreviewResponse[] } | undefined>;
+let fetching: Ref<boolean>;
+let fetchingNextPage: Ref<boolean>;
 const previewRule = vi.fn(async () => page());
 
 vi.mock("@tanstack/vue-query", () => ({
@@ -27,7 +29,8 @@ vi.mock("@tanstack/vue-query", () => ({
             data,
             fetchNextPage: vi.fn(),
             hasNextPage: ref(false),
-            isFetchingNextPage: ref(false),
+            isFetching: fetching,
+            isFetchingNextPage: fetchingNextPage,
             isLoading: ref(false),
             isPlaceholderData: ref(false),
             error: ref(null),
@@ -72,6 +75,8 @@ const keyFor = (filter: RulePreviewFilter, search: string) => ruleKeys.preview({
 beforeEach(() => {
     vi.useFakeTimers();
     data = ref(undefined);
+    fetching = ref(false);
+    fetchingNextPage = ref(false);
 });
 
 afterEach(() => {
@@ -129,6 +134,17 @@ describe("useRulePreviewList", () => {
         search.value = "";
         await flush();
         expect(options.queryKey.value).toEqual(keyFor("all", ""));
+    });
+
+    it("reports a refetch of the rows on screen, but not a next-page load, as refetching", () => {
+        const list = useRulePreviewList(ref<RuleDraft | null>(draft), ref<RulePreviewFilter>("all"), ref(""));
+        expect(list.isRefetching.value).toBe(false);
+
+        fetching.value = true;
+        expect(list.isRefetching.value).toBe(true);
+
+        fetchingNextPage.value = true;
+        expect(list.isRefetching.value).toBe(false);
     });
 
     it("flattens the loaded pages and takes the totals from the first page", () => {

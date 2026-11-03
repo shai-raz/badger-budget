@@ -15,6 +15,7 @@ const list = vi.hoisted(() => ({
     counts: null as { all: number; uncategorized: number; categorized: number } | null,
     draft: null as RuleDraft | null,
     placeholder: false,
+    refetching: false,
 }));
 // The mock reads through a reactive view, so a test can change the list while the dialog stays mounted.
 const state = reactive(list);
@@ -40,6 +41,7 @@ vi.mock("~/composables/rules/useRulePreviewList", () => ({
             hasNextPage: ref(false),
             isFetchingNextPage: ref(false),
             isLoading: ref(false),
+            isRefetching: computed(() => state.refetching),
             isPlaceholderData: computed(() => state.placeholder),
             error: ref(null),
         };
@@ -126,6 +128,7 @@ beforeEach(() => {
     list.matchCount = 4;
     list.counts = { all: 3, uncategorized: 3, categorized: 0 };
     list.placeholder = false;
+    list.refetching = false;
 });
 
 afterEach(() => {
@@ -221,6 +224,53 @@ describe("ApplyRuleDialog", () => {
         expect(document.body.textContent).toContain("Bakeries");
         expect(document.body.textContent).not.toContain("Nothing to change");
         expect(buttonLabelled("Apply to 1")?.disabled).toBe(false);
+    });
+
+    it("waits for a reopened rule's refetch before saying anything, rather than showing its cached totals as settled", async () => {
+        // Rule A had nothing to change, and its totals are still cached when the dialog reopens.
+        list.items = [];
+        list.total = 0;
+        list.matchCount = 3;
+        const wrapper = await mountDialog();
+        expect(document.body.textContent).toContain("Nothing to change");
+
+        await wrapper.setProps({ visible: false });
+        await wrapper.setProps({ visible: true });
+        // The same key refetches on open. Until that lands the cached totals may be stale.
+        state.refetching = true;
+        await flushPromises();
+
+        expect(document.body.textContent).not.toContain("Nothing to change");
+        expect(document.body.textContent).not.toContain("All 3 transactions");
+        expect(buttonLabelled("Apply")?.disabled).toBe(true);
+        expect(buttonLabelled("Apply to 0")).toBeUndefined();
+
+        state.refetching = false;
+        await flushPromises();
+
+        expect(document.body.textContent).toContain("Nothing to change");
+    });
+
+    it("waits for a reopened rule's refetch before offering to apply the cached count", async () => {
+        // Rule A had 3 rows to change. Applying them moved all of them, so the cache is now stale.
+        const wrapper = await mountDialog();
+        expect(buttonLabelled("Apply to 3")?.disabled).toBe(false);
+
+        await wrapper.setProps({ visible: false });
+        await wrapper.setProps({ visible: true });
+        state.refetching = true;
+        await flushPromises();
+
+        expect(buttonLabelled("Apply to 3")).toBeUndefined();
+        expect(buttonLabelled("Apply")?.disabled).toBe(true);
+
+        state.refetching = false;
+        state.total = 0;
+        state.items = [];
+        state.matchCount = 3;
+        await flushPromises();
+
+        expect(document.body.textContent).toContain("Nothing to change");
     });
 
     it("disables Apply when no transaction is selected", async () => {

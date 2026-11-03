@@ -71,6 +71,8 @@ export function useRulePreviewList(
         fetchNextPage: query.fetchNextPage,
         hasNextPage: query.hasNextPage,
         isFetchingNextPage: query.isFetchingNextPage,
+        // A refetch of rows already on screen, such as a reopened rule's first page. Next-page loads are left out.
+        isRefetching: computed(() => query.isFetching.value && !query.isFetchingNextPage.value),
         isLoading: query.isLoading,
         isPlaceholderData: query.isPlaceholderData,
         error: query.error,
