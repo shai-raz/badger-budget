@@ -4,7 +4,6 @@ import { DEFAULT_CATEGORY_AVATAR_ICON } from "@badger/shared-data";
 import type { MenuItem } from "primevue/menuitem";
 import { useConfirm } from "primevue/useconfirm";
 import EditTransactionDialog from "~/components/transactions/EditTransactionDialog.vue";
-import ApplyCategoryRuleDialog from "~/components/transactions/ApplyCategoryRuleDialog.vue";
 import MarkCardPayoff from "~/components/transactions/MarkCardPayoff.vue";
 import ReimbursementsBand from "~/components/transactions/ReimbursementsBand.vue";
 import {
@@ -37,19 +36,13 @@ const { data: transaction, isLoading, error } = useGetTransaction(transactionId)
 const deleteMutation = useDeleteTransaction();
 
 const showEditModal = ref(false);
-const showApplyRuleModal = ref(false);
 const showMarkCardPayoffModal = ref(false);
 
-const ruleTransaction = ref<ITransactionResponse | null>(null);
-watch(showApplyRuleModal, (v) => {
-    if (!v) ruleTransaction.value = null;
-});
-
-const openApplyRuleFromEdit = async (tx: ITransactionResponse) => {
-    ruleTransaction.value = tx;
+const { openFromTransaction } = useRuleEditorDialog();
+const openCreateRuleFromEdit = async (tx: ITransactionResponse) => {
     showEditModal.value = false;
     await nextTick();
-    showApplyRuleModal.value = true;
+    openFromTransaction(tx);
 };
 
 const { menuItems: transferMenuItems } = useTransferActions(transaction);
@@ -66,10 +59,10 @@ const linkMenuItems = computed<MenuItem[]>(() => {
 
 const menuItems = computed<MenuItem[]>(() => [
     {
-        label: "Apply category rule",
+        label: "Create rule",
         icon: "pi pi-bolt",
         command: () => {
-            showApplyRuleModal.value = true;
+            if (transaction.value) openFromTransaction(transaction.value);
         },
         ...mirrorLock.value,
     },
@@ -349,11 +342,7 @@ const handleDelete = () => {
         <EditTransactionDialog
             v-model:visible="showEditModal"
             :transaction="transaction ?? null"
-            @create-rule="openApplyRuleFromEdit"
-        />
-        <ApplyCategoryRuleDialog
-            v-model:visible="showApplyRuleModal"
-            :transaction="ruleTransaction ?? transaction ?? null"
+            @create-rule="openCreateRuleFromEdit"
         />
         <MarkCardPayoff
             v-model:visible="showMarkCardPayoffModal"

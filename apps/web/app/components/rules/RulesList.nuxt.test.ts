@@ -195,3 +195,47 @@ describe("RulesList on desktop", () => {
         expect(grips(wrapper).every((grip) => grip.attributes("disabled") !== undefined)).toBe(true);
     });
 });
+
+describe("RulesList opening and creating", () => {
+    beforeEach(() => {
+        apiClient.reorderRules.mockReset();
+        apiClient.reorderRules.mockResolvedValue(undefined);
+    });
+
+    it("emits edit with the rule when its row is clicked", async () => {
+        layout.desktop = false;
+        const wrapper = await mountList();
+
+        await at(wrapper.findAll("span.truncate"), 1).trigger("click");
+
+        expect(wrapper.emitted("edit")).toEqual([[rules[1]]]);
+    });
+
+    it("does not emit edit for a row click while reordering on the phone", async () => {
+        layout.desktop = false;
+        const wrapper = await mountList();
+
+        await clickButton(wrapper, "Reorder");
+        await at(wrapper.findAll("span.truncate"), 0).trigger("click");
+
+        expect(wrapper.emitted("edit")).toBeUndefined();
+    });
+
+    it("does not emit edit from a grip click on desktop", async () => {
+        layout.desktop = true;
+        const wrapper = await mountList();
+
+        await at(grips(wrapper), 0).trigger("click");
+
+        expect(wrapper.emitted("edit")).toBeUndefined();
+    });
+
+    it("emits create from the empty state's New rule action", async () => {
+        layout.desktop = false;
+        const wrapper = await mountSuspended(RulesList, { props: { rules: [], context } });
+
+        await clickButton(wrapper, "New rule");
+
+        expect(wrapper.emitted("create")).toHaveLength(1);
+    });
+});

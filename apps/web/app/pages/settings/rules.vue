@@ -15,6 +15,7 @@ definePageMeta({
 
 const confirm = useConfirm();
 const toast = useToast();
+const { openCreate, openEdit } = useRuleEditorDialog();
 const { data: rules, isLoading, error } = useRulesQuery();
 const { data: accounts, isLoading: accountsLoading } = useGetAccounts();
 const { data: categories, isLoading: categoriesLoading } = useGetCategoriesQuery();
@@ -40,6 +41,12 @@ const menuItems = computed<MenuItem[]>(() => {
     const rule = selectedRule.value;
     if (!rule) return [];
     return [
+        {
+            label: "Edit",
+            icon: "pi pi-pencil",
+            command: () => openEdit(rule),
+        },
+        { separator: true },
         {
             label: "Delete",
             icon: "pi pi-trash",
@@ -102,7 +109,18 @@ const confirmDelete = (rule: IRule) => {
         <LayoutPageHeader
             title="Rules"
             back-to="/settings"
-        />
+        >
+            <template #actions>
+                <LayoutHeaderButton
+                    v-if="!reorderMode"
+                    label="New"
+                    icon="pi pi-plus"
+                    primary
+                    aria-label="New rule"
+                    @click="openCreate"
+                />
+            </template>
+        </LayoutPageHeader>
 
         <RulesList
             v-model:reorder-mode="reorderMode"
@@ -112,6 +130,8 @@ const confirmDelete = (rule: IRule) => {
             :error="error"
             @toggle="handleToggle"
             @actions="openMenu"
+            @edit="openEdit"
+            @create="openCreate"
         />
 
         <Menu

@@ -73,3 +73,30 @@ describe("RuleRow", () => {
         expect(wrapper.emitted("actions")).toHaveLength(1);
     });
 });
+
+describe("RuleRow opening", () => {
+    it("emits open when the row is clicked", async () => {
+        const wrapper = await mountSuspended(RuleRow, { props: { rule: makeRule(), context } });
+
+        await wrapper.find("span.truncate").trigger("click");
+
+        expect(wrapper.emitted("open")).toHaveLength(1);
+    });
+
+    it("does not emit open while reordering", async () => {
+        const wrapper = await mountSuspended(RuleRow, { props: { rule: makeRule(), context, reordering: true } });
+
+        await wrapper.trigger("click");
+
+        expect(wrapper.emitted("open")).toBeUndefined();
+    });
+
+    it("does not emit open from the switch or the ⋮ trigger", async () => {
+        const wrapper = await mountSuspended(RuleRow, { props: { rule: makeRule(), context } });
+
+        await wrapper.find('input[aria-label="Rule on"]').trigger("click");
+        await wrapper.find('button[aria-label="Rule actions"]').trigger("click");
+
+        expect(wrapper.emitted("open")).toBeUndefined();
+    });
+});
