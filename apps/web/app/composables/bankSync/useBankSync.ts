@@ -140,9 +140,8 @@ export function useUpdateScraperConnectionMutation() {
     return useMutation({
         mutationFn: ({ id, data }: { id: string; data: IUpdateScraperConnection }) =>
             apiClient.updateScraperConnection(id, data),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: bankSyncKeys.connections() });
-        },
+        // Returned, so mutateAsync settles only once the refetched list is in: callers read the new isActive from it.
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: bankSyncKeys.connections() }),
     });
 }
 

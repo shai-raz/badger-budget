@@ -21,40 +21,28 @@ const {
 } = useScraperConnectionsQuery();
 const updateConnectionMutation = useUpdateScraperConnectionMutation();
 const deleteConnectionMutation = useDeleteScraperConnectionMutation();
-const showConnectionModal = ref(false);
-const editingConnection = ref<IScraperConnectionResponse | null>(null);
+const { openCreate, openEdit } = useConnectionEditor();
 
 const connectionCountLabel = computed(() => {
     const count = scraperConnections.value?.length ?? 0;
     return count === 1 ? "1 connection" : `${count} connections`;
 });
 
-const handleAddConnection = () => {
-    editingConnection.value = null;
-    showConnectionModal.value = true;
-};
+const handleAddConnection = () => openCreate();
 
-const handleEditConnection = (connection: IScraperConnectionResponse) => {
-    editingConnection.value = connection;
-    showConnectionModal.value = true;
-};
+// Switch values being saved, by connection id. A row's switch shows its pending value and stays disabled until the save
+// settles, after the list has refetched, so a second click can't race the first.
+const pendingToggles = ref<Partial<Record<string, boolean>>>({});
+const pendingToggle = (connection: IScraperConnectionResponse) => pendingToggles.value[connection.id];
 
-const handleConnectionModalClose = () => {
-    showConnectionModal.value = false;
-    editingConnection.value = null;
-};
-
-const handleToggleConnection = async (connection: IScraperConnectionResponse) => {
+// PrimeVue's switch flips itself on click and only resyncs when its bound value changes. Binding the pending value
+// (then the server's, once settled) means a failed save always moves the bound value back.
+const handleToggleConnection = async (connection: IScraperConnectionResponse, isActive: boolean) => {
+    pendingToggles.value = { ...pendingToggles.value, [connection.id]: isActive };
     try {
         await updateConnectionMutation.mutateAsync({
             id: connection.id,
-            data: { isActive: !connection.isActive },
-        });
-        toast.add({
-            severity: "success",
-            summary: "Updated",
-            detail: `Connection ${connection.isActive ? "paused" : "resumed"}`,
-            life: 3000,
+            data: { isActive },
         });
     } catch (err) {
         toast.add({
@@ -63,6 +51,10 @@ const handleToggleConnection = async (connection: IScraperConnectionResponse) =>
             detail: getApiErrorMessage(err, "Failed to update connection"),
             life: 5000,
         });
+    } finally {
+        pendingToggles.value = Object.fromEntries(
+            Object.entries(pendingToggles.value).filter(([id]) => id !== connection.id),
+        );
     }
 };
 
@@ -110,14 +102,9 @@ const menuItems = computed(() => {
             command: () => requestSync({ connectionId: connection.id }),
         },
         {
-            label: connection.isActive ? "Pause" : "Resume",
-            icon: connection.isActive ? "pi pi-pause" : "pi pi-play",
-            command: () => handleToggleConnection(connection),
-        },
-        {
             label: "Edit",
             icon: "pi pi-pencil",
-            command: () => handleEditConnection(connection),
+            command: () => openEdit(connection),
         },
         {
             label: "Delete",
@@ -130,14 +117,6 @@ const menuItems = computed(() => {
 const openMenu = ({ connection, event }: { connection: IScraperConnectionResponse; event: Event }) => {
     selectedConnection.value = connection;
     menu.value?.toggle(event);
-};
-
-const formatDate = (date: Date) =>
-    new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(date));
-
-const connectionDetails = (connection: IScraperConnectionResponse) => {
-    const synced = connection.lastSyncedAt ? `Last synced ${formatDate(connection.lastSyncedAt)}` : "Never synced";
-    return `${connection.companyId} · ${connection.scrapeLookbackDays} days lookback · ${synced}`;
 };
 </script>
 
@@ -181,16 +160,16 @@ const connectionDetails = (connection: IScraperConnectionResponse) => {
                     <div class="flex min-w-0 flex-1 flex-col gap-1">
                         <div class="flex min-w-0 items-center gap-2">
                             <span class="truncate font-semibold">{{ conn.displayName }}</span>
-                            <SharedStatusTag
-                                :value="conn.isActive ? 'Active' : 'Paused'"
-                                :tone="conn.isActive ? 'success' : 'neutral'"
-                                class="shrink-0"
-                            />
                         </div>
-                        <p class="truncate text-xs text-muted-color">
-                            {{ connectionDetails(conn) }}
-                        </p>
+                        <BankSyncConnectionSubtitle :connection="conn" />
                     </div>
+                    <ToggleSwitch
+                        :model-value="pendingToggle(conn) ?? conn.isActive"
+                        :disabled="pendingToggle(conn) !== undefined"
+                        :aria-label="`Sync ${conn.displayName}`"
+                        class="shrink-0"
+                        @update:model-value="(value) => handleToggleConnection(conn, value === true)"
+                    />
                     <Button
                         icon="pi pi-ellipsis-v"
                         text
@@ -208,12 +187,6 @@ const connectionDetails = (connection: IScraperConnectionResponse) => {
             ref="menu"
             :model="menuItems"
             popup
-        />
-
-        <BankSyncScraperConnectionModal
-            v-model:visible="showConnectionModal"
-            :connection="editingConnection"
-            @close="handleConnectionModalClose"
         />
     </div>
 </template>

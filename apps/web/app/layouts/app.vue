@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { provideBankSyncFlow } from "~/composables/bankSync/useBankSyncFlow";
+import { useConnectionEditor } from "~/composables/bankSync/useConnectionEditor";
 import AppBottomBar from "~/components/layout/AppBottomBar.vue";
 import AppSidebar from "~/components/layout/AppSidebar.vue";
 import NavDrawer from "~/components/layout/NavDrawer.vue";
@@ -7,6 +8,7 @@ import UpdateDialog from "~/components/layout/UpdateDialog.vue";
 import WhatsNewDialog from "~/components/layout/WhatsNewDialog.vue";
 import BudgetFormDialog from "~/components/budgets/BudgetFormDialog.vue";
 import BankSyncSyncFlowHost from "~/components/bankSync/SyncFlowHost.vue";
+import BankSyncScraperConnectionModal from "~/components/bankSync/ScraperConnectionModal.vue";
 import CashFollowupToast from "~/components/transactions/CashFollowupToast.vue";
 import UpgradeToast from "~/components/layout/UpgradeToast.vue";
 import ReimbursementPickerDialog from "~/components/transactions/ReimbursementPickerDialog.vue";
@@ -15,6 +17,7 @@ import ReimbursementPickerDialog from "~/components/transactions/ReimbursementPi
 // mobile padding so its sections can span the full screen width (see below).
 const route = useRoute();
 provideBankSyncFlow();
+const { state: connectionEditor, close: closeConnectionEditor } = useConnectionEditor();
 
 // Below md, the toast spans the screen with 1rem gutters instead of its fixed
 // 25rem top-right box. PrimeVue turns this into a `max-width` media query.
@@ -66,11 +69,13 @@ useHead({ bodyAttrs: { class: "app-layout-body" } });
                     <Toast :breakpoints="toastBreakpoints" />
                     <CashFollowupToast />
                     <UpgradeToast />
+                    <!-- PrimeVue takes reject props per confirm.require call, so the text Cancel style lives here once (matches FormDialog). -->
                     <ConfirmDialog
                         :pt="{
                             root: { class: 'max-w-[calc(100vw-2rem)] md:max-w-xl' },
                             icon: { class: 'shrink-0' },
                             message: { class: 'min-w-0 whitespace-pre-line [overflow-wrap:anywhere]' },
+                            pcRejectButton: { root: { class: 'p-button-text p-button-secondary' } },
                         }"
                     />
                 </div>
@@ -83,6 +88,13 @@ useHead({ bodyAttrs: { class: "app-layout-body" } });
         <WhatsNewDialog />
         <BudgetFormDialog />
         <BankSyncSyncFlowHost />
+        <BankSyncScraperConnectionModal
+            :visible="connectionEditor.visible"
+            :connection="connectionEditor.connection"
+            :update-login="connectionEditor.updateLogin"
+            @update:visible="closeConnectionEditor"
+            @close="closeConnectionEditor"
+        />
         <ReimbursementPickerDialog />
     </div>
 </template>

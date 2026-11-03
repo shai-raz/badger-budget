@@ -6,10 +6,17 @@ import type { IScraperConnectionResponse, IUpdateScraperConnection } from "@badg
 import { useQueryClient } from "@tanstack/vue-query";
 import { bankSyncKeys } from "~/composables/bankSync/useBankSync";
 import { STALE_PIN_MESSAGE, unlockFallbackMessage } from "~/utils/syncPasskeyWebAuthn";
+import { shouldAutoSyncAfterSave } from "~/utils/bankConnections";
+import { useBankSyncFlow } from "~/composables/bankSync/useBankSyncFlow";
 
 const props = defineProps<{
     visible: boolean;
     connection?: IScraperConnectionResponse | null;
+    /**
+     * Edit only: opened from Update login. Focuses the first login field instead of the dialog, and syncs the
+     * connection after a credential change.
+     */
+    updateLogin?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -21,8 +28,11 @@ const toast = useToast();
 const queryClient = useQueryClient();
 const createMutation = useCreateScraperConnectionMutation();
 const updateMutation = useUpdateScraperConnectionMutation();
+const { syncConnectionWithPin } = useBankSyncFlow();
 
 const isEditMode = computed(() => !!props.connection);
+// The first login field takes focus on create, and on edit only when opened to fix a login.
+const autofocusFirstLogin = computed(() => !isEditMode.value || !!props.updateLogin);
 
 // Form state
 const selectedCompanyId = ref<string | null>(null);
@@ -174,17 +184,27 @@ const handleSave = async () => {
                 displayName: displayName.value.trim(),
                 scrapeLookbackDays: scrapeLookbackDays.value,
             };
-            if (credentialsTouched.value) {
+            const credentialsChanged = credentialsTouched.value;
+            if (credentialsChanged) {
                 data.pin = pin;
                 data.credentials = { ...credentials.value };
             }
-            await updateMutation.mutateAsync({ id: props.connection.id, data });
+            const updated = await updateMutation.mutateAsync({ id: props.connection.id, data });
             toast.add({
                 severity: "success",
                 summary: "Success",
                 detail: "Bank connection updated successfully",
                 life: 3000,
             });
+            if (
+                shouldAutoSyncAfterSave({
+                    updateLogin: !!props.updateLogin,
+                    credentialsChanged,
+                    isActive: updated.isActive,
+                })
+            ) {
+                void syncConnectionWithPin(updated.id, pin, { typed: !pinFromPasskey });
+            }
         } else {
             if (!selectedCompanyId.value || !selectedProvider.value) return;
             await createMutation.mutateAsync({
@@ -227,7 +247,7 @@ const handleSave = async () => {
         :header="isEditMode ? 'Edit bank connection' : 'Add bank connection'"
         :busy="saving"
         :api-error="apiError"
-        :initial-focus="isEditMode ? 'dialog' : 'field'"
+        :initial-focus="isEditMode && !updateLogin ? 'dialog' : 'field'"
         :save-label="isEditMode ? 'Save changes' : 'Add connection'"
         :save-disabled="!canSave"
         @update:visible="handleClose"
@@ -279,7 +299,7 @@ const handleSave = async () => {
                 </Message>
 
                 <div
-                    v-for="field in selectedProvider.loginFields"
+                    v-for="(field, index) in selectedProvider.loginFields"
                     :key="field"
                 >
                     <label class="block text-sm font-medium mb-2">
@@ -298,7 +318,10 @@ const handleSave = async () => {
                         toggle-mask
                         class="w-full"
                         input-class="w-full"
-                        :input-props="{ autocomplete: 'new-password' }"
+                        :input-props="{
+                            autocomplete: 'new-password',
+                            autofocus: index === 0 && autofocusFirstLogin,
+                        }"
                     />
                     <InputText
                         v-else
@@ -306,6 +329,7 @@ const handleSave = async () => {
                         :placeholder="fieldLabel(field)"
                         class="w-full"
                         autocomplete="new-password"
+                        :autofocus="index === 0 && autofocusFirstLogin"
                     />
                 </div>
 
