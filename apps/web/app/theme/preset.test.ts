@@ -104,3 +104,20 @@ describe("customAuraPreset: amount and budget tokens", () => {
         expect(darkScheme.budget).toEqual(noirBudget);
     });
 });
+
+describe("customAuraPreset: sync-error tokens", () => {
+    // Always-loaded copies of Aura's error message colours, so the failed-sync strip looks the same on a cold load.
+    it("matches Aura's error message colours in both schemes", () => {
+        const message = Aura.components?.message?.colorScheme;
+        expect(lightScheme.syncError).toEqual({
+            background: message?.light?.error?.background,
+            border: message?.light?.error?.borderColor,
+            color: message?.light?.error?.color,
+        });
+        expect(darkScheme.syncError).toEqual({
+            background: message?.dark?.error?.background,
+            border: message?.dark?.error?.borderColor,
+            color: message?.dark?.error?.color,
+        });
+    });
+});

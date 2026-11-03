@@ -1,9 +1,9 @@
 import Aura from "@primeuix/themes/aura";
 import { COLOR_THEMES, type ColorThemeName } from "@badger/shared-data";
-import { BUDGET_LEVEL_TOKENS, THEMES, type ThemeDefinition } from "./themes";
+import { BUDGET_LEVEL_TOKENS, SYNC_ERROR_TOKENS, THEMES, type ThemeDefinition } from "./themes";
 
 // Builds the PrimeVue preset for a theme: the Aura base with the theme's primary
-// ramp, surfaces and per-scheme mappings, plus the amount and budget tokens.
+// ramp, surfaces and per-scheme mappings, plus the amount, budget and sync-error tokens.
 export function buildPreset(def: ThemeDefinition) {
     return {
         ...Aura,
@@ -58,6 +58,7 @@ export function buildPreset(def: ThemeDefinition) {
                     highlight: def.light.highlight,
                     amount: def.light.amount,
                     budget: BUDGET_LEVEL_TOKENS,
+                    syncError: SYNC_ERROR_TOKENS.light,
                 },
                 dark: {
                     ...(Aura.semantic?.colorScheme?.dark ?? {}),
@@ -66,6 +67,7 @@ export function buildPreset(def: ThemeDefinition) {
                     highlight: def.dark.highlight,
                     amount: def.dark.amount,
                     budget: BUDGET_LEVEL_TOKENS,
+                    syncError: SYNC_ERROR_TOKENS.dark,
                 },
             },
         },

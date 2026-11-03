@@ -31,7 +31,7 @@ const openDetails = () => {
 <template>
     <div
         v-if="copy"
-        class="relative flex items-center gap-2 rounded-md border border-[color:var(--p-message-error-border-color)] bg-[color:var(--p-message-error-background)] px-3 py-2 text-sm text-[color:var(--p-message-error-color)]"
+        class="relative flex items-center gap-2 rounded-md border border-[color:var(--p-sync-error-border)] bg-[color:var(--p-sync-error-background)] px-3 py-2 text-sm text-[color:var(--p-sync-error-color)]"
     >
         <button
             type="button"
