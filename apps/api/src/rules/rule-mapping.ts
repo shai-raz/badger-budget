@@ -2,6 +2,9 @@ import type { Prisma } from "@prisma/client";
 import type { IRule, IRuleAction, IRuleCondition } from "@badger/types";
 import { isOperatorForField, isRuleActionType, isRuleConditionField, isRuleOperator } from "@badger/shared-data";
 import type { MatchableRule } from "@badger/utils";
+import type { PrismaService } from "../prisma/prisma.service";
+
+type Db = Prisma.TransactionClient | PrismaService;
 
 export const ruleInclude = {
     conditions: { orderBy: { position: "asc" } },
@@ -40,6 +43,19 @@ export function toMatchableRule(row: RuleRow): MatchableRule | null {
         conditions: rule.conditions,
         actions: rule.actions,
     };
+}
+
+/** The user's live, active rules in run order, as the matcher sees them. Load once per run, then reuse. */
+export async function loadMatchableRules(db: Db, userId: string): Promise<MatchableRule[]> {
+    const rows = await db.rule.findMany({
+        where: { userId, isActive: true, deletedAt: null },
+        include: ruleInclude,
+        orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
+    });
+    return rows.flatMap((row) => {
+        const rule = toMatchableRule(row);
+        return rule ? [rule] : [];
+    });
 }
 
 function toCondition(row: ConditionRow): IRuleCondition[] {

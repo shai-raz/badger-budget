@@ -3,10 +3,11 @@ import { PrismaService } from "../prisma/prisma.service";
 import { CardPayoffPatternsService } from "../card-payoff-patterns/card-payoff-patterns.service";
 import { SyncResultDto } from "../google-sheets/dto";
 import { Decimal } from "@prisma/client/runtime/library";
-import { findMatchingCategoryId } from "@badger/utils";
+import { runRules } from "@badger/utils";
 import { DEFAULT_CURRENCY_CODE, defaultCategoryIcon } from "@badger/shared-data";
 import { resolveCategoryId } from "../google-sheets/category-resolution";
 import { resolveDefaultAccountCurrencyId } from "../accounts/default-account-currency";
+import { loadMatchableRules } from "../rules/rule-mapping";
 
 export interface ImportCandidate {
     externalId: string;
@@ -147,6 +148,9 @@ export class TransactionImportService {
                 },
             );
 
+            // Loaded once for the whole import: every row runs the same rule set.
+            const rules = await loadMatchableRules(this.prisma, userId);
+
             const createdCategoryNames = new Set<string>();
             const createdAccountNumbers = new Set<string>();
             const categoryByName = new Map(userCategories.map((c) => [c.name, c.id]));
@@ -269,11 +273,16 @@ export class TransactionImportService {
                     createdCategoryNames,
                     result,
                     matchCategoryByRules: () =>
-                        this.matchCategoryByRules(userId, {
-                            originalCategory: candidate.originalCategory || undefined,
-                            description: candidate.description,
-                            amount: candidate.amount,
-                        }),
+                        runRules(
+                            {
+                                description: candidate.description || "",
+                                originalCategory: candidate.originalCategory || null,
+                                amount: candidate.amount,
+                                accountId,
+                                type: transactionType,
+                            },
+                            rules,
+                        ).categoryId,
                     createCategory: () =>
                         this.prisma.category.create({
                             data: {
@@ -385,24 +394,5 @@ export class TransactionImportService {
         }
 
         return result;
-    }
-
-    private async matchCategoryByRules(
-        userId: string,
-        transactionData: { originalCategory?: string; description?: string; amount?: number },
-    ): Promise<string | null> {
-        const rules = await this.prisma.categoryMappingRule.findMany({
-            where: { userId, isActive: true },
-            orderBy: [{ priority: "asc" }, { createdAt: "desc" }],
-        });
-
-        return findMatchingCategoryId(
-            {
-                description: transactionData.description || "",
-                originalCategory: transactionData.originalCategory,
-                amount: transactionData.amount,
-            },
-            rules as any,
-        );
     }
 }

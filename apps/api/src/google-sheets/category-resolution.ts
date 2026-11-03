@@ -5,19 +5,21 @@ export interface ResolveCategoryParams {
     categoryByName: Map<string, string>;
     createdCategoryNames: Set<string>;
     result: SyncResultDto;
-    matchCategoryByRules: () => Promise<string | null>;
+    matchCategoryByRules: () => string | null;
     createCategory: () => Promise<{ id: string }>;
 }
 
 export async function resolveCategoryId(params: ResolveCategoryParams): Promise<string | null> {
     const { categoryName, categoryByName, createdCategoryNames, result, matchCategoryByRules, createCategory } = params;
-    if (!categoryName) {
-        return null;
-    }
 
-    const matchedCategory = await matchCategoryByRules();
+    // Rules run on every row, including rows with no original category.
+    const matchedCategory = matchCategoryByRules();
     if (matchedCategory) {
         return matchedCategory;
+    }
+
+    if (!categoryName) {
+        return null;
     }
 
     if (categoryByName.has(categoryName)) {
