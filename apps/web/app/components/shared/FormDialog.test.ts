@@ -37,3 +37,22 @@ describe("FormDialog Escape", () => {
         expect(dialog).toMatch(/if \(!props\.busy\) emit\("update:visible", false\);/);
     });
 });
+
+describe("FormDialog back step", () => {
+    const dialog = source("./FormDialog.vue");
+
+    it("takes an optional back label and emits back", () => {
+        expect(dialog).toContain("backLabel?: string;");
+        expect(dialog).toContain("back: [];");
+    });
+
+    it("puts a labelled back arrow before the title only when a back label is set", () => {
+        expect(dialog).toContain('v-if="backLabel"');
+        expect(dialog).toContain('icon="pi pi-arrow-left"');
+        expect(dialog).toContain(':aria-label="backLabel"');
+    });
+
+    it("makes the footer cancel return to the previous step instead of closing", () => {
+        expect(dialog).toContain("@click=\"backLabel ? emit('back') : emit('update:visible', false)\"");
+    });
+});

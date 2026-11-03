@@ -20,6 +20,11 @@ interface Props {
     initialFocus: "field" | "dialog";
     saveLabel?: string;
     cancelLabel?: string;
+    /**
+     * Turns the dialog into a step of a larger one: an arrow button before the title, and the footer's cancel
+     * button emits `back` instead of closing. Set it for the view a back arrow returns from.
+     */
+    backLabel?: string;
     showSave?: boolean;
     saveDisabled?: boolean;
     /** Defaults to `busy`. */
@@ -39,6 +44,7 @@ const props = withDefaults(defineProps<Props>(), {
     apiError: null,
     saveLabel: "Save",
     cancelLabel: "Cancel",
+    backLabel: undefined,
     showSave: true,
     saveDisabled: false,
     saveLoading: undefined,
@@ -50,6 +56,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
     "update:visible": [value: boolean];
     save: [];
+    back: [];
     hide: [];
 }>();
 
@@ -90,6 +97,25 @@ const dialogPt = computed(() =>
         @update:visible="emit('update:visible', $event)"
         @hide="emit('hide')"
     >
+        <template
+            v-if="backLabel"
+            #header
+        >
+            <div class="flex min-w-0 items-center gap-2">
+                <Button
+                    icon="pi pi-arrow-left"
+                    text
+                    rounded
+                    severity="secondary"
+                    size="small"
+                    :aria-label="backLabel"
+                    :disabled="busy"
+                    @click="emit('back')"
+                />
+                <span class="p-dialog-title truncate text-surface-900 dark:text-surface-0">{{ header }}</span>
+            </div>
+        </template>
+
         <div
             class="flex flex-col gap-4 outline-none"
             v-bind="bodyFocus"
@@ -110,7 +136,7 @@ const dialogPt = computed(() =>
                     text
                     severity="secondary"
                     :disabled="busy"
-                    @click="emit('update:visible', false)"
+                    @click="backLabel ? emit('back') : emit('update:visible', false)"
                 />
                 <Button
                     v-if="showSave"
