@@ -40,6 +40,7 @@ model User {
   transactions           Transaction[]
   transactionAttachments TransactionAttachment[]
   categoryMappingRules CategoryMappingRule[]
+  rules                Rule[]
   cardPayoffPatterns   CardPayoffPattern[]
   cashWithdrawalPatterns CashWithdrawalPattern[]
   refreshTokens        RefreshToken[]
@@ -168,6 +169,54 @@ model CategoryMappingRule {
   @@index([isActive])
   @@index([userId, isActive, priority])
   @@map("category_mapping_rules")
+}
+
+model Rule {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  name        String    @db.Text
+  priority    Int
+  stopOnMatch Boolean   @default(false) @map("stop_on_match")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamp(6)
+
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conditions RuleCondition[]
+  actions    RuleAction[]
+
+  @@index([userId, deletedAt, priority])
+  @@map("rules")
+}
+
+model RuleCondition {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ruleId   String @map("rule_id") @db.Uuid
+  field    String @db.VarChar(50)
+  operator String @db.VarChar(20)
+  value    String @db.Text
+  position Int
+
+  rule Rule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+  @@index([field, value])
+  @@map("rule_conditions")
+}
+
+model RuleAction {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ruleId   String @map("rule_id") @db.Uuid
+  type     String @db.VarChar(50)
+  value    String @db.Text
+  position Int
+
+  rule Rule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+  @@index([type, value])
+  @@map("rule_actions")
 }
 
 model Budget {

@@ -50,6 +50,15 @@ import type {
     IAuthResponse,
     IAuthUser,
     IUpdateMeRequest,
+    IRule,
+    CreateRuleDto,
+    UpdateRuleDto,
+    RuleSaveResponse,
+    RulePreviewRequest,
+    RulePreviewResponse,
+    ApplyRuleSelection,
+    ApplyRuleResponse,
+    AccountRuleUsageResponse,
 } from "@badger/types";
 import type { AccountType, AttachmentDisposition, AvatarIconName } from "@badger/shared-data";
 
@@ -656,6 +665,55 @@ export class ApiClient {
 
     async deleteCategoryMappingRule(id: string) {
         await this.client.delete(`/category-mapping-rules/${id}`);
+    }
+
+    // Rules
+    async getRules(): Promise<IRule[]> {
+        const response = await this.client.get<IRule[]>("/rules");
+        return response.data;
+    }
+
+    async getRule(id: string): Promise<IRule> {
+        const response = await this.client.get<IRule>(`/rules/${id}`);
+        return response.data;
+    }
+
+    async createRule(dto: CreateRuleDto): Promise<RuleSaveResponse> {
+        const response = await this.client.post<RuleSaveResponse>("/rules", dto);
+        return response.data;
+    }
+
+    async updateRule(id: string, dto: UpdateRuleDto): Promise<RuleSaveResponse> {
+        const response = await this.client.put<RuleSaveResponse>(`/rules/${id}`, dto);
+        return response.data;
+    }
+
+    async setRuleActive(id: string, isActive: boolean): Promise<IRule> {
+        const response = await this.client.patch<IRule>(`/rules/${id}/active`, { isActive });
+        return response.data;
+    }
+
+    async reorderRules(ids: string[]): Promise<void> {
+        await this.client.post("/rules/reorder", { ids });
+    }
+
+    async deleteRule(id: string): Promise<void> {
+        await this.client.delete(`/rules/${id}`);
+    }
+
+    async previewRule(req: RulePreviewRequest): Promise<RulePreviewResponse> {
+        const response = await this.client.post<RulePreviewResponse>("/rules/preview", req);
+        return response.data;
+    }
+
+    async applyRule(id: string, selection: ApplyRuleSelection): Promise<ApplyRuleResponse> {
+        const response = await this.client.post<ApplyRuleResponse>(`/rules/${id}/apply`, selection);
+        return response.data;
+    }
+
+    async getAccountRuleUsage(accountId: string): Promise<AccountRuleUsageResponse> {
+        const response = await this.client.get<AccountRuleUsageResponse>(`/accounts/${accountId}/rule-usage`);
+        return response.data;
     }
 
     // Google Sheets

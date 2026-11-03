@@ -1,4 +1,4 @@
-export * from "./category-mapping";
+export * from "./rules";
 export * from "./bank-providers";
 export * from "./currencies";
 export * from "./categories";

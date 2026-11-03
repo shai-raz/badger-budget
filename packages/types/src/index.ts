@@ -1,4 +1,15 @@
-import type { AvatarIconName } from "@badger/shared-data";
+import type {
+    AccountRuleOutcome,
+    AvatarIconName,
+    RuleActionType,
+    RuleApplyMode,
+    RuleConditionField,
+    RuleOperator,
+    RulePreviewFilter,
+    TransactionType,
+} from "@badger/shared-data";
+
+export type { TransactionType };
 
 // User & Authentication
 export interface User {
@@ -117,9 +128,114 @@ export interface CreateCategoryMappingRuleDto {
 
 export interface UpdateCategoryMappingRuleDto extends Partial<CreateCategoryMappingRuleDto> {}
 
-// Transaction
-export type TransactionType = "income" | "expense" | "transfer";
+// Rules (conditions and actions; replaces category mapping rules once the old module is removed)
+export interface IRuleCondition {
+    id: string;
+    field: RuleConditionField;
+    operator: RuleOperator;
+    value: string;
+    position: number;
+}
 
+export interface IRuleAction {
+    id: string;
+    type: RuleActionType;
+    value: string;
+    position: number;
+}
+
+export interface IRule {
+    id: string;
+    name: string;
+    priority: number;
+    stopOnMatch: boolean;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+    conditions: IRuleCondition[];
+    actions: IRuleAction[];
+}
+
+export interface RuleConditionInput {
+    field: RuleConditionField;
+    operator: RuleOperator;
+    value: string;
+}
+
+export interface RuleActionInput {
+    type: RuleActionType;
+    value: string;
+}
+
+export interface RuleDraft {
+    conditions: RuleConditionInput[];
+    actions: RuleActionInput[];
+}
+
+/** Which previewed transactions a save-and-apply touches: all except the ids, or only the ids. */
+export interface ApplyRuleSelection {
+    mode: RuleApplyMode;
+    ids: string[];
+}
+
+export interface CreateRuleDto extends RuleDraft {
+    name: string;
+    stopOnMatch?: boolean;
+    apply?: ApplyRuleSelection;
+}
+
+export interface UpdateRuleDto extends RuleDraft {
+    name: string;
+    stopOnMatch: boolean;
+    apply?: ApplyRuleSelection;
+}
+
+export interface RuleSaveResponse {
+    rule: IRule;
+    /** Number of transactions changed by save-and-apply; null when nothing was applied. */
+    appliedCount: number | null;
+}
+
+export interface ReorderRulesDto {
+    ids: string[];
+}
+
+export interface RulePreviewRequest extends RuleDraft {
+    filter?: RulePreviewFilter;
+    search?: string;
+    page?: number;
+}
+
+export interface RulePreviewItem {
+    id: string;
+    description: string;
+    transactionDate: string;
+    amount: number;
+    type: TransactionType;
+    currencyCode: string;
+    accountName: string | null;
+    category: { id: string; name: string; color: string; icon: string | null } | null;
+}
+
+export interface RulePreviewResponse {
+    matchCount: number;
+    wouldChangeCount: number;
+    alreadyTargetCount: number;
+    counts: { all: number; uncategorized: number; categorized: number };
+    items: RulePreviewItem[];
+    page: number;
+    totalPages: number;
+}
+
+export interface ApplyRuleResponse {
+    count: number;
+}
+
+export interface AccountRuleUsageResponse {
+    rules: { id: string; name: string; outcome: AccountRuleOutcome }[];
+}
+
+// Transaction
 // Direction of money movement for transfers: "out" leaves the account
 // (e.g. bank → savings), "in" enters it. Always null for income/expense.
 export type TransferDirection = "in" | "out";

@@ -1,4 +1,16 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, HttpCode, HttpStatus, UseGuards } from "@nestjs/common";
+import {
+    Controller,
+    Get,
+    Post,
+    Body,
+    Patch,
+    Param,
+    ParseUUIDPipe,
+    Delete,
+    HttpCode,
+    HttpStatus,
+    UseGuards,
+} from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from "@nestjs/swagger";
 import { UpdateLedgerBalanceDto } from "./dto/update-ledger-balance.dto";
 import { AccountsService } from "./accounts.service";
@@ -33,6 +45,14 @@ export class AccountsController {
     @ApiResponse({ status: 404, description: "Account not found" })
     findOne(@Param("id") id: string, @CurrentUser() user: any) {
         return this.accountsService.findOne(id, user.id);
+    }
+
+    @Get(":id/rule-usage")
+    @ApiOperation({ summary: "List the rules that test this account, with what deleting it does to each" })
+    @ApiResponse({ status: 200, description: "Rules that test the account" })
+    @ApiResponse({ status: 404, description: "Account not found" })
+    getRuleUsage(@Param("id", ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+        return this.accountsService.getRuleUsage(id, user.id);
     }
 
     @Patch(":id")

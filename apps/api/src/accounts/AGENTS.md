@@ -13,5 +13,6 @@ Accounts that transactions and budgets attach to. CRUD, soft-deleted, scoped by 
 - Their balance is computed, not stored (`ledger-balance.ts`), and overlaid by `withLedgerStats` in `findAll` / `findOne` / `create` / `update` only. Nested `account` objects in transaction responses carry no computed balance.
 - `cash_on_hand` (cash) is never summed with bank balances; savings reports `account_balance`, so it does.
 - An account with transactions can't change currency, or become a ledger type while any transaction is in another currency. One with linked transfers can't be deleted or change type at all.
+- `remove` soft-deletes inside a transaction that first calls `removeAccountFromRules` (`rules/rule-cleanup.ts`). Keep that order: rules that test the account must not outlive it.
 - `POST /accounts/:id/balance`: the server is authoritative for the difference. Inside one `$transaction` it locks the account row, recomputes the balance and records the adjustment as an uncategorized row. The client sends `date` because `transactionDate` is `@db.Date` and only the client knows the user's local day.
 - Only cash is auto-created or suggested (default account, cash-withdrawal hint); savings never is.

@@ -23,6 +23,13 @@ describe("AccountsService", () => {
             create: jest.fn(),
             count: jest.fn(),
         },
+        rule: {
+            findMany: jest.fn(),
+            updateMany: jest.fn(),
+        },
+        ruleCondition: {
+            deleteMany: jest.fn(),
+        },
     };
 
     beforeEach(async () => {
@@ -774,6 +781,11 @@ describe("AccountsService", () => {
     });
 
     describe("remove", () => {
+        beforeEach(() => {
+            mockPrismaService.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(mockPrismaService));
+            mockPrismaService.rule.findMany.mockResolvedValue([]);
+        });
+
         it("rejects deleting a linked cash wallet", async () => {
             mockPrismaService.account.findFirst.mockResolvedValue(cashRow());
             mockCashRows([group("cash-1", "income", null, 5)], [{ accountId: "cash-1", _count: { _all: 1 } }]);
@@ -817,6 +829,120 @@ describe("AccountsService", () => {
                 where: { id: accountId },
                 data: { deletedAt: expect.any(Date) },
             });
+        });
+    });
+
+    describe("rule cleanup", () => {
+        const ACCOUNT_ID = "account-123";
+        const accountRow = {
+            id: ACCOUNT_ID,
+            name: "Visa",
+            type: "bank",
+            userId: "user-123",
+            currencyId: null,
+            balance: null,
+            balanceKind: null,
+            cardFrame: null,
+            currency: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            deletedAt: null,
+        };
+        /** A stored rule as the rules query returns it: its conditions and actions carry ids and positions. */
+        const storedRule = (
+            id: string,
+            name: string,
+            conditions: { field: string; operator: string; value: string }[],
+        ) => ({
+            id,
+            userId: "user-123",
+            name,
+            priority: 1,
+            stopOnMatch: false,
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            deletedAt: null,
+            conditions: conditions.map((condition, position) => ({
+                id: `${id}-c${position}`,
+                ruleId: id,
+                ...condition,
+                position,
+            })),
+            actions: [],
+        });
+        const accountOnly = storedRule("rule-only", "Visa only", [
+            { field: "account", operator: "equals", value: ACCOUNT_ID },
+        ]);
+        const mixed = storedRule("rule-mixed", "Visa coffee", [
+            { field: "description", operator: "contains", value: "coffee" },
+            { field: "account", operator: "equals", value: ACCOUNT_ID },
+        ]);
+
+        beforeEach(() => {
+            mockPrismaService.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(mockPrismaService));
+            mockPrismaService.account.findFirst.mockResolvedValue(accountRow);
+            mockPrismaService.account.update.mockResolvedValue({ ...accountRow, deletedAt: new Date() });
+        });
+
+        it("removes the account from its rules in the same transaction as the soft delete", async () => {
+            mockPrismaService.rule.findMany.mockResolvedValue([accountOnly, mixed]);
+            mockPrismaService.rule.updateMany.mockResolvedValue({ count: 1 });
+            mockPrismaService.ruleCondition.deleteMany.mockResolvedValue({ count: 1 });
+
+            await service.remove(ACCOUNT_ID, "user-123");
+
+            expect(mockPrismaService.$transaction).toHaveBeenCalledTimes(1);
+            expect(mockPrismaService.rule.updateMany).toHaveBeenCalledWith({
+                where: { id: { in: ["rule-only"] } },
+                data: { deletedAt: expect.any(Date) },
+            });
+            expect(mockPrismaService.ruleCondition.deleteMany).toHaveBeenCalledWith({
+                where: { ruleId: { in: ["rule-mixed"] }, field: "account", value: ACCOUNT_ID },
+            });
+            const cleanupCall = mockPrismaService.rule.updateMany.mock.invocationCallOrder[0];
+            const deleteCall = mockPrismaService.account.update.mock.invocationCallOrder[0];
+            expect(cleanupCall).toBeLessThan(deleteCall);
+        });
+
+        it("keeps the account when the rule cleanup fails", async () => {
+            mockPrismaService.rule.findMany.mockResolvedValue([accountOnly]);
+            mockPrismaService.rule.updateMany.mockRejectedValue(new Error("connection lost"));
+
+            await expect(service.remove(ACCOUNT_ID, "user-123")).rejects.toThrow("connection lost");
+            expect(mockPrismaService.account.update).not.toHaveBeenCalled();
+        });
+
+        it("lists the rules that test the account, in priority order, with the outcome of deleting it", async () => {
+            mockPrismaService.rule.findMany.mockResolvedValue([accountOnly, mixed]);
+
+            const result = await service.getRuleUsage(ACCOUNT_ID, "user-123");
+
+            expect(result).toEqual({
+                rules: [
+                    { id: "rule-only", name: "Visa only", outcome: "rule_deleted" },
+                    { id: "rule-mixed", name: "Visa coffee", outcome: "condition_removed" },
+                ],
+            });
+            expect(mockPrismaService.rule.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: {
+                        userId: "user-123",
+                        deletedAt: null,
+                        conditions: { some: { field: "account", value: ACCOUNT_ID } },
+                    },
+                }),
+            );
+        });
+
+        it("404s for an account the user does not own, without reading rules", async () => {
+            mockPrismaService.account.findFirst.mockResolvedValue(null);
+
+            await expect(service.getRuleUsage(ACCOUNT_ID, "user-456")).rejects.toThrow(NotFoundException);
+            expect(mockPrismaService.account.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { id: ACCOUNT_ID, userId: "user-456", deletedAt: null } }),
+            );
+            expect(mockPrismaService.rule.findMany).not.toHaveBeenCalled();
         });
     });
 

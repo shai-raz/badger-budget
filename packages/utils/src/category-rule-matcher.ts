@@ -1,3 +1,5 @@
+import { matchString } from "./rule-matcher.js";
+
 export interface CategoryMappingRule {
     id: string;
     categoryId: string;
@@ -12,27 +14,6 @@ export interface TransactionData {
     description: string;
     originalCategory?: string;
     amount?: number;
-}
-
-/**
- * Matches a string value against a rule using a string operator (case-insensitive, e.g. "contains").
- */
-export function matchString(value: string, operator: string, ruleValue: string): boolean {
-    const lowerValue = value.toLowerCase();
-    const lowerRuleValue = ruleValue.toLowerCase();
-
-    switch (operator) {
-        case "contains":
-            return lowerValue.includes(lowerRuleValue);
-        case "equals":
-            return lowerValue === lowerRuleValue;
-        case "startsWith":
-            return lowerValue.startsWith(lowerRuleValue);
-        case "endsWith":
-            return lowerValue.endsWith(lowerRuleValue);
-        default:
-            return false;
-    }
 }
 
 /**

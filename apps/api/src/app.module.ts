@@ -8,6 +8,7 @@ import { CategoriesModule } from "./categories/categories.module";
 import { BudgetsModule } from "./budgets/budgets.module";
 import { TransactionsModule } from "./transactions/transactions.module";
 import { CategoryMappingRulesModule } from "./category-mapping-rules/category-mapping-rules.module";
+import { RulesModule } from "./rules/rules.module";
 import { CardPayoffPatternsModule } from "./card-payoff-patterns/card-payoff-patterns.module";
 import { ReimbursementsModule } from "./reimbursements/reimbursements.module";
 import { CashWithdrawalPatternsModule } from "./cash-withdrawal-patterns/cash-withdrawal-patterns.module";
@@ -50,6 +51,7 @@ import { SystemModule } from "./system/system.module";
         BudgetsModule,
         TransactionsModule,
         CategoryMappingRulesModule,
+        RulesModule,
         CardPayoffPatternsModule,
         ReimbursementsModule,
         CashWithdrawalPatternsModule,
