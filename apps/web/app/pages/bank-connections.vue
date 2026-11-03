@@ -155,7 +155,7 @@ const openMenu = ({ connection, event }: { connection: IScraperConnectionRespons
                 <div
                     v-for="conn in scraperConnections"
                     :key="conn.id"
-                    class="flex items-center gap-3 px-4 py-3 md:px-0"
+                    class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 gap-y-2 px-4 py-3 md:px-0"
                 >
                     <div class="flex min-w-0 flex-1 flex-col gap-1">
                         <div class="flex min-w-0 items-center gap-2">
@@ -178,6 +178,10 @@ const openMenu = ({ connection, event }: { connection: IScraperConnectionRespons
                         aria-label="Connection actions"
                         class="shrink-0 text-muted-color"
                         @click="(event) => openMenu({ connection: conn, event })"
+                    />
+                    <BankSyncFailureStrip
+                        :connection="conn"
+                        class="col-span-full md:col-span-1"
                     />
                 </div>
             </div>

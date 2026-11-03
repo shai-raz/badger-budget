@@ -36,6 +36,21 @@ export const BUDGET_LEVEL_TOKENS = {
     over: "#ef4444",
 } as const;
 
+// Failed-sync strip and run dialog icon. Aura's Message tokens are injected only once a Message mounts, so these sit in
+// the always-loaded colour scheme (as --p-sync-error-*). Values are Aura's own error message colours.
+export const SYNC_ERROR_TOKENS = {
+    light: {
+        background: "color-mix(in srgb, {red.50}, transparent 5%)",
+        border: "{red.200}",
+        color: "{red.600}",
+    },
+    dark: {
+        background: "color-mix(in srgb, {red.500}, transparent 84%)",
+        border: "color-mix(in srgb, {red.700}, transparent 64%)",
+        color: "{red.500}",
+    },
+} as const;
+
 // Charcoal surface palette shared by both color schemes.
 // PrimeVue v4 only reads surfaces from `semantic.colorScheme.{light,dark}.surface`
 // (NOT from `semantic.surface`), so buildPreset injects it into each scheme.
