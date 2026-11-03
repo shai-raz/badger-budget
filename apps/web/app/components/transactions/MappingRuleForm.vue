@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { Category, CreateCategoryMappingRuleDto, ITransactionResponse } from "@badger/types";
+import type { Category, ITransactionResponse } from "@badger/types";
+import type { RuleConditionField, RuleOperator } from "@badger/shared-data";
 import { ref, watch, computed } from "vue";
 
 interface Props {
@@ -16,24 +17,25 @@ const emit = defineEmits<{
 
 const { hideSystemCategories } = useSystemCategoryVisibility();
 
+/** The fields this form offers. Account and type rules are made elsewhere. */
+type MappingField = Extract<RuleConditionField, "description" | "originalCategory" | "amount">;
+
 interface RuleData {
     categoryId: string;
-    field: "description" | "originalCategory" | "amount";
-    operator: CreateCategoryMappingRuleDto["operator"];
-    value: string;
+    condition: { field: MappingField; operator: RuleOperator; value: string };
     stopOnMatch: boolean;
 }
 
 // State
-const selectedField = ref<"description" | "originalCategory" | "amount">("description");
-const selectedOperator = ref<CreateCategoryMappingRuleDto["operator"]>("contains");
+const selectedField = ref<MappingField>("description");
+const selectedOperator = ref<RuleOperator>("contains");
 const ruleValue = ref<string>("");
 const ruleValueNumber = ref<number | null>(null);
 const stopOnMatch = ref<boolean>(true);
 const selectedCategoryId = ref<string | null>(null);
 
 // Field options
-const fieldOptions = [
+const fieldOptions: { label: string; value: MappingField }[] = [
     { label: "Description", value: "description" },
     { label: "Original Category", value: "originalCategory" },
     { label: "Amount", value: "amount" },
@@ -56,7 +58,7 @@ const categoryOptions = computed(() => {
 });
 
 // Dynamic operator options based on selected field
-const operatorOptions = computed(() => {
+const operatorOptions = computed((): { label: string; value: RuleOperator }[] => {
     if (selectedField.value === "amount") {
         return [
             { label: "Equals", value: "equals" },
@@ -107,32 +109,28 @@ const canSave = computed(() => {
     return selectedCategoryId.value !== null && ruleValue.value.trim().length > 0;
 });
 
-const handleSave = () => {
-    if (!canSave.value || !selectedCategoryId.value) return;
-
-    const ruleData: RuleData = {
-        categoryId: selectedCategoryId.value,
+const buildRuleData = (categoryId: string): RuleData => ({
+    categoryId,
+    condition: {
         field: selectedField.value,
         operator: selectedOperator.value,
         value: selectedField.value === "amount" ? String(ruleValueNumber.value) : ruleValue.value,
-        stopOnMatch: stopOnMatch.value,
-    };
+    },
+    stopOnMatch: stopOnMatch.value,
+});
 
-    emit("save", ruleData);
+const handleSave = () => {
+    const categoryId = selectedCategoryId.value;
+    if (!canSave.value || categoryId === null) return;
+
+    emit("save", buildRuleData(categoryId));
 };
 
 const handleSaveAndApply = () => {
-    if (!canSave.value || !selectedCategoryId.value) return;
+    const categoryId = selectedCategoryId.value;
+    if (!canSave.value || categoryId === null) return;
 
-    const ruleData: RuleData = {
-        categoryId: selectedCategoryId.value,
-        field: selectedField.value,
-        operator: selectedOperator.value,
-        value: selectedField.value === "amount" ? String(ruleValueNumber.value) : ruleValue.value,
-        stopOnMatch: stopOnMatch.value,
-    };
-
-    emit("saveAndApply", ruleData);
+    emit("saveAndApply", buildRuleData(categoryId));
 };
 </script>
 
@@ -200,6 +198,7 @@ const handleSaveAndApply = () => {
                 id="value"
                 v-model="ruleValueNumber"
                 mode="decimal"
+                :min="0"
                 :min-fraction-digits="2"
                 :max-fraction-digits="2"
                 placeholder="Enter amount"
