@@ -103,33 +103,7 @@ export interface DeleteCategoryOptions {
     moveRules?: boolean;
 }
 
-// Category Mapping Rules
-export interface ICategoryMappingRule {
-    id: string;
-    userId: string;
-    categoryId: string;
-    field: "description" | "originalCategory" | "amount";
-    operator: "contains" | "equals" | "startsWith" | "endsWith" | "greaterThan" | "lessThan";
-    value: string;
-    priority: number;
-    stopOnMatch: boolean;
-    isActive: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-    category?: Category;
-}
-
-export interface CreateCategoryMappingRuleDto {
-    categoryId: string;
-    field: "description" | "originalCategory" | "amount";
-    operator: "contains" | "equals" | "startsWith" | "endsWith" | "greaterThan" | "lessThan";
-    value: string;
-    stopOnMatch?: boolean;
-}
-
-export interface UpdateCategoryMappingRuleDto extends Partial<CreateCategoryMappingRuleDto> {}
-
-// Rules (conditions and actions; replaces category mapping rules once the old module is removed)
+// Rules (conditions and actions)
 export interface IRuleCondition {
     id: string;
     field: RuleConditionField;
