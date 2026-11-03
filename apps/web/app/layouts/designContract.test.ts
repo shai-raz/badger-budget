@@ -277,7 +277,8 @@ describe("design contract: fullBleed band pages", () => {
         "pages/budgets/[id]/index.vue",
         "pages/accounts/index.vue",
         "pages/reports/index.vue",
-        "pages/bank-connections.vue",
+        "pages/bank-connections/index.vue",
+        "pages/bank-connections/history.vue",
         "pages/categories.vue",
         "pages/settings/index.vue",
         "pages/settings/card-payoff-patterns.vue",
@@ -315,7 +316,7 @@ describe("design contract: reports and bank connection bands", () => {
     // Reports and Bank connections are bands, not floating cards: the sections and their rows carry the chrome.
     const BAND_SURFACES = [
         "pages/reports/index.vue",
-        "pages/bank-connections.vue",
+        "pages/bank-connections/index.vue",
         "components/reports/TotalSpendingCard.vue",
         "components/reports/CategoryBreakdownList.vue",
     ];
@@ -325,7 +326,7 @@ describe("design contract: reports and bank connection bands", () => {
     });
 
     it("renders the bank connection section through SharedSectionBand", () => {
-        expect(readFileSync(`${appDir}/pages/bank-connections.vue`, "utf8")).toContain("<SharedSectionBand");
+        expect(readFileSync(`${appDir}/pages/bank-connections/index.vue`, "utf8")).toContain("<SharedSectionBand");
     });
 });
 
@@ -429,7 +430,7 @@ describe("design contract: shared empty states", () => {
         "components/dashboard/BudgetsSection.vue",
         "pages/budgets/index.vue",
         "pages/accounts/index.vue",
-        "pages/bank-connections.vue",
+        "pages/bank-connections/index.vue",
         "pages/budgets/[id]/index.vue",
     ])("%s uses the shared empty state", (rel) => {
         const source = readFileSync(`${appDir}/${rel}`, "utf8");
@@ -722,6 +723,14 @@ describe("savings accounts: web wiring", () => {
     });
 });
 
+describe("design contract: header sync dot", () => {
+    const source = readFileSync(`${appDir}/components/SyncButton.vue`, "utf8");
+
+    it("draws no hex colour literal, the dot takes the sync-error theme token", () => {
+        expect(source).not.toMatch(/#[0-9a-fA-F]{3,6}/);
+    });
+});
+
 describe("design contract: failure strip", () => {
     // The strip's whole-body button and its action button are siblings, so a button never nests in a button.
     const source = readFileSync(`${appDir}/components/bankSync/FailureStrip.vue`, "utf8");
@@ -737,6 +746,13 @@ describe("design contract: failure strip", () => {
         expect(source).not.toMatch(/#[0-9a-fA-F]{3,6}/);
     });
 
+    it("takes its action button from the shared component, which the run dialog also uses", () => {
+        expect(source).toContain("<BankSyncActionButton");
+        expect(readFileSync(`${appDir}/components/bankSync/SyncRunDialog.vue`, "utf8")).toContain(
+            "<BankSyncActionButton",
+        );
+    });
+
     it("nests no button inside a button", () => {
         expect(nestsButton(source)).toBe(false);
     });
@@ -744,5 +760,33 @@ describe("design contract: failure strip", () => {
     it("flags a button nested inside a button", () => {
         expect(nestsButton('<button type="button"><Button label="Retry" /></button>')).toBe(true);
         expect(nestsButton('<button type="button" /><Button label="Retry" />')).toBe(false);
+    });
+});
+
+describe("design contract: bank connection row", () => {
+    const page = readFileSync(`${appDir}/pages/bank-connections/index.vue`, "utf8");
+
+    // The failure strip is the row's second line, so it spans every column at every width, the toggle and menu included.
+    it("spans the failure strip across the whole row at every width", () => {
+        expect(page).toContain('class="col-span-full"');
+        expect(page).not.toContain("md:col-span-1");
+    });
+});
+
+describe("design contract: sync error action button", () => {
+    const source = readFileSync(`${appDir}/components/bankSync/ActionButton.vue`, "utf8");
+
+    it("draws no hex colour literal, colours come from the sync-error theme tokens", () => {
+        expect(source).not.toMatch(/#[0-9a-fA-F]{3,6}/);
+    });
+
+    // A soft, small outline in the strip's own border and text tokens, not a neutral outline.
+    it("is a small light outline in the sync-error border and text tokens", () => {
+        expect(source).toContain("h-7");
+        expect(source).toContain("rounded-md");
+        expect(source).toContain("text-xs");
+        expect(source).toContain("border-[color:var(--p-sync-error-border)]");
+        expect(source).toContain("text-[color:var(--p-sync-error-color)]");
+        expect(source).toContain("bg-transparent");
     });
 });

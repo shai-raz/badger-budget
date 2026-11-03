@@ -18,6 +18,7 @@ export {
     bankSyncKeys,
     useActiveSyncJobQuery,
     useSyncJobQuery,
+    useSyncHistoryQuery,
     useScraperConnectionsQuery,
     useSyncPinStatusQuery,
     useSyncPasskeysQuery,

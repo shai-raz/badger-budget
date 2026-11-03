@@ -3,7 +3,6 @@ import type { IScraperConnectionResponse } from "@badger/types";
 import { useBankSyncFlow } from "~/composables/bankSync/useBankSyncFlow";
 import { useConnectionEditor } from "~/composables/bankSync/useConnectionEditor";
 import { useSyncRunDialog } from "~/composables/bankSync/useSyncRunDialog";
-import { SYNC_ERROR_ACTION_LABEL } from "~/utils/syncErrors";
 import { failureStripFor } from "~/utils/syncRuns";
 
 // Shown under an active connection whose latest run failed. The whole strip opens the run's details dialog; the
@@ -44,12 +43,10 @@ const openDetails = () => {
             aria-hidden="true"
         />
         <span class="min-w-0 flex-1 truncate font-semibold">{{ copy.short }}</span>
-        <Button
+        <BankSyncActionButton
             v-if="copy.action"
-            :label="SYNC_ERROR_ACTION_LABEL[copy.action]"
+            :action="copy.action"
             :disabled="copy.action === 'retry' && busy"
-            outlined
-            size="small"
             class="relative z-10 shrink-0"
             @click="onAction"
         />

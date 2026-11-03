@@ -1,5 +1,5 @@
 // Pure helpers for bank sync runs: the failure strip on a connection, and the run rows and details dialog.
-import type { IScraperConnectionResponse, ISyncJob, SyncJobStatus } from "@badger/types";
+import type { IScraperConnectionResponse, ISyncJob, ISyncJobPage, SyncJobStatus } from "@badger/types";
 import { syncErrorCopy } from "./syncErrors";
 import type { SyncErrorCopy } from "./syncErrors";
 
@@ -23,6 +23,13 @@ export function failingConnections(
     connections: ReadonlyArray<IScraperConnectionResponse> | undefined,
 ): IScraperConnectionResponse[] {
     return (connections ?? []).filter(isFailingConnection);
+}
+
+/** The header Sync button's accessible name and tooltip for `failingCount` failing connections. */
+export function syncButtonLabel(failingCount: number): string {
+    if (failingCount === 0) return "Sync";
+    if (failingCount === 1) return "Sync, 1 connection failing";
+    return `Sync, ${failingCount} connections failing`;
 }
 
 /** Copy for a connection's failure strip, plus the run its "details" opens; null when it shows no failure. */
@@ -96,4 +103,14 @@ export function initialExpanded(run: ISyncJob, expandConnectionId?: string | nul
         if (job.status === "failed" && job.scraperConnectionId === expandConnectionId) expanded.add(job.id);
     }
     return expanded;
+}
+
+/** Rows on the first history page, then on each page from "Show older syncs". */
+export const HISTORY_FIRST_PAGE = 10;
+export const HISTORY_MORE_PAGE = 50;
+
+/** Page params for the page after `page`; undefined once the API reports no further cursor. */
+export function nextHistoryPageParam(page: ISyncJobPage): { cursor: string; limit: number } | undefined {
+    if (page.nextCursor === null) return undefined;
+    return { cursor: page.nextCursor, limit: HISTORY_MORE_PAGE };
 }

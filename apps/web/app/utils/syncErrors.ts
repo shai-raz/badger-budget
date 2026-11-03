@@ -5,9 +5,10 @@ import type { SyncErrorCode } from "@badger/shared-data";
 /** What the user can do next: fix the login, or run the sync again. `null` means nothing to press. */
 export type SyncErrorAction = "update-login" | "retry";
 
-export const SYNC_ERROR_ACTION_LABEL: Record<SyncErrorAction, string> = {
-    "update-login": "Update login",
-    retry: "Retry",
+/** Button copy and PrimeIcons icon for each action, shared by the failure strip and the run dialog. */
+export const SYNC_ERROR_ACTION: Record<SyncErrorAction, { label: string; icon: string }> = {
+    "update-login": { label: "Update login", icon: "pi pi-key" },
+    retry: { label: "Retry", icon: "pi pi-refresh" },
 };
 
 export interface SyncErrorCopy {

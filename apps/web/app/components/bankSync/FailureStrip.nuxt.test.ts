@@ -84,6 +84,14 @@ describe("FailureStrip", () => {
         expect(buttonLabelled(wrapper, "Retry")).toBeNull();
     });
 
+    it("gives Update login its key icon and Retry its refresh icon", async () => {
+        const login = await mountStrip(connection("INVALID_PASSWORD"));
+        expect(buttonLabelled(login, "Update login")?.find(".pi-key").exists()).toBe(true);
+
+        const retry = await mountStrip(connection("TIMEOUT"));
+        expect(buttonLabelled(retry, "Retry")?.find(".pi-refresh").exists()).toBe(true);
+    });
+
     it("opens the editor on the login fields from Update login", async () => {
         const wrapper = await mountStrip(connection("INVALID_PASSWORD"));
 

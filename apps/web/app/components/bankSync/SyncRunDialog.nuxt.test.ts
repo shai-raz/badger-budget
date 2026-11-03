@@ -190,6 +190,16 @@ const copyButton = () => document.body.querySelector<HTMLButtonElement>('button[
 const finishHide = (wrapper: VueWrapper) => wrapper.findComponent({ name: "Dialog" }).vm.$emit("after-hide");
 
 describe("SyncRunDialog actions", () => {
+    it("gives Update login its key icon and Retry its refresh icon", async () => {
+        await openDialog({ expandConnectionId: "conn-b" });
+        await vi.waitFor(() => expect(actionButton("Update login")).not.toBeNull());
+        expect(actionButton("Update login")?.querySelector(".pi-key")).not.toBeNull();
+
+        failedRowButton("Leumi")?.click();
+        await vi.waitFor(() => expect(actionButton("Retry")).not.toBeNull());
+        expect(actionButton("Retry")?.querySelector(".pi-refresh")).not.toBeNull();
+    });
+
     it("Retry closes the dialog, then requests a sync once it has hidden", async () => {
         const wrapper = await openDialog();
         failedRowButton("Leumi")?.click();
