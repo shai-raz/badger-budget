@@ -27,13 +27,13 @@ const {
 const deleting = ref(false);
 const mode = ref<"leave" | "move">("leave");
 const targetCategoryId = ref<string | null>(null);
-const moveMappingRules = ref(true);
+const moveRules = ref(true);
 
-const mappingRuleCount = computed(() => usage.value?.mappingRuleCount ?? 0);
+const ruleCount = computed(() => usage.value?.ruleCount ?? 0);
 const hasUsage = computed(() => {
     const u = usage.value;
     if (!u) return false;
-    return u.transactionCount + u.budgetCount + u.mappingRuleCount > 0;
+    return u.transactionCount + u.budgetCount + u.ruleCount > 0;
 });
 
 const hasOtherCategories = computed(() => availableTargets.value.length > 0);
@@ -46,8 +46,7 @@ const usageSummary = computed(() => {
     const parts: string[] = [];
     if (u.transactionCount > 0) parts.push(`${u.transactionCount} transaction${u.transactionCount > 1 ? "s" : ""}`);
     if (u.budgetCount > 0) parts.push(`${u.budgetCount} budget${u.budgetCount > 1 ? "s" : ""}`);
-    if (u.mappingRuleCount > 0)
-        parts.push(`${u.mappingRuleCount} auto-categorization rule${u.mappingRuleCount > 1 ? "s" : ""}`);
+    if (u.ruleCount > 0) parts.push(`${u.ruleCount} rule${u.ruleCount > 1 ? "s" : ""}`);
     return parts.join(", ");
 });
 
@@ -61,7 +60,7 @@ const confirmDisabled = computed(() => {
 const resetState = () => {
     mode.value = "leave";
     targetCategoryId.value = null;
-    moveMappingRules.value = true;
+    moveRules.value = true;
 };
 
 watch(
@@ -98,7 +97,7 @@ const handleConfirm = async () => {
     const payload: DeleteCategoryVariables = { id: props.category.id };
     if (mode.value === "move" && targetCategoryId.value) {
         payload.transferToCategoryId = targetCategoryId.value;
-        if (mappingRuleCount.value > 0) payload.moveMappingRules = moveMappingRules.value;
+        if (ruleCount.value > 0) payload.moveRules = moveRules.value;
     }
     deleting.value = true;
     try {
@@ -216,32 +215,30 @@ const handleConfirm = async () => {
                             />
 
                             <div
-                                v-if="mappingRuleCount > 0"
+                                v-if="ruleCount > 0"
                                 class="flex items-center gap-2"
                             >
                                 <Checkbox
-                                    v-model="moveMappingRules"
-                                    input-id="move-mapping-rules"
+                                    v-model="moveRules"
+                                    input-id="move-rules"
                                     :binary="true"
                                 />
                                 <label
-                                    for="move-mapping-rules"
+                                    for="move-rules"
                                     class="cursor-pointer text-sm"
                                 >
-                                    Also move {{ mappingRuleCount }} auto-categorization rule{{
-                                        mappingRuleCount > 1 ? "s" : ""
-                                    }}
+                                    Also move {{ ruleCount }} rule{{ ruleCount > 1 ? "s" : "" }}
                                     to the new category
                                 </label>
                             </div>
                         </div>
 
                         <p
-                            v-if="mode === 'leave' && mappingRuleCount > 0"
+                            v-if="mode === 'leave' && ruleCount > 0"
                             class="text-muted-color text-xs"
                         >
-                            {{ mappingRuleCount }} auto-categorization rule{{ mappingRuleCount > 1 ? "s" : "" }} will be
-                            deleted, since they can't work without a category.
+                            {{ ruleCount }} rule{{ ruleCount > 1 ? "s" : "" }} will be deleted, since they can't work
+                            without a category.
                         </p>
                     </div>
                 </template>

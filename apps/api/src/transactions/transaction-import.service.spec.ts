@@ -3,11 +3,11 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { TransactionImportService, ImportCandidate } from "./transaction-import.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { CardPayoffPatternsService } from "../card-payoff-patterns/card-payoff-patterns.service";
+import { runRules } from "@badger/utils";
 
-// Mocked to isolate the unit under test.
-// The rule matcher is irrelevant here — candidates carry no originalCategory.
+// Mocked to isolate the unit under test: the matcher has its own spec.
 jest.mock("@badger/utils", () => ({
-    findMatchingCategoryId: jest.fn().mockReturnValue(null),
+    runRules: jest.fn().mockReturnValue({ categoryId: null, matchedRuleIds: [] }),
 }));
 
 describe("TransactionImportService", () => {
@@ -33,7 +33,7 @@ describe("TransactionImportService", () => {
         currency: {
             findMany: jest.fn(),
         },
-        categoryMappingRule: {
+        rule: {
             findMany: jest.fn(),
         },
     };
@@ -83,7 +83,7 @@ describe("TransactionImportService", () => {
             { id: "cur-usd", code: "USD", symbol: "$" },
             { id: "cur-ils", code: "ILS", symbol: "₪" },
         ]);
-        mockPrismaService.categoryMappingRule.findMany.mockResolvedValue([]);
+        mockPrismaService.rule.findMany.mockResolvedValue([]);
     });
 
     afterEach(() => {
@@ -138,6 +138,96 @@ describe("TransactionImportService", () => {
 
         const row = await importedRow();
         expect(row).toMatchObject({ type: "income", hidden: false, transferDirection: null });
+    });
+
+    describe("category rules", () => {
+        const storedRule = {
+            id: "rule-1",
+            name: "Coffee",
+            priority: 1,
+            stopOnMatch: true,
+            isActive: true,
+            createdAt: new Date("2026-01-01"),
+            updatedAt: new Date("2026-01-01"),
+            conditions: [],
+            actions: [],
+        };
+
+        beforeEach(() => {
+            mockCardPayoffPatternsService.checkDescription.mockResolvedValue(false);
+        });
+
+        it("loads the live, active rules once per import, not once per row", async () => {
+            mockPrismaService.rule.findMany.mockResolvedValue([storedRule]);
+
+            const result = await service.importTransactions(
+                "user-1",
+                [
+                    makeCandidate({ externalId: "ext-1", description: "A" }),
+                    makeCandidate({ externalId: "ext-2", description: "B" }),
+                    makeCandidate({ externalId: "ext-3", description: "C" }),
+                ],
+                "ILS",
+            );
+
+            expect(result.transactionsSynced).toBe(3);
+            expect(mockPrismaService.rule.findMany).toHaveBeenCalledTimes(1);
+            expect(mockPrismaService.rule.findMany).toHaveBeenCalledWith({
+                where: { userId: "user-1", isActive: true, deletedAt: null },
+                include: expect.any(Object),
+                orderBy: [{ priority: "asc" }, { createdAt: "asc" }],
+            });
+            expect(runRules).toHaveBeenCalledTimes(3);
+        });
+
+        it("runs the rules on each new row with its description, category, amount, account and type", async () => {
+            mockPrismaService.rule.findMany.mockResolvedValue([storedRule]);
+            mockPrismaService.category.create.mockResolvedValueOnce({ id: "new-category" });
+
+            await service.importTransactions(
+                "user-1",
+                [makeCandidate({ description: "Coffee", originalCategory: "Food", signedAmount: -12, amount: 12 })],
+                "ILS",
+            );
+
+            expect(runRules).toHaveBeenCalledWith(
+                {
+                    description: "Coffee",
+                    originalCategory: "Food",
+                    amount: 12,
+                    accountId: "account-1",
+                    type: "expense",
+                },
+                [expect.objectContaining({ id: "rule-1", stopOnMatch: true })],
+            );
+        });
+
+        it("uses the rule's category over the row's own category", async () => {
+            (runRules as jest.Mock).mockReturnValueOnce({ categoryId: "rule-category", matchedRuleIds: ["rule-1"] });
+
+            await service.importTransactions("user-1", [makeCandidate({ originalCategory: "Food" })], "ILS");
+
+            const row = await importedRow();
+            expect(row.categoryId).toBe("rule-category");
+            expect(mockPrismaService.category.create).not.toHaveBeenCalled();
+        });
+
+        it("categorizes a row with no original category when a rule matches", async () => {
+            (runRules as jest.Mock).mockReturnValueOnce({ categoryId: "rule-category", matchedRuleIds: ["rule-1"] });
+
+            await service.importTransactions("user-1", [makeCandidate({ originalCategory: null })], "ILS");
+
+            const row = await importedRow();
+            expect(row.categoryId).toBe("rule-category");
+        });
+
+        it("leaves a row with no original category uncategorized when no rule matches", async () => {
+            await service.importTransactions("user-1", [makeCandidate({ originalCategory: null })], "ILS");
+
+            const row = await importedRow();
+            expect(row.categoryId).toBeNull();
+            expect(mockPrismaService.category.create).not.toHaveBeenCalled();
+        });
     });
 
     describe("date self-heal", () => {

@@ -91,44 +91,19 @@ export interface UpdateCategoryDto extends Partial<CreateCategoryDto> {}
 export interface CategoryUsageResponse {
     transactionCount: number;
     budgetCount: number;
-    mappingRuleCount: number;
+    /** Live rules whose set_category action targets the category. */
+    ruleCount: number;
     totalCount: number;
 }
 
 export interface DeleteCategoryOptions {
-    /** When set, transactions/budgets/mapping-rules move to this category instead of becoming uncategorized. */
+    /** When set, transactions, budgets and rules move to this category instead of becoming uncategorized. */
     transferToCategoryId?: string;
-    /** Only meaningful when transferring. Default true on the server. When false, mapping rules are deleted instead of re-pointed. */
-    moveMappingRules?: boolean;
+    /** Only meaningful when transferring. Default true on the server. When false, rules are deleted instead of re-pointed. */
+    moveRules?: boolean;
 }
 
-// Category Mapping Rules
-export interface ICategoryMappingRule {
-    id: string;
-    userId: string;
-    categoryId: string;
-    field: "description" | "originalCategory" | "amount";
-    operator: "contains" | "equals" | "startsWith" | "endsWith" | "greaterThan" | "lessThan";
-    value: string;
-    priority: number;
-    stopOnMatch: boolean;
-    isActive: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-    category?: Category;
-}
-
-export interface CreateCategoryMappingRuleDto {
-    categoryId: string;
-    field: "description" | "originalCategory" | "amount";
-    operator: "contains" | "equals" | "startsWith" | "endsWith" | "greaterThan" | "lessThan";
-    value: string;
-    stopOnMatch?: boolean;
-}
-
-export interface UpdateCategoryMappingRuleDto extends Partial<CreateCategoryMappingRuleDto> {}
-
-// Rules (conditions and actions; replaces category mapping rules once the old module is removed)
+// Rules (conditions and actions)
 export interface IRuleCondition {
     id: string;
     field: RuleConditionField;

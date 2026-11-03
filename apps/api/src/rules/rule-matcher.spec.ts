@@ -1,8 +1,6 @@
 import type { RuleConditionField, RuleOperator } from "@badger/shared-data";
 import {
     conditionMatches,
-    findMatchingCategoryId,
-    type CategoryMappingRule,
     type MatchableCondition,
     type MatchableRule,
     ruleCategoryId,
@@ -150,10 +148,11 @@ describe("runRules", () => {
     });
 });
 
-describe("parity with the legacy category mapping matcher", () => {
-    // The legacy matcher compares the raw amount, so amount cases use positive values. Each case is a single
-    // rule with stopOnMatch, so first match and last match agree.
-    type LegacyCase = [string, RuleTransaction, CategoryMappingRule["field"], RuleOperator, string, boolean];
+describe("migrated rules produce the same matches", () => {
+    // A migrated rule is one condition plus stopOnMatch, so the first match wins, as it did under the legacy matcher.
+    // The expected values are what the legacy matcher returned, hard-coded now that the old module is gone. Amount
+    // cases use positive values because the legacy matcher compared the raw amount.
+    type LegacyCase = [string, RuleTransaction, RuleConditionField, RuleOperator, string, boolean];
     const cases: LegacyCase[] = [
         ["description contains", { ...tx, amount: 12 }, "description", "contains", "STARBUCKS", true],
         ["description equals", { ...tx, amount: 12 }, "description", "equals", "starbucks coffee", true],
@@ -166,27 +165,14 @@ describe("parity with the legacy category mapping matcher", () => {
         ["amount equals", { ...tx, amount: 12.5 }, "amount", "equals", "12.5", true],
     ];
 
-    it.each(cases)("%s agrees with findMatchingCategoryId", (_name, data, field, operator, value, matches) => {
-        const legacyRule: CategoryMappingRule = {
-            id: "legacy",
-            categoryId: "cat-1",
-            field,
-            operator,
-            value,
-            priority: 1,
-            stopOnMatch: true,
-        };
-        const legacy = findMatchingCategoryId(
-            {
-                description: data.description,
-                originalCategory: data.originalCategory ?? undefined,
-                amount: data.amount,
-            },
-            [legacyRule],
-        );
-        const next = runRules(data, [rule("legacy", [condition(field, operator, value)], "cat-1", true)]);
+    it.each(cases)("%s", (_name, data, field, operator, value, matches) => {
+        const migrated = rule("legacy", [condition(field, operator, value)], "cat-1", true);
+        expect(runRules(data, [migrated]).categoryId).toBe(matches ? "cat-1" : null);
+    });
 
-        expect(legacy).toBe(matches ? "cat-1" : null);
-        expect(next.categoryId).toBe(legacy);
+    it("keeps the first match when several migrated rules match", () => {
+        const first = rule("first", [condition("description", "contains", "star")], "cat-a", true);
+        const second = rule("second", [condition("description", "contains", "coffee")], "cat-b", true);
+        expect(runRules(tx, [first, second])).toEqual({ categoryId: "cat-a", matchedRuleIds: ["first"] });
     });
 });

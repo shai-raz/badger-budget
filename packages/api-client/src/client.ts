@@ -10,8 +10,6 @@ import type {
     ITransactionAttachmentResponse,
     IAttachmentUrlResponse,
     IRenameTransactionAttachment,
-    CreateCategoryMappingRuleDto,
-    ICategoryMappingRule,
     DeleteCategoryOptions,
     CategoryUsageResponse,
     CreateCategoryDto,
@@ -635,36 +633,6 @@ export class ApiClient {
     async getCurrencyByCode(code: string) {
         const response = await this.client.get(`/currencies/code/${code}`);
         return response.data;
-    }
-
-    // Category mapping rules
-    async getCategoryMappingRules() {
-        const response = await this.client.get("/category-mapping-rules");
-        return response.data;
-    }
-
-    async getCategoryMappingRule(id: string) {
-        const response = await this.client.get(`/category-mapping-rules/${id}`);
-        return response.data;
-    }
-
-    async createCategoryMappingRule(data: CreateCategoryMappingRuleDto) {
-        const response = await this.client.post<ICategoryMappingRule>("/category-mapping-rules", data);
-        return response.data;
-    }
-
-    async updateCategoryMappingRule(id: string, data: Partial<CreateCategoryMappingRuleDto>) {
-        const response = await this.client.patch<ICategoryMappingRule>(`/category-mapping-rules/${id}`, data);
-        return response.data;
-    }
-
-    async applyCategoryMappingRule(id: string) {
-        const response = await this.client.post<{ count: number }>(`/category-mapping-rules/${id}/apply-all`);
-        return response.data;
-    }
-
-    async deleteCategoryMappingRule(id: string) {
-        await this.client.delete(`/category-mapping-rules/${id}`);
     }
 
     // Rules

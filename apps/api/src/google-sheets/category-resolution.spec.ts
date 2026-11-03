@@ -2,7 +2,7 @@ import { resolveCategoryId } from "./category-resolution";
 
 describe("resolveCategoryId", () => {
     it("prioritizes mapping rule over existing category with same name", async () => {
-        const matchCategoryByRules = jest.fn().mockResolvedValue("mapped-category-id");
+        const matchCategoryByRules = jest.fn().mockReturnValue("mapped-category-id");
         const createCategory = jest.fn();
 
         const result = await resolveCategoryId({
@@ -19,6 +19,38 @@ describe("resolveCategoryId", () => {
         expect(matchCategoryByRules).toHaveBeenCalledTimes(1);
     });
 
+    it("returns the rule match when the row has no category name", async () => {
+        const createCategory = jest.fn();
+
+        const result = await resolveCategoryId({
+            categoryName: "",
+            categoryByName: new Map(),
+            createdCategoryNames: new Set<string>(),
+            result: { categoriesCreated: 0 } as any,
+            matchCategoryByRules: jest.fn().mockReturnValue("rule-category-id"),
+            createCategory,
+        });
+
+        expect(result).toBe("rule-category-id");
+        expect(createCategory).not.toHaveBeenCalled();
+    });
+
+    it("returns null when the row has no category name and no rule matches", async () => {
+        const createCategory = jest.fn();
+
+        const result = await resolveCategoryId({
+            categoryName: "",
+            categoryByName: new Map(),
+            createdCategoryNames: new Set<string>(),
+            result: { categoriesCreated: 0 } as any,
+            matchCategoryByRules: jest.fn().mockReturnValue(null),
+            createCategory,
+        });
+
+        expect(result).toBeNull();
+        expect(createCategory).not.toHaveBeenCalled();
+    });
+
     it("falls back to existing category when no mapping rule matches", async () => {
         const createCategory = jest.fn();
 
@@ -27,7 +59,7 @@ describe("resolveCategoryId", () => {
             categoryByName: new Map([["Fuel", "fuel-category-id"]]),
             createdCategoryNames: new Set<string>(),
             result: { categoriesCreated: 0 } as any,
-            matchCategoryByRules: jest.fn().mockResolvedValue(null),
+            matchCategoryByRules: jest.fn().mockReturnValue(null),
             createCategory,
         });
 
@@ -45,7 +77,7 @@ describe("resolveCategoryId", () => {
             categoryByName,
             createdCategoryNames,
             result: syncResult,
-            matchCategoryByRules: jest.fn().mockResolvedValue(null),
+            matchCategoryByRules: jest.fn().mockReturnValue(null),
             createCategory: jest.fn().mockResolvedValue({ id: "new-category-id" }),
         });
 

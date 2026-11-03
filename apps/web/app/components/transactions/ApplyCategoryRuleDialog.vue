@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type { CreateCategoryMappingRuleDto, ITransactionResponse } from "@badger/types";
+import type { CreateRuleDto, ITransactionResponse, RuleConditionInput } from "@badger/types";
 import { ref } from "vue";
 import { useToast } from "primevue/usetoast";
-import { findMatchingCategoryId } from "@badger/utils";
+import { autoRuleName, ruleCategoryId, ruleMatches } from "@badger/utils";
 import MappingRuleForm from "./MappingRuleForm.vue";
-import { useCreateCategoryMappingRuleMutation } from "~/composables/category-mapping-rules/useCreateCategoryMappingRule.mutation";
-import { useApplyCategoryMappingRuleMutation } from "~/composables/category-mapping-rules/useApplyCategoryMappingRule.mutation";
+import { useCreateRuleMutation } from "~/composables/rules/useCreateRule.mutation";
 import { formatCurrency } from "~/utils/currency";
+import { toRuleTransaction } from "~/utils/ruleTransaction";
 
 interface Props {
     visible: boolean;
@@ -20,10 +20,16 @@ const emit = defineEmits<{
     applyingRules: [isApplying: boolean];
 }>();
 
+/** What MappingRuleForm emits: the category to set, the one condition, and whether a match stops later rules. */
+interface MappingRuleData {
+    categoryId: string;
+    condition: RuleConditionInput;
+    stopOnMatch: boolean;
+}
+
 const toast = useToast();
 const { mutateAsync: updateTransaction } = useUpdateTransactionMutation();
-const { mutateAsync: createMappingRule } = useCreateCategoryMappingRuleMutation();
-const { mutateAsync: applyMappingRule } = useApplyCategoryMappingRuleMutation();
+const { mutateAsync: createRule } = useCreateRuleMutation();
 
 const { data: categories } = useGetCategoriesQuery();
 const saving = ref(false);
@@ -32,26 +38,26 @@ const handleClose = () => {
     emit("update:visible", false);
 };
 
-const handleMappingRuleSave = async (ruleData: CreateCategoryMappingRuleDto) => {
-    if (!props.transaction) return;
+const buildRuleDto = (ruleData: MappingRuleData): CreateRuleDto => ({
+    name: autoRuleName([ruleData.condition]),
+    conditions: [ruleData.condition],
+    actions: [{ type: "set_category", value: ruleData.categoryId }],
+    stopOnMatch: ruleData.stopOnMatch,
+});
+
+const handleMappingRuleSave = async (ruleData: MappingRuleData) => {
+    const transaction = props.transaction;
+    if (!transaction) return;
 
     saving.value = true;
     try {
-        // Create the mapping rule
-        const createdRule = await createMappingRule(ruleData);
+        const { rule } = await createRule(buildRuleDto(ruleData));
 
-        // Optimistically apply the rule to current transaction
-        const transactionData = {
-            description: props.transaction.description,
-            originalCategory: props.transaction.originalCategory || undefined,
-            amount: props.transaction.amount,
-        };
-
-        const matchedCategoryId = findMatchingCategoryId(transactionData, [createdRule]);
-
-        if (matchedCategoryId) {
+        // Update this transaction now only when the new rule matches it; the other rows wait for an apply.
+        const matchedCategoryId = ruleCategoryId(rule);
+        if (matchedCategoryId && ruleMatches(toRuleTransaction(transaction), rule)) {
             await updateTransaction({
-                id: props.transaction.id,
+                id: transaction.id,
                 data: {
                     categoryId: matchedCategoryId,
                 },
@@ -78,27 +84,24 @@ const handleMappingRuleSave = async (ruleData: CreateCategoryMappingRuleDto) => 
     }
 };
 
-const handleMappingRuleSaveAndApply = async (ruleData: CreateCategoryMappingRuleDto) => {
+const handleMappingRuleSaveAndApply = async (ruleData: MappingRuleData) => {
     if (!props.transaction) return;
 
     saving.value = true;
+    // The apply runs inside the same save, so a failure leaves no rule behind and the dialog stays open to retry.
+    emit("applyingRules", true);
     try {
-        // Create the mapping rule
-        const createdRule = await createMappingRule(ruleData);
+        const { appliedCount } = await createRule({
+            ...buildRuleDto(ruleData),
+            apply: { mode: "allExcept", ids: [] },
+        });
 
-        // Close dialog immediately
         handleClose();
-
-        // Emit event to show loading message
-        emit("applyingRules", true);
-
-        // Apply rule to all transactions
-        const result = await applyMappingRule(createdRule.id);
 
         toast.add({
             severity: "success",
             summary: "Success",
-            detail: `Mapping rule created and applied to ${result.count} transaction(s)`,
+            detail: `Mapping rule created and applied to ${appliedCount ?? 0} transaction(s)`,
             life: 5000,
         });
     } catch (error) {
