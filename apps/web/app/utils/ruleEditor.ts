@@ -46,6 +46,8 @@ export interface EditorPrimaryLabelInput {
 
 export interface ApplyBoxInput {
     complete: boolean;
+    /** True while a count for the current draft is on its way. */
+    checking?: boolean;
     preview: RulePreviewResponse | null;
     categoryName: string;
 }
@@ -188,24 +190,32 @@ export function editorPrimaryLabel({ mode, applying, count }: EditorPrimaryLabel
     return `${verb} and apply to ${count}`;
 }
 
-/** Copy and enabled state for the "Also apply to existing transactions" box. */
-export function applyBoxCopy({ complete, preview, categoryName }: ApplyBoxInput): ApplyBoxCopy {
-    const idleTitle = "Also apply to existing transactions";
+const APPLY_BOX_TITLE = "Also apply to existing transactions";
 
+/** Copy and enabled state for the "Also apply to existing transactions" box. */
+export function applyBoxCopy({ complete, checking = false, preview, categoryName }: ApplyBoxInput): ApplyBoxCopy {
     if (!complete) {
-        return { title: idleTitle, sub: "Finish the conditions to see matches.", disabled: true };
+        return { title: APPLY_BOX_TITLE, sub: "Finish the conditions to see matches.", disabled: true };
     }
     if (preview === null) {
-        return { title: idleTitle, sub: "Checking matches...", disabled: true };
+        // Nothing to show before the first count; the box stays usable while that count loads.
+        return { title: APPLY_BOX_TITLE, sub: "Checking matches...", disabled: !checking };
     }
 
+    const copy = countCopy(preview, categoryName);
+    // While a newer count loads, the last one stays visible and the box stays usable: save recomputes the set.
+    return checking ? { ...copy, disabled: false } : copy;
+}
+
+/** Copy for a count on screen. The box is disabled when nothing would change. */
+function countCopy(preview: RulePreviewResponse, categoryName: string): ApplyBoxCopy {
     const total = preview.matchCount;
     if (total === 0) {
-        return { title: idleTitle, sub: "No existing transactions match yet.", disabled: true };
+        return { title: APPLY_BOX_TITLE, sub: "No existing transactions match yet.", disabled: true };
     }
     if (preview.wouldChangeCount === 0) {
         return {
-            title: idleTitle,
+            title: APPLY_BOX_TITLE,
             sub: `All ${total} matching ${plural(total, "transaction")} already have ${categoryName}.`,
             disabled: true,
         };
@@ -215,7 +225,7 @@ export function applyBoxCopy({ complete, preview, categoryName }: ApplyBoxInput)
     const already = preview.alreadyTargetCount;
     return {
         title: `Also apply to ${changing} existing ${plural(changing, "transaction")}`,
-        sub: `${total} ${total === 1 ? "match" : "matches"}, ${already} ${already === 1 ? "already has" : "already have"} ${categoryName}`,
+        sub: `${total} match, ${already} ${already === 1 ? "already has" : "already have"} ${categoryName}`,
         disabled: false,
     };
 }

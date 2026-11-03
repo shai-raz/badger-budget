@@ -8,6 +8,7 @@ interface QueryOptions {
     queryKey: Ref<unknown[]>;
     enabled: Ref<boolean>;
     queryFn: () => Promise<unknown>;
+    staleTime: number;
     placeholderData: unknown;
 }
 
@@ -92,6 +93,11 @@ describe("useRulePreviewCount", () => {
                 filter: "all",
             },
         ]);
+    });
+
+    it("never trusts a cached count, since transactions change outside the editor", () => {
+        useRulePreviewCount(ref(completeDraft()));
+        expect(queryOptions.staleTime).toBe(0);
     });
 
     it("keeps the previous count while a new one loads", () => {

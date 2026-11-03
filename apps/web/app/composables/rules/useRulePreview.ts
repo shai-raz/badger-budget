@@ -32,6 +32,8 @@ export function useRulePreviewCount(draft: Ref<RuleEditorDraft>) {
             return apiClient.previewRule(req);
         },
         enabled: computed(() => request.value !== null),
+        // Transactions change outside this editor (edits, imports, syncs), so every open counts again.
+        staleTime: 0,
         placeholderData: keepPreviousData,
     });
 

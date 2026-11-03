@@ -7,6 +7,7 @@
  * The "Also apply" box saves and applies in one request, so a failed apply leaves no rule behind.
  */
 import { useToast } from "primevue/usetoast";
+import { RULE_NAME_MAX_LENGTH } from "@badger/shared-data";
 import type { ApplyRuleSelection, Category } from "@badger/types";
 import CategorySelect from "~/components/categories/CategorySelect.vue";
 import { getApiErrorMessage } from "~/utils/apiError";
@@ -58,7 +59,7 @@ const initialDraft = (): RuleEditorDraft => {
 };
 
 const draft = ref<RuleEditorDraft>(initialDraft());
-const { preview } = useRulePreviewCount(draft);
+const { preview, checking } = useRulePreviewCount(draft);
 
 const applyTicked = ref(true);
 const apiError = ref<string | null>(null);
@@ -112,21 +113,26 @@ const categoryModel = computed<string | null>({
 const applyCopy = computed(() =>
     applyBoxCopy({
         complete: isDraftComplete(draft.value),
+        checking: checking.value,
         preview: preview.value,
         categoryName: categoryName.value,
     }),
 );
 
-// Applying needs the box ticked, the box enabled and at least one transaction the save would change.
-const applying = computed(
-    () => applyTicked.value && !applyCopy.value.disabled && (preview.value?.wouldChangeCount ?? 0) > 0,
-);
+// Applying needs the box ticked. While a count is being checked the box decides alone, since the count on screen
+// may be stale; save recomputes the set anyway. Otherwise the box must be enabled and at least one transaction changes.
+const applying = computed(() => {
+    if (!applyTicked.value) return false;
+    if (checking.value) return true;
+    return !applyCopy.value.disabled && (preview.value?.wouldChangeCount ?? 0) > 0;
+});
 
+// The primary states the count only once it is current.
 const primaryLabel = computed(() =>
     editorPrimaryLabel({
         mode: isEdit ? "edit" : "create",
         applying: applying.value,
-        count: preview.value?.wouldChangeCount ?? null,
+        count: checking.value ? null : (preview.value?.wouldChangeCount ?? null),
     }),
 );
 
@@ -221,6 +227,7 @@ onMounted(() => {
                 id="rule-name"
                 v-model="nameModel"
                 :placeholder="autoName || 'Name this rule'"
+                :maxlength="RULE_NAME_MAX_LENGTH"
                 class="w-full"
             />
             <small class="text-sm text-muted-color">Filled in from the first condition until you type your own.</small>
@@ -228,19 +235,28 @@ onMounted(() => {
 
         <div class="flex flex-col gap-2">
             <h3 class="text-sm font-medium text-surface-700 dark:text-surface-200">When all of these match</h3>
-            <RuleConditionRow
+            <template
                 v-for="(condition, index) in draft.conditions"
                 :key="condition.key"
-                :condition="condition"
-                :accounts="accounts ?? []"
-                :removable="draft.conditions.length > 1"
-                :error="conditionError(condition.key)"
-                :autofocus="index === 0 && !isEdit"
-                :hint="index === 0 ? transactionHint : undefined"
-                @update:condition="updateCondition(condition.key, $event)"
-                @remove="removeCondition(condition.key)"
-                @blur="markTouched(valueFieldId(condition.key))"
-            />
+            >
+                <div
+                    v-if="index > 0"
+                    class="text-center text-xs font-semibold tracking-wide text-muted-color sm:hidden"
+                >
+                    AND
+                </div>
+                <RuleConditionRow
+                    :condition="condition"
+                    :accounts="accounts ?? []"
+                    :removable="draft.conditions.length > 1"
+                    :error="conditionError(condition.key)"
+                    :autofocus="index === 0 && !isEdit"
+                    :hint="index === 0 ? transactionHint : undefined"
+                    @update:condition="updateCondition(condition.key, $event)"
+                    @remove="removeCondition(condition.key)"
+                    @blur="markTouched(valueFieldId(condition.key))"
+                />
+            </template>
             <div>
                 <Button
                     label="Add condition"
@@ -272,11 +288,7 @@ onMounted(() => {
                 >
             </div>
 
-            <div class="flex items-start gap-3">
-                <ToggleSwitch
-                    v-model="draft.stopOnMatch"
-                    input-id="rule-stop-on-match"
-                />
+            <div class="flex items-center justify-between gap-3">
                 <div class="flex min-w-0 flex-col gap-0.5">
                     <label
                         for="rule-stop-on-match"
@@ -287,16 +299,22 @@ onMounted(() => {
                         >Rules below this one won't run on transactions it matches.</small
                     >
                 </div>
+                <ToggleSwitch
+                    v-model="draft.stopOnMatch"
+                    input-id="rule-stop-on-match"
+                    class="shrink-0"
+                />
             </div>
         </div>
 
         <div class="flex flex-col gap-2 rounded-lg border border-surface-200 p-3 dark:border-surface-700">
             <div class="flex items-start gap-3">
                 <Checkbox
-                    v-model="applyTicked"
+                    :model-value="applyTicked && !applyCopy.disabled"
                     input-id="rule-apply"
                     :binary="true"
                     :disabled="applyCopy.disabled"
+                    @update:model-value="applyTicked = $event"
                 />
                 <div class="flex min-w-0 flex-1 flex-col gap-0.5">
                     <label

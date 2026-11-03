@@ -211,8 +211,35 @@ describe("applyBoxCopy", () => {
         });
     });
 
-    it("is disabled while the preview is still checking", () => {
+    it("is disabled before any count when none is being checked", () => {
         expect(applyBoxCopy({ complete: true, preview: null, categoryName: "Coffee" }).disabled).toBe(true);
+    });
+
+    it("stays enabled on the first count while it is checking", () => {
+        expect(applyBoxCopy({ complete: true, checking: true, preview: null, categoryName: "Coffee" })).toEqual({
+            title: "Also apply to existing transactions",
+            sub: "Checking matches...",
+            disabled: false,
+        });
+    });
+
+    it("keeps the last count and stays enabled while a newer count loads", () => {
+        const copy = applyBoxCopy({ complete: true, checking: true, preview: preview(), categoryName: "Coffee" });
+        expect(copy).toEqual({
+            title: "Also apply to 9 existing transactions",
+            sub: "12 match, 3 already have Coffee",
+            disabled: false,
+        });
+    });
+
+    it("stays enabled while a newer count loads, even if the last count matched nothing", () => {
+        const copy = applyBoxCopy({
+            complete: true,
+            checking: true,
+            preview: preview({ matchCount: 0, wouldChangeCount: 0, alreadyTargetCount: 0 }),
+            categoryName: "Coffee",
+        });
+        expect(copy.disabled).toBe(false);
     });
 
     it("is disabled when nothing matches", () => {
@@ -242,7 +269,7 @@ describe("applyBoxCopy", () => {
         const copy = applyBoxCopy({ complete: true, preview: preview(), categoryName: "Coffee" });
         expect(copy).toEqual({
             title: "Also apply to 9 existing transactions",
-            sub: "12 matches, 3 already have Coffee",
+            sub: "12 match, 3 already have Coffee",
             disabled: false,
         });
     });
@@ -254,6 +281,6 @@ describe("applyBoxCopy", () => {
             categoryName: "Coffee",
         });
         expect(copy.title).toBe("Also apply to 1 existing transaction");
-        expect(copy.sub).toBe("2 matches, 1 already has Coffee");
+        expect(copy.sub).toBe("2 match, 1 already has Coffee");
     });
 });

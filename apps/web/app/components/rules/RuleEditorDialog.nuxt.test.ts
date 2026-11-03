@@ -4,6 +4,7 @@ import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { computed, ref } from "vue";
 import Checkbox from "primevue/checkbox";
 import Select from "primevue/select";
+import { RULE_NAME_MAX_LENGTH } from "@badger/shared-data";
 import type { Category, IAccountResponse, IRule, ITransactionResponse, RulePreviewResponse } from "@badger/types";
 import type { RuleEditorDialogState } from "~/composables/useRuleEditorDialog";
 import CategorySelect from "~/components/categories/CategorySelect.vue";
@@ -24,14 +25,17 @@ const api = vi.hoisted(() => ({
     createRule: vi.fn(),
     updateRule: vi.fn(),
 }));
-const previewState = vi.hoisted(() => ({ value: null as RulePreviewResponse | null }));
+const previewState = vi.hoisted(() => ({ value: null as RulePreviewResponse | null, checking: false }));
 
 mockNuxtImport("useRuleEditorDialog", () => () => ({ state: ref(dialog.state), close: dialog.close }));
 mockNuxtImport("useApiClient", () => () => api);
 mockNuxtImport("useGetAccounts", () => () => ({ data: ref(accounts) }));
 mockNuxtImport("useGetCategoriesQuery", () => () => ({ data: ref(categories) }));
 vi.mock("~/composables/rules/useRulePreview", () => ({
-    useRulePreviewCount: () => ({ preview: computed(() => previewState.value), checking: ref(false) }),
+    useRulePreviewCount: () => ({
+        preview: computed(() => previewState.value),
+        checking: computed(() => previewState.checking),
+    }),
 }));
 
 const timestamp = new Date("2026-01-01T00:00:00.000Z");
@@ -169,6 +173,7 @@ beforeEach(() => {
     api.updateRule.mockResolvedValue({ rule: existingRule, appliedCount: null });
     dialog.close.mockReset();
     previewState.value = null;
+    previewState.checking = false;
 });
 
 afterEach(() => {
@@ -276,6 +281,49 @@ describe("RuleEditorDialog", () => {
         expect(document.body.textContent).toContain("Rule name is already used");
         expect(dialog.close).not.toHaveBeenCalled();
         expect(buttonLabelled("Create rule")).toBeDefined();
+    });
+
+    it("shows a disabled apply box unticked", async () => {
+        const wrapper = await mountDialog();
+
+        const checkbox = wrapper.findComponent(Checkbox);
+        expect(checkbox.props("disabled")).toBe(true);
+        expect(checkbox.props("modelValue")).toBe(false);
+    });
+
+    it("caps the name at the rule name limit", async () => {
+        await mountDialog();
+
+        expect(nameInput().maxLength).toBe(RULE_NAME_MAX_LENGTH);
+    });
+
+    it("drops the count from the primary and still sends apply while a new count is checking", async () => {
+        previewState.value = preview(3);
+        previewState.checking = true;
+        const wrapper = await mountDialog();
+        await fillComplete(wrapper);
+
+        expect(buttonLabelled("Create and apply to 3")).toBeUndefined();
+
+        await clickButton("Create and apply");
+
+        expect(api.createRule).toHaveBeenCalledTimes(1);
+        expect(api.createRule.mock.calls[0]?.[0].apply).toEqual({ mode: "allExcept", ids: [] });
+    });
+
+    it("keeps the box enabled and ticked while checking, even when the last count matched nothing", async () => {
+        previewState.value = preview(0);
+        previewState.checking = true;
+        const wrapper = await mountDialog();
+        await fillComplete(wrapper);
+
+        const checkbox = wrapper.findComponent(Checkbox);
+        expect(checkbox.props("disabled")).toBe(false);
+        expect(checkbox.props("modelValue")).toBe(true);
+
+        await clickButton("Create and apply");
+
+        expect(api.createRule.mock.calls[0]?.[0].apply).toEqual({ mode: "allExcept", ids: [] });
     });
 
     it("focuses the first empty value on save and does not send", async () => {
