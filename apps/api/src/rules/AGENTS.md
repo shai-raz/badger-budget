@@ -5,6 +5,7 @@ Conditions and actions, matched in priority order against the user's transaction
 - **Soft delete.** Rules are soft-deleted (`deletedAt`); their condition and action rows are replaced or deleted outright. Every query, the matcher input, counts, reorder and cleanup filter on `deletedAt: null`.
 - **Priority only orders.** Create appends after the last live rule. Soft delete leaves gaps. Reorder rewrites every live rule to 1..n from the full id set, and a stale or partial set gets 409.
 - **Matching.** The last matching `set_category` wins; a matched rule with `stopOnMatch` ends the run. Use `runRules` from `@badger/utils`; don't reimplement matching here or in the web.
+- **Import.** `loadMatchableRules` runs once per import and `runRules` on every new row, including rows with no original category.
 - **Candidates.** Mirror rows of linked transfers (`counterpartOfId`) are never candidates, so preview and apply skip them. Preview and apply load every candidate into memory: fine at current scale, revisit if it grows.
 - **Save and apply** is one interactive transaction with a 60s timeout (Prisma's default is 5s).
 - **No foreign keys on values.** An `account` condition value and a `set_category` action value are plain strings. Any path that deletes or merges a referenced account or category must call `rule-cleanup.ts` inside its own transaction, or rules keep pointing at nothing.
