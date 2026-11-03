@@ -4,7 +4,6 @@ import { TRANSACTION_ADDITIONAL_DESCRIPTION_MAX_LENGTH, TRANSACTION_NOTES_MAX_LE
 import { transactionAmountClass, transactionSign } from "./formatters";
 import { getLocaleCurrencyCode } from "../../utils/locale-currency";
 import { accountTypeCaption } from "../../utils/accountBalance";
-import LockHint from "./LockHint.vue";
 import AttachmentQueueField from "./AttachmentQueueField.vue";
 import type { AttachmentUploadState } from "../../utils/attachmentUploads";
 import { matchesCashWithdrawal, pickCashWallet } from "../../utils/cashWithdrawal";
@@ -357,7 +356,11 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
                 class="flex items-center gap-2"
             >
                 <span :class="labelClass">Type</span>
-                <LockHint :tooltip="lockTooltip" />
+                <SharedHintButton
+                    icon="pi-lock"
+                    aria-label="Locked: from your bank"
+                    :tooltip="lockTooltip"
+                />
             </div>
             <SelectButton
                 v-model="values.type"
@@ -372,12 +375,16 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
                 :pt="{ pcToggleButton: { root: { class: 'flex-1' } } }"
             />
             <div class="flex flex-col items-center gap-1">
-                <LockHint
+                <SharedHintButton
                     v-if="isLocked('amount')"
+                    icon="pi-lock"
+                    aria-label="Locked: from your bank"
                     :tooltip="lockTooltip"
                 />
-                <LockHint
+                <SharedHintButton
                     v-else-if="currencyLockedByAccount"
+                    icon="pi-lock"
+                    aria-label="Locked: from your bank"
                     tooltip="This account uses its own currency"
                 />
                 <div class="flex w-full items-center justify-center gap-2">
@@ -462,8 +469,10 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
                 >
                     Description
                 </label>
-                <LockHint
+                <SharedHintButton
                     v-if="isLocked('description')"
+                    icon="pi-lock"
+                    aria-label="Locked: from your bank"
                     :tooltip="lockTooltip"
                 />
             </div>
@@ -492,8 +501,10 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
                 >
                     Account
                 </label>
-                <LockHint
+                <SharedHintButton
                     v-if="isLocked('accountId')"
+                    icon="pi-lock"
+                    aria-label="Locked: from your bank"
                     :tooltip="lockTooltip"
                 />
             </div>
@@ -554,8 +565,10 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
                 >
                     Date
                 </label>
-                <LockHint
+                <SharedHintButton
                     v-if="isLocked('date')"
+                    icon="pi-lock"
+                    aria-label="Locked: from your bank"
                     :tooltip="lockTooltip"
                 />
             </div>
@@ -589,8 +602,10 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
                     Category
                     <span class="font-normal text-surface-500 dark:text-surface-400">(optional)</span>
                 </label>
-                <LockHint
+                <SharedHintButton
                     v-if="isLocked('categoryId')"
+                    icon="pi-lock"
+                    aria-label="Locked: from your bank"
                     :tooltip="lockTooltip"
                 />
                 <Button
@@ -646,8 +661,10 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
         >
             <div class="flex items-center gap-2">
                 <span :class="labelClass">Transfer direction</span>
-                <LockHint
+                <SharedHintButton
                     v-if="isLocked('transferDirection')"
+                    icon="pi-lock"
+                    aria-label="Locked: from your bank"
                     :tooltip="directionTooltip"
                 />
             </div>
@@ -674,8 +691,10 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
                         {{ counterpartLabel(values.transferDirection) }}
                         <span class="font-normal text-surface-500 dark:text-surface-400">(optional)</span>
                     </label>
-                    <LockHint
+                    <SharedHintButton
                         v-if="isLocked('counterpart')"
+                        icon="pi-lock"
+                        aria-label="Locked: from your bank"
                         :tooltip="lockTooltip"
                     />
                 </div>
@@ -767,8 +786,10 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
                 >
                     Additional description
                 </label>
-                <LockHint
+                <SharedHintButton
                     v-if="isLocked('additionalDescription')"
+                    icon="pi-lock"
+                    aria-label="Locked: from your bank"
                     :tooltip="lockTooltip"
                 />
             </div>
@@ -841,8 +862,10 @@ const helperClass = "text-sm text-surface-500 dark:text-surface-400";
             >
                 Hidden
             </label>
-            <LockHint
+            <SharedHintButton
                 v-if="isLocked('hidden')"
+                icon="pi-lock"
+                aria-label="Locked: from your bank"
                 :tooltip="lockTooltip"
             />
             <button
