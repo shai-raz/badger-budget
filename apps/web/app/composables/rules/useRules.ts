@@ -2,10 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import type { IRule } from "@badger/types";
 import { ruleKeys } from "./ruleKeys";
 
-function isConflict(error: unknown): boolean {
-    return (error as { response?: { status?: number } } | null)?.response?.status === 409;
-}
-
 export function useRulesQuery() {
     const apiClient = useApiClient();
 
@@ -40,7 +36,7 @@ export function useSetRuleActiveMutation() {
     });
 }
 
-/** Saves the full order of the user's rules. The cache is reordered at once; a 409 means the list changed elsewhere, so it refetches. */
+/** Saves the full order of the user's rules. The cache is reordered at once and refetched once settled, so a failed or conflicting save cannot leave an order the server does not have on screen. */
 export function useReorderRulesMutation() {
     const apiClient = useApiClient();
     const queryClient = useQueryClient();
@@ -64,13 +60,13 @@ export function useReorderRulesMutation() {
             }
             return { previous };
         },
-        onError: (error, _ids, context) => {
+        onError: (_error, _ids, context) => {
             if (context?.previous) {
                 queryClient.setQueryData(ruleKeys.list(), context.previous);
             }
-            if (isConflict(error)) {
-                queryClient.invalidateQueries({ queryKey: ruleKeys.lists() });
-            }
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: ruleKeys.lists() });
         },
     });
 }

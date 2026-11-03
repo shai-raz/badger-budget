@@ -64,6 +64,7 @@ const meta = computed(() => {
 });
 const isEmpty = computed(() => !!props.rules && props.rules.length === 0);
 
+const runOrderTooltip = "Rules run top to bottom on each new <b>synced</b> transaction.";
 const announcement = ref("");
 const gripId = (id: string) => `rule-grip-${id}`;
 const focusGrip = (id: string) => {
@@ -91,11 +92,20 @@ watch(
     { immediate: true },
 );
 
+// Ends a keyboard pick without saving. The order goes back to the saved one, which may have changed mid-pick.
 const cancelKeyboardPick = () => {
     if (keyboardPicked.value === null) return;
-    if (keyboardOriginal.value) orderedIds.value = [...keyboardOriginal.value];
     keyboardPicked.value = null;
     keyboardOriginal.value = null;
+    orderedIds.value = [...savedIds.value];
+};
+
+// Moving the picked row re-inserts its grip, which can blur it mid-move. The grip is refocused on the next tick,
+// so the focus check waits a task.
+const onGripFocusout = (id: string) => {
+    setTimeout(() => {
+        if (document.activeElement?.id !== gripId(id)) cancelKeyboardPick();
+    });
 };
 
 const KEYBOARD_KEYS: Record<string, KeyboardReorderKey> = {
@@ -148,6 +158,7 @@ const listEl = ref<HTMLElement | null>(null);
 const sortable = useSortable(listEl, orderedIds, {
     handle: ".rule-grip",
     animation: 150,
+    onStart: cancelKeyboardPick,
     onUpdate: (event) => {
         const { oldIndex, newIndex } = event;
         if (oldIndex === undefined || newIndex === undefined) return;
@@ -199,6 +210,7 @@ const finishReorder = () => {
 
 // Switching to the desktop layout discards unsaved phone moves, as Cancel does.
 watch(isDesktop, (desktop) => {
+    cancelKeyboardPick();
     if (desktop && reorderMode.value) cancelReorder();
 });
 watch(trimmedQuery, cancelKeyboardPick);
@@ -218,7 +230,8 @@ watch(trimmedQuery, cancelKeyboardPick);
                 <SharedHintButton
                     icon="pi-info-circle"
                     aria-label="How rules run"
-                    tooltip="Rules run top to bottom on each new synced transaction."
+                    :tooltip="runOrderTooltip"
+                    tooltip-html
                 />
             </span>
         </template>
@@ -230,6 +243,7 @@ watch(trimmedQuery, cancelKeyboardPick);
                     text
                     severity="secondary"
                     size="small"
+                    :disabled="isSaving"
                     @click="cancelReorder"
                 />
                 <Button
@@ -323,6 +337,7 @@ watch(trimmedQuery, cancelKeyboardPick);
                         aria-label="Drag to reorder"
                         :disabled="trimmedQuery !== ''"
                         @keydown="onGripKeydown($event, rule)"
+                        @focusout="onGripFocusout(rule.id)"
                     />
                 </template>
                 <template #move>

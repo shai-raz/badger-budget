@@ -113,16 +113,12 @@ describe("useReorderRulesMutation", () => {
         expect(cache.map((rule) => rule.id)).toEqual(["r1", "r2", "r3"]);
     });
 
-    it("refetches the lists when the server reports a conflict", () => {
-        const options = optionsFor<string[]>(useReorderRulesMutation);
-        options.onError?.({ response: { status: 409 } }, ["r3", "r2", "r1"], { previous: cache });
-        expect(invalidatedKeys()).toEqual([listKey]);
-    });
-
-    it("does not refetch on other failures", () => {
+    it("refetches the lists once settled, so a failed save cannot leave its optimistic order", () => {
         const options = optionsFor<string[]>(useReorderRulesMutation);
         options.onError?.({ response: { status: 500 } }, ["r3", "r2", "r1"], { previous: cache });
         expect(invalidatedKeys()).toEqual([]);
+        options.onSettled?.();
+        expect(invalidatedKeys()).toEqual([listKey]);
     });
 
     it("sends the ids to the API", async () => {

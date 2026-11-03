@@ -6,6 +6,8 @@
 interface Props {
     /** Tooltip text, shown on hover and focus. */
     tooltip: string;
+    /** Render `tooltip` as HTML, for constant markup such as <b>. Never pass user text. */
+    tooltipHtml?: boolean;
     /** PrimeIcon class suffix, e.g. "pi-lock". */
     icon: string;
     /** Accessible name, e.g. "Locked: from your bank". Pass it as `aria-label`. */
@@ -17,7 +19,7 @@ defineProps<Props>();
 
 <template>
     <button
-        v-tooltip.top.focus="tooltip"
+        v-tooltip.top.focus="tooltipHtml ? { value: tooltip, escape: false } : tooltip"
         type="button"
         class="inline-flex items-center rounded-full text-surface-500 dark:text-surface-400"
         :aria-label="ariaLabel"

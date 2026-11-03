@@ -4,6 +4,7 @@ import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { ref } from "vue";
 import type { AccountRuleUsageResponse, IAccountResponse } from "@badger/types";
 import DeleteAccountDialog from "./DeleteAccountDialog.vue";
+import StatusTag from "../shared/StatusTag.vue";
 
 const usage = vi.hoisted(() => ({
     data: undefined as AccountRuleUsageResponse | undefined,
@@ -92,10 +93,9 @@ describe("DeleteAccountDialog", () => {
         expect(
             Array.from(list?.querySelectorAll("li") ?? []).map((item) => item.querySelector("span")?.textContent),
         ).toEqual(["Groceries", "Old salary"]);
-        expect(wrapper.findAllComponents({ name: "Tag" }).map((tag) => tag.props("value"))).toEqual([
-            "Condition removed",
-            "Rule deleted",
-        ]);
+        const tags = wrapper.findAllComponents(StatusTag);
+        expect(tags.map((tag) => tag.props("value"))).toEqual(["Condition removed", "Rule deleted"]);
+        expect(tags.map((tag) => tag.props("tone"))).toEqual(["neutral", "danger"]);
         expect(document.body.textContent).toContain("A rule with no other conditions is deleted.");
     });
 

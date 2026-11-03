@@ -119,6 +119,18 @@ describe("RulesList on phone", () => {
         expect(buttonWithText(wrapper, "Done")).toBeDefined();
         expect(rowNames(wrapper)).toEqual(["Bravo", "Alpha", "Charlie"]);
     });
+
+    it("disables Cancel while the save is pending", async () => {
+        apiClient.reorderRules.mockReturnValueOnce(new Promise(() => undefined));
+        const wrapper = await mountList();
+
+        await clickButton(wrapper, "Reorder");
+        await at(moveDownButtons(wrapper), 0).trigger("click");
+        await clickButton(wrapper, "Done");
+        await flushPromises();
+
+        expect(buttonWithText(wrapper, "Cancel")?.attributes("disabled")).toBeDefined();
+    });
 });
 
 describe("RulesList on desktop", () => {
@@ -155,6 +167,23 @@ describe("RulesList on desktop", () => {
         await flushPromises();
 
         expect(rowNames(wrapper)).toEqual(["Alpha", "Bravo", "Charlie"]);
+        expect(apiClient.reorderRules).not.toHaveBeenCalled();
+    });
+
+    it("ends a pick when its grip blurs, so the list follows a changed rules prop", async () => {
+        const wrapper = await mountList();
+        const alphaGrip = at(grips(wrapper), 0);
+
+        await alphaGrip.trigger("keydown", { key: " " }); // pick up Alpha
+        await alphaGrip.trigger("keydown", { key: "ArrowDown" });
+        await alphaGrip.trigger("focusout");
+        await new Promise((resolve) => setTimeout(resolve));
+
+        expect(rowNames(wrapper)).toEqual(["Alpha", "Bravo", "Charlie"]);
+        await wrapper.setProps({
+            rules: [makeRule("c", "Charlie", 1), makeRule("a", "Alpha", 2), makeRule("b", "Bravo", 3)],
+        });
+        expect(rowNames(wrapper)).toEqual(["Charlie", "Alpha", "Bravo"]);
         expect(apiClient.reorderRules).not.toHaveBeenCalled();
     });
 

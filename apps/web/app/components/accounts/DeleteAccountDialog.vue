@@ -40,8 +40,8 @@ const confirmDisabled = computed(() => deleting.value || loadingUsage.value || u
 
 const tagFor = (outcome: AccountRuleOutcome) =>
     outcome === "rule_deleted"
-        ? { severity: "danger" as const, value: "Rule deleted" }
-        : { severity: "secondary" as const, value: "Condition removed" };
+        ? { tone: "danger" as const, value: "Rule deleted" }
+        : { tone: "neutral" as const, value: "Condition removed" };
 
 const handleClose = () => emit("update:visible", false);
 
@@ -110,9 +110,9 @@ const handleConfirm = async () => {
                         class="flex items-center justify-between gap-3 px-3 py-2"
                     >
                         <span class="min-w-0 truncate text-sm">{{ rule.name }}</span>
-                        <Tag
+                        <SharedStatusTag
                             class="shrink-0"
-                            :severity="tagFor(rule.outcome).severity"
+                            :tone="tagFor(rule.outcome).tone"
                             :value="tagFor(rule.outcome).value"
                         />
                     </li>
