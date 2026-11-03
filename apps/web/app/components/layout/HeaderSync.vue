@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { latestSyncedAt } from "~/utils/lastSynced";
 import { formatTimeAgo, formatTimeAgoCompact } from "~/utils/relativeTime";
+import { failingConnections } from "~/utils/syncRuns";
 
 // Shared header Sync: the last-sync label plus SyncButton. Desktop shows the long label, mobile the compact one.
 const isDesktop = useIsDesktop();
@@ -10,6 +11,7 @@ const now = useNow({ interval: 60_000 });
 
 const { data: connections } = useScraperConnectionsQuery();
 const lastSyncedAt = computed(() => latestSyncedAt(connections.value));
+const failingCount = computed(() => failingConnections(connections.value).length);
 </script>
 
 <template>
@@ -24,7 +26,7 @@ const lastSyncedAt = computed(() => latestSyncedAt(connections.value));
         >
             Synced {{ formatTimeAgo(lastSyncedAt, now) }}
         </span>
-        <SyncButton />
+        <SyncButton :failing-count="failingCount" />
     </div>
     <div
         v-else
@@ -36,6 +38,9 @@ const lastSyncedAt = computed(() => latestSyncedAt(connections.value));
         >
             {{ formatTimeAgoCompact(lastSyncedAt, now) }}
         </span>
-        <SyncButton icon-only />
+        <SyncButton
+            icon-only
+            :failing-count="failingCount"
+        />
     </div>
 </template>

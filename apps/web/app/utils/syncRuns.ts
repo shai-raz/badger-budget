@@ -25,6 +25,13 @@ export function failingConnections(
     return (connections ?? []).filter(isFailingConnection);
 }
 
+/** The header Sync button's accessible name and tooltip for `failingCount` failing connections. */
+export function syncButtonLabel(failingCount: number): string {
+    if (failingCount === 0) return "Sync";
+    if (failingCount === 1) return "Sync, 1 connection failing";
+    return `Sync, ${failingCount} connections failing`;
+}
+
 /** Copy for a connection's failure strip, plus the run its "details" opens; null when it shows no failure. */
 export function failureStripFor(
     connection: IScraperConnectionResponse,

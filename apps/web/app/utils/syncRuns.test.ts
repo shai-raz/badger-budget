@@ -13,6 +13,7 @@ import {
     runResult,
     runScope,
     runSyncedCount,
+    syncButtonLabel,
 } from "./syncRuns";
 
 const START = new Date("2026-06-10T08:00:00.000Z");
@@ -111,6 +112,29 @@ describe("failingConnections", () => {
 
     it("is empty for undefined", () => {
         expect(failingConnections(undefined)).toEqual([]);
+    });
+
+    it("drops a connection once its latest run succeeds", () => {
+        const recovered = connection({
+            id: "conn-recovered",
+            latestJob: { syncJobId: "run-2", status: "success", errorCode: null, finishedAt: START },
+        });
+
+        expect(failingConnections([recovered])).toEqual([]);
+    });
+});
+
+describe("syncButtonLabel", () => {
+    it("reads plain Sync when nothing is failing", () => {
+        expect(syncButtonLabel(0)).toBe("Sync");
+    });
+
+    it("names the one failing connection", () => {
+        expect(syncButtonLabel(1)).toBe("Sync, 1 connection failing");
+    });
+
+    it("counts several failing connections", () => {
+        expect(syncButtonLabel(3)).toBe("Sync, 3 connections failing");
     });
 });
 

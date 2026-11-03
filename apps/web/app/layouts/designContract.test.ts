@@ -723,6 +723,14 @@ describe("savings accounts: web wiring", () => {
     });
 });
 
+describe("design contract: header sync dot", () => {
+    const source = readFileSync(`${appDir}/components/SyncButton.vue`, "utf8");
+
+    it("draws no hex colour literal, the dot takes the sync-error theme token", () => {
+        expect(source).not.toMatch(/#[0-9a-fA-F]{3,6}/);
+    });
+});
+
 describe("design contract: failure strip", () => {
     // The strip's whole-body button and its action button are siblings, so a button never nests in a button.
     const source = readFileSync(`${appDir}/components/bankSync/FailureStrip.vue`, "utf8");
