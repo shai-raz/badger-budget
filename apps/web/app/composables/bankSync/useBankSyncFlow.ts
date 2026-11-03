@@ -25,7 +25,12 @@ import {
     unlockFallbackMessage,
 } from "~/utils/syncPasskeyWebAuthn";
 import { hasRegisteredOnDevice, isOfferDismissed, markOfferDismissed } from "~/utils/syncPasskeyDeviceFlags";
-import { runProblemSummary } from "~/utils/syncRuns";
+import {
+    runProblemSummary,
+    connectionSyncStates,
+    finishedConnectionIds,
+    type ConnectionSyncState,
+} from "~/utils/syncRuns";
 import { syncErrorCopy } from "~/utils/syncErrors";
 
 export const SYNC_RESULT_TOAST_GROUP = "sync-result";
@@ -108,6 +113,14 @@ function createBankSyncFlow() {
     const jobId = computed(() => activeJobId.value);
     const { data: jobData } = useSyncJobQuery(jobId);
 
+    // Live state of each connection in the active run, for the connection rows.
+    const syncingConnections = computed(() => {
+        const job = jobData.value;
+        return connectionSyncStates(job && job.id === activeJobId.value ? job : null);
+    });
+    const connectionSyncState = (connectionId: string): ConnectionSyncState | null =>
+        syncingConnections.value.get(connectionId) ?? null;
+
     // One group for every sync result, so the "See why" link can close the toast and open that run's dialog.
     const addSyncResultToast = (job: ISyncJob, message: ToastMessageOptions, seeWhy: boolean) => {
         const syncResult: ToastMessageOptions & { data: SyncResultToastData } = {
@@ -118,9 +131,22 @@ function createBankSyncFlow() {
         toast.add(syncResult);
     };
 
+    // Connections whose scraper job had finished at the last poll, per run.
+    let finishedSeen: { jobId: string; ids: Set<string> } | null = null;
+
     // Watch job data for updates
     watch(jobData, (job) => {
         if (!job || job.id !== activeJobId.value) return;
+
+        if (job.status === "pending" || job.status === "running") {
+            const finished = finishedConnectionIds(job);
+            const seen = finishedSeen?.jobId === job.id ? finishedSeen.ids : new Set<string>();
+            // A finished bank's row must show its new last-sync time or failure within one poll, not only at the end of the run.
+            if ([...finished].some((id) => !seen.has(id))) {
+                queryClient.invalidateQueries({ queryKey: bankSyncKeys.connections() });
+            }
+            finishedSeen = { jobId: job.id, ids: finished };
+        }
 
         syncedCount.value = job.transactionsSynced ?? null;
         // Any terminal status moves the run from Syncing to its result in the history list.
@@ -433,5 +459,6 @@ function createBankSyncFlow() {
         triggerPending,
         cancelSync,
         syncConnectionWithPin,
+        connectionSyncState,
     };
 }

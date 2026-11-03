@@ -1,7 +1,9 @@
 import type { IScraperConnectionResponse, IScraperJob, ISyncJob, ISyncJobPage, SyncJobStatus } from "@badger/types";
 import { describe, expect, it } from "vitest";
 import {
+    connectionSyncStates,
     failingConnections,
+    finishedConnectionIds,
     failureStripFor,
     formatDuration,
     HISTORY_FIRST_PAGE,
@@ -301,5 +303,49 @@ describe("history paging", () => {
 
     it("has no next page once the API returns a null cursor", () => {
         expect(nextHistoryPageParam(page(null))).toBeUndefined();
+    });
+});
+
+describe("connectionSyncStates", () => {
+    it.each(["success", "partial", "failed", "interrupted"] as const)("is empty for a %s run", (status) => {
+        expect(connectionSyncStates(run(status, [scraperJob({ status: "running" })])).size).toBe(0);
+    });
+
+    it("is empty for no job", () => {
+        expect(connectionSyncStates(null).size).toBe(0);
+        expect(connectionSyncStates(undefined).size).toBe(0);
+    });
+
+    it("maps each unfinished connection to its state, skipping finished and deleted ones", () => {
+        const job = run("running", [
+            scraperJob({ id: "j-a", scraperConnectionId: "conn-a", status: "running" }),
+            scraperJob({ id: "j-b", scraperConnectionId: "conn-b", status: "pending" }),
+            scraperJob({ id: "j-c", scraperConnectionId: "conn-c", status: "success" }),
+            scraperJob({ id: "j-d", scraperConnectionId: "conn-d", status: "failed", errorCode: "TIMEOUT" }),
+            scraperJob({ id: "j-e", scraperConnectionId: null, status: "pending" }),
+        ]);
+        expect(connectionSyncStates(job)).toEqual(
+            new Map([
+                ["conn-a", "running"],
+                ["conn-b", "pending"],
+            ]),
+        );
+    });
+});
+
+describe("finishedConnectionIds", () => {
+    it("returns the connections whose scraper job succeeded or failed", () => {
+        const job = run("running", [
+            scraperJob({ id: "j-a", scraperConnectionId: "conn-a", status: "running" }),
+            scraperJob({ id: "j-b", scraperConnectionId: "conn-b", status: "pending" }),
+            scraperJob({ id: "j-c", scraperConnectionId: "conn-c", status: "success" }),
+            scraperJob({ id: "j-d", scraperConnectionId: "conn-d", status: "failed", errorCode: "TIMEOUT" }),
+            scraperJob({ id: "j-e", scraperConnectionId: null, status: "success" }),
+        ]);
+        expect(finishedConnectionIds(job)).toEqual(new Set(["conn-c", "conn-d"]));
+    });
+
+    it("is empty for no job", () => {
+        expect(finishedConnectionIds(null).size).toBe(0);
     });
 });

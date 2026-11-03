@@ -1,9 +1,18 @@
 // Pure helpers for bank sync runs: the failure strip on a connection, and the run rows and details dialog.
-import type { IScraperConnectionResponse, ISyncJob, ISyncJobPage, SyncJobStatus } from "@badger/types";
+import type {
+    IScraperConnectionResponse,
+    ISyncJob,
+    ISyncJobPage,
+    ScraperJobStatus,
+    SyncJobStatus,
+} from "@badger/types";
 import { syncErrorCopy } from "./syncErrors";
 import type { SyncErrorCopy } from "./syncErrors";
 
 export type RunResultTone = "success" | "warn" | "danger" | "neutral";
+
+/** A connection's state inside a run that is still going. */
+export type ConnectionSyncState = Extract<ScraperJobStatus, "pending" | "running">;
 
 const RUN_RESULTS: Record<SyncJobStatus, { label: string; tone: RunResultTone }> = {
     success: { label: "Success", tone: "success" },
@@ -49,6 +58,30 @@ export function runResult(status: SyncJobStatus): { label: string; tone: RunResu
 export function runScope(run: ISyncJob): string {
     const [only] = run.scraperJobs;
     return run.scraperJobs.length === 1 && only ? only.displayName : "All connections";
+}
+
+/** Connection id -> state for a run still pending/running; empty for no job or a finished run. Jobs whose connection was deleted (null id) are skipped. */
+export function connectionSyncStates(job: ISyncJob | null | undefined): Map<string, ConnectionSyncState> {
+    const states = new Map<string, ConnectionSyncState>();
+    if (!job || (job.status !== "pending" && job.status !== "running")) return states;
+
+    for (const scraperJob of job.scraperJobs) {
+        if (scraperJob.scraperConnectionId === null) continue;
+        if (scraperJob.status === "pending" || scraperJob.status === "running") {
+            states.set(scraperJob.scraperConnectionId, scraperJob.status);
+        }
+    }
+    return states;
+}
+
+/** Ids of connections whose scraper job in this run has finished (success or failed). */
+export function finishedConnectionIds(job: ISyncJob | null | undefined): Set<string> {
+    const ids = new Set<string>();
+    for (const scraperJob of job?.scraperJobs ?? []) {
+        if (scraperJob.scraperConnectionId === null) continue;
+        if (scraperJob.status === "success" || scraperJob.status === "failed") ids.add(scraperJob.scraperConnectionId);
+    }
+    return ids;
 }
 
 /** Connections that synced in the run, out of the connections the run covered. */
