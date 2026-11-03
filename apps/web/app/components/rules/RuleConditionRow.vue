@@ -96,11 +96,14 @@ const onValueSelect = (value: string) => patch({ value });
 </script>
 
 <template>
-    <!-- Phone: a bordered card with Field and the remove button on top, then Operator and Value side by side. -->
+    <!-- Phone: a bordered card with Field and the remove button on top, then Operator and Value side by side.
+         Every grid is items-start: an error under Value must not stretch the selects beside it. -->
     <div
         class="grid grid-cols-[8.5rem_minmax(0,1fr)_auto] items-start gap-2 max-sm:rounded-lg max-sm:border max-sm:border-surface-200 max-sm:p-3 sm:flex dark:max-sm:border-surface-700"
     >
-        <div class="contents min-w-0 flex-1 gap-2 sm:grid sm:grid-cols-[minmax(0,10rem)_minmax(0,11rem)_minmax(0,1fr)]">
+        <div
+            class="contents min-w-0 flex-1 gap-2 sm:grid sm:grid-cols-[minmax(0,10rem)_minmax(0,11rem)_minmax(0,1fr)] sm:items-start"
+        >
             <Select
                 :input-id="fieldId"
                 :model-value="condition.field"
