@@ -4,6 +4,11 @@ import type { SyncErrorCode } from "@badger/shared-data";
 /** What the user can do next: fix the login, or run the sync again. `null` means nothing to press. */
 export type SyncErrorAction = "update-login" | "retry";
 
+export const SYNC_ERROR_ACTION_LABEL: Record<SyncErrorAction, string> = {
+    "update-login": "Update login",
+    retry: "Retry",
+};
+
 export interface SyncErrorCopy {
     /** One line, at most 40 characters, no full stop. */
     short: string;

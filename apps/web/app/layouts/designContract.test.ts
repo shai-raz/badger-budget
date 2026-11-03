@@ -721,3 +721,28 @@ describe("savings accounts: web wiring", () => {
         expect(row).toContain('v-if="isLedgerAccountType(account.type) && !manageable"');
     });
 });
+
+describe("design contract: failure strip", () => {
+    // The strip's whole-body button and its action button are siblings, so a button never nests in a button.
+    const source = readFileSync(`${appDir}/components/bankSync/FailureStrip.vue`, "utf8");
+    const nestsButton = (text: string) =>
+        [...text.matchAll(/<button\b[^>]*?(\/?)>/g)].some((open) => {
+            if (open[1] === "/") return false;
+            const start = (open.index ?? 0) + open[0].length;
+            const close = text.indexOf("</button>", start);
+            return /<button\b|<Button\b/.test(text.slice(start, close));
+        });
+
+    it("draws no hex colour literal, colours come from the message tokens", () => {
+        expect(source).not.toMatch(/#[0-9a-fA-F]{3,6}/);
+    });
+
+    it("nests no button inside a button", () => {
+        expect(nestsButton(source)).toBe(false);
+    });
+
+    it("flags a button nested inside a button", () => {
+        expect(nestsButton('<button type="button"><Button label="Retry" /></button>')).toBe(true);
+        expect(nestsButton('<button type="button" /><Button label="Retry" />')).toBe(false);
+    });
+});

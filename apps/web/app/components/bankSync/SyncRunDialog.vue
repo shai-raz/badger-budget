@@ -7,7 +7,7 @@ import { useBankSyncFlow } from "~/composables/bankSync/useBankSyncFlow";
 import { useSyncJobQuery, useScraperConnectionsQuery } from "~/composables/bankSync/useBankSync";
 import { useConnectionEditor } from "~/composables/bankSync/useConnectionEditor";
 import { providerName } from "~/utils/bankConnections";
-import { syncErrorCopy } from "~/utils/syncErrors";
+import { SYNC_ERROR_ACTION_LABEL, syncErrorCopy } from "~/utils/syncErrors";
 import type { SyncErrorAction } from "~/utils/syncErrors";
 import { formatDuration, initialExpanded, runResult, runScope, runSyncedCount } from "~/utils/syncRuns";
 
@@ -20,7 +20,6 @@ const { openEdit } = useConnectionEditor();
 const { data: run, isError } = useSyncJobQuery(computed(() => state.value.jobId));
 const { data: connections } = useScraperConnectionsQuery();
 
-const ACTION_LABEL: Record<SyncErrorAction, string> = { "update-login": "Update login", retry: "Retry" };
 const MIDDOT = " \u00b7 ";
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
@@ -84,7 +83,7 @@ const actionFor = (job: IScraperJob): SyncErrorAction | null => {
 
 const actionLabelFor = (job: IScraperJob): string | null => {
     const action = actionFor(job);
-    return action ? ACTION_LABEL[action] : null;
+    return action ? SYNC_ERROR_ACTION_LABEL[action] : null;
 };
 
 const rowMeta = (job: IScraperJob): string => {
