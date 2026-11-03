@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useBankSyncFlow } from "~/composables/bankSync/useBankSyncFlow";
 import type { IScraperConnectionResponse } from "@badger/types";
-import { connectionSubtitle } from "~/utils/bankConnections";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
 
@@ -119,9 +118,6 @@ const openMenu = ({ connection, event }: { connection: IScraperConnectionRespons
     selectedConnection.value = connection;
     menu.value?.toggle(event);
 };
-
-const formatDate = (date: Date) =>
-    new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(date));
 </script>
 
 <template>
@@ -165,9 +161,7 @@ const formatDate = (date: Date) =>
                         <div class="flex min-w-0 items-center gap-2">
                             <span class="truncate font-semibold">{{ conn.displayName }}</span>
                         </div>
-                        <p class="truncate text-xs text-muted-color">
-                            {{ connectionSubtitle(conn, formatDate) }}
-                        </p>
+                        <BankSyncConnectionSubtitle :connection="conn" />
                     </div>
                     <ToggleSwitch
                         :model-value="pendingToggle(conn) ?? conn.isActive"

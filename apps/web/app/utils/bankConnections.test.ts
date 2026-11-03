@@ -26,23 +26,39 @@ describe("providerName", () => {
 });
 
 describe("connectionSubtitle", () => {
-    const formatDate = (d: Date) => d.toISOString().slice(0, 10);
+    const now = new Date("2026-11-03T12:00:00Z");
+    const hoursBefore = (hours: number) => new Date(now.getTime() - hours * 60 * 60 * 1000);
+    const daysBefore = (days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-    it("shows the provider and the last sync time", () => {
-        expect(
-            connectionSubtitle({ companyId: "visaCal", lastSyncedAt: new Date("2026-10-02T08:00:00Z") }, formatDate),
-        ).toBe("Visa Cal · Last synced 2026-10-02");
+    it("shows the provider and the compact sync age", () => {
+        expect(connectionSubtitle({ companyId: "visaCal", lastSyncedAt: hoursBefore(3) }, now)).toEqual({
+            provider: "Visa Cal",
+            syncAge: "Synced 3h ago",
+            stale: false,
+        });
     });
 
-    it("says never synced when there is no sync yet", () => {
-        expect(connectionSubtitle({ companyId: "visaCal", lastSyncedAt: null }, formatDate)).toBe(
-            "Visa Cal · Never synced",
-        );
+    it("flags a sync older than three days as stale", () => {
+        expect(connectionSubtitle({ companyId: "visaCal", lastSyncedAt: daysBefore(5) }, now)).toEqual({
+            provider: "Visa Cal",
+            syncAge: "Synced 5d ago",
+            stale: true,
+        });
+    });
+
+    it("does not flag a sync exactly three days old", () => {
+        expect(connectionSubtitle({ companyId: "visaCal", lastSyncedAt: daysBefore(3) }, now).stale).toBe(false);
+    });
+
+    it("says never synced, and is never stale, when there is no sync yet", () => {
+        expect(connectionSubtitle({ companyId: "visaCal", lastSyncedAt: null }, now)).toEqual({
+            provider: "Visa Cal",
+            syncAge: "Never synced",
+            stale: false,
+        });
     });
 
     it("uses the raw id for an unknown provider", () => {
-        expect(connectionSubtitle({ companyId: "unknownBank", lastSyncedAt: null }, formatDate)).toBe(
-            "unknownBank · Never synced",
-        );
+        expect(connectionSubtitle({ companyId: "unknownBank", lastSyncedAt: null }, now).provider).toBe("unknownBank");
     });
 });

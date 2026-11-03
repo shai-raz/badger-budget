@@ -2,6 +2,7 @@
 import { BANK_PROVIDERS } from "@badger/shared-data";
 import type { BankProvider } from "@badger/shared-data";
 import type { IScraperConnectionResponse } from "@badger/types";
+import { formatTimeAgoCompact, isStale } from "./relativeTime";
 
 /** A credential change on an active connection syncs it straight after the save. Name-only edits and paused connections never do. */
 export function shouldAutoSyncAfterSave({
@@ -19,12 +20,23 @@ export function providerName(companyId: string): string {
     return BANK_PROVIDERS.find((p: BankProvider) => p.companyId === companyId)?.name ?? companyId;
 }
 
-/** The gray line under a connection's name: provider and last sync time. */
+export interface ConnectionSubtitleParts {
+    provider: string;
+    /** "Synced 3h ago", or "Never synced". */
+    syncAge: string;
+    /** The last sync is older than the staleness threshold; never-synced connections are not stale. */
+    stale: boolean;
+}
+
+/** The gray line under a connection's name, split into provider, compact sync age and staleness. */
 export function connectionSubtitle(
     connection: Pick<IScraperConnectionResponse, "companyId" | "lastSyncedAt">,
-    formatDate: (d: Date) => string,
-): string {
-    const name = providerName(connection.companyId);
-    const synced = connection.lastSyncedAt ? `Last synced ${formatDate(connection.lastSyncedAt)}` : "Never synced";
-    return `${name} · ${synced}`;
+    now: Date,
+): ConnectionSubtitleParts {
+    const { lastSyncedAt } = connection;
+    return {
+        provider: providerName(connection.companyId),
+        syncAge: lastSyncedAt ? `Synced ${formatTimeAgoCompact(lastSyncedAt, now)}` : "Never synced",
+        stale: lastSyncedAt ? isStale(lastSyncedAt, now) : false,
+    };
 }
