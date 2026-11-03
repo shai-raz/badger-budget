@@ -4,6 +4,7 @@ import { useNuxtApp } from "#app";
 import { ref } from "vue";
 import type { ISyncJob, ISyncJobPage, SyncJobStatus } from "@badger/types";
 import SyncHistory from "./history.vue";
+import { bankSyncKeys } from "../../composables/bankSync/useBankSync";
 import { useSyncRunDialog } from "../../composables/bankSync/useSyncRunDialog";
 
 const api = vi.hoisted(() => ({
@@ -103,5 +104,21 @@ describe("sync history page", () => {
         await wrapper.get("li button").trigger("click");
 
         expect(useSyncRunDialog().state.value.jobId).toBe("m1");
+    });
+
+    it("keeps the loaded runs and the retry button when an older page fails", async () => {
+        // The app's default retry backoff runs for seconds; this test asserts the error state, not the retries.
+        useNuxtApp().$queryClient.setQueryDefaults(bankSyncKeys.history(), { retry: false });
+        const wrapper = await mountSuspended(SyncHistory);
+        await vi.waitFor(() => expect(rowButtons(wrapper)).toHaveLength(10));
+
+        api.listSyncJobs.mockRejectedValue(new Error("Network down"));
+        const showOlder = () => wrapper.findAll("button").find((b) => b.text() === "Show older syncs");
+        await showOlder()!.trigger("click");
+
+        await vi.waitFor(() => expect(wrapper.text()).toContain("Couldn't load older syncs."));
+        expect(rowButtons(wrapper)).toHaveLength(10);
+        expect(wrapper.text()).not.toContain("Couldn't load syncs.");
+        expect(showOlder()).toBeDefined();
     });
 });

@@ -12,10 +12,13 @@ definePageMeta({
 });
 
 const isDesktop = useIsDesktop();
-const { data, isLoading, error, hasNextPage, isFetchingNextPage, fetchNextPage } = useSyncHistoryQuery();
+const { data, isLoading, error, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } =
+    useSyncHistoryQuery();
 const { open } = useSyncRunDialog();
 
 const runs = computed<ISyncJob[]>(() => data.value?.pages.flatMap((page) => page.items) ?? []);
+// A failed next page or background refetch keeps the loaded runs, so the band shows them and the error only when there are none.
+const bandError = computed(() => (runs.value.length === 0 ? error.value : null));
 
 const dateFormat = new Intl.DateTimeFormat("en-US", { dateStyle: "medium" });
 const timeFormat = new Intl.DateTimeFormat("en-US", { timeStyle: "short" });
@@ -47,7 +50,7 @@ const mobileMeta = (run: ISyncJob) => {
         <SharedSectionBand
             title="Syncs"
             :loading="isLoading"
-            :error="error"
+            :error="bandError"
             :empty="runs.length === 0"
             empty-text="No syncs yet"
         >
@@ -160,6 +163,15 @@ const mobileMeta = (run: ISyncJob) => {
                 v-if="hasNextPage"
                 class="px-4 py-3 md:px-0 md:pt-4"
             >
+                <Message
+                    v-if="isFetchNextPageError"
+                    class="mb-2"
+                    severity="error"
+                    size="small"
+                    :closable="false"
+                >
+                    Couldn't load older syncs. Try again.
+                </Message>
                 <Button
                     label="Show older syncs"
                     severity="secondary"
