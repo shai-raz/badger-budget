@@ -4,7 +4,7 @@ import { useNuxtApp } from "#app";
 import type { VueWrapper } from "@vue/test-utils";
 import { ref } from "vue";
 import type { IScraperConnectionResponse } from "@badger/types";
-import BankConnections from "./bank-connections.vue";
+import BankConnections from "./bank-connections/index.vue";
 
 const api = vi.hoisted(() => ({
     getScraperConnections: vi.fn(),

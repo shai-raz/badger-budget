@@ -277,7 +277,7 @@ describe("design contract: fullBleed band pages", () => {
         "pages/budgets/[id]/index.vue",
         "pages/accounts/index.vue",
         "pages/reports/index.vue",
-        "pages/bank-connections.vue",
+        "pages/bank-connections/index.vue",
         "pages/categories.vue",
         "pages/settings/index.vue",
         "pages/settings/card-payoff-patterns.vue",
@@ -315,7 +315,7 @@ describe("design contract: reports and bank connection bands", () => {
     // Reports and Bank connections are bands, not floating cards: the sections and their rows carry the chrome.
     const BAND_SURFACES = [
         "pages/reports/index.vue",
-        "pages/bank-connections.vue",
+        "pages/bank-connections/index.vue",
         "components/reports/TotalSpendingCard.vue",
         "components/reports/CategoryBreakdownList.vue",
     ];
@@ -325,7 +325,7 @@ describe("design contract: reports and bank connection bands", () => {
     });
 
     it("renders the bank connection section through SharedSectionBand", () => {
-        expect(readFileSync(`${appDir}/pages/bank-connections.vue`, "utf8")).toContain("<SharedSectionBand");
+        expect(readFileSync(`${appDir}/pages/bank-connections/index.vue`, "utf8")).toContain("<SharedSectionBand");
     });
 });
 
@@ -429,7 +429,7 @@ describe("design contract: shared empty states", () => {
         "components/dashboard/BudgetsSection.vue",
         "pages/budgets/index.vue",
         "pages/accounts/index.vue",
-        "pages/bank-connections.vue",
+        "pages/bank-connections/index.vue",
         "pages/budgets/[id]/index.vue",
     ])("%s uses the shared empty state", (rel) => {
         const source = readFileSync(`${appDir}/${rel}`, "utf8");
