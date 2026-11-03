@@ -20,6 +20,11 @@ interface Props {
     initialFocus: "field" | "dialog";
     saveLabel?: string;
     cancelLabel?: string;
+    /**
+     * Turns the dialog into a step of a larger one: an arrow button before the title, and the footer's cancel
+     * button emits `back` instead of closing. Set it for the view a back arrow returns from.
+     */
+    backLabel?: string;
     showSave?: boolean;
     saveDisabled?: boolean;
     /** Defaults to `busy`. */
@@ -32,6 +37,11 @@ interface Props {
      * (or nowhere) whatever has focus. Needed when the stacked dialog's overlays are teleported outside its mask.
      */
     suspendEscape?: boolean;
+    /**
+     * Below md, where the dialog is fullscreen, the body fills the height instead of scrolling as a whole, so a list
+     * in it can take the rest of the screen and scroll on its own (`flex-1 min-h-0 overflow-y-auto` on the list).
+     */
+    fillBody?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -39,17 +49,20 @@ const props = withDefaults(defineProps<Props>(), {
     apiError: null,
     saveLabel: "Save",
     cancelLabel: "Cancel",
+    backLabel: undefined,
     showSave: true,
     saveDisabled: false,
     saveLoading: undefined,
     width: "36rem",
     isolateEscape: false,
     suspendEscape: false,
+    fillBody: false,
 });
 
 const emit = defineEmits<{
     "update:visible": [value: boolean];
     save: [];
+    back: [];
     hide: [];
 }>();
 
@@ -72,15 +85,19 @@ const onMaskKeydown = (event: KeyboardEvent) => {
 // so a click on the dimmed area or on the dialog's non-focusable parts (labels, gaps, the title) keeps focus within
 // the mask. Without that, focus drops to <body>, the keydown never reaches the mask, and Escape reaches the dialog
 // underneath. Keydown from inside the root bubbles through the mask, so one handler there covers both.
-const dialogPt = computed(() =>
-    props.isolateEscape ? { mask: { tabindex: -1, onKeydown: onMaskKeydown } } : undefined,
-);
+const dialogPt = computed(() => ({
+    ...(props.isolateEscape ? { mask: { tabindex: -1, onKeydown: onMaskKeydown } } : {}),
+    ...(props.fillBody
+        ? { content: { class: "max-md:flex max-md:min-h-0 max-md:flex-col max-md:overflow-hidden" } }
+        : {}),
+}));
 </script>
 
 <template>
     <Dialog
         :visible="visible"
         :header="header"
+        :aria-label="backLabel ? header : undefined"
         modal
         :draggable="false"
         :style="{ width }"
@@ -90,8 +107,28 @@ const dialogPt = computed(() =>
         @update:visible="emit('update:visible', $event)"
         @hide="emit('hide')"
     >
+        <template
+            v-if="backLabel"
+            #header
+        >
+            <div class="flex min-w-0 items-center gap-2">
+                <Button
+                    icon="pi pi-arrow-left"
+                    text
+                    rounded
+                    severity="secondary"
+                    size="small"
+                    :aria-label="backLabel"
+                    :disabled="busy"
+                    @click="emit('back')"
+                />
+                <span class="p-dialog-title truncate text-surface-900 dark:text-surface-0">{{ header }}</span>
+            </div>
+        </template>
+
         <div
             class="flex flex-col gap-4 outline-none"
+            :class="{ 'max-md:min-h-0 max-md:flex-1': fillBody }"
             v-bind="bodyFocus"
         >
             <Message
@@ -110,7 +147,7 @@ const dialogPt = computed(() =>
                     text
                     severity="secondary"
                     :disabled="busy"
-                    @click="emit('update:visible', false)"
+                    @click="backLabel ? emit('back') : emit('update:visible', false)"
                 />
                 <Button
                     v-if="showSave"

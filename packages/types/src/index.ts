@@ -187,6 +187,8 @@ export interface RulePreviewItem {
     transactionDate: string;
     amount: number;
     type: TransactionType;
+    /** Set for transfers; the review signs an incoming one with a plus. */
+    transferDirection: "in" | "out" | null;
     currencyCode: string;
     accountName: string | null;
     category: { id: string; name: string; color: string; icon: string | null } | null;

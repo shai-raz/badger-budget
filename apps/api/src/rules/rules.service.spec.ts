@@ -482,6 +482,7 @@ describe("RulesService", () => {
                 amount: -12.5,
                 accountId: ACCOUNT_ID,
                 type: "expense",
+                transferDirection: null,
                 categoryId: null,
                 transactionDate: new Date("2026-02-01T00:00:00.000Z"),
                 createdAt: new Date("2026-02-01T10:00:00.000Z"),
@@ -502,6 +503,7 @@ describe("RulesService", () => {
                             description: row.description,
                             transactionDate: row.transactionDate,
                             amount: row.amount,
+                            transferDirection: row.transferDirection,
                             currency: { code: "ILS" },
                             account: { name: "Checking" },
                             category: row.categoryId
@@ -626,10 +628,25 @@ describe("RulesService", () => {
                     transactionDate: "2026-02-01",
                     amount: -12.5,
                     type: "expense",
+                    transferDirection: null,
                     currencyCode: "ILS",
                     accountName: "Checking",
                     category: null,
                 });
+            });
+
+            it("carries a transfer's direction so the review can sign it", async () => {
+                givenTransactions([
+                    txRow(1, { type: "transfer", transferDirection: "in", amount: 100 }),
+                    txRow(2, { type: "transfer", transferDirection: "out", amount: -100 }),
+                ]);
+
+                const result = await service.preview(USER_ID, preview);
+
+                expect(result.items.map((item) => [item.id, item.transferDirection])).toEqual([
+                    [txId(1), "in"],
+                    [txId(2), "out"],
+                ]);
             });
 
             it("validates the draft before reading any transaction", async () => {

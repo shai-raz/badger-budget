@@ -20,7 +20,7 @@ describe("FormDialog Escape", () => {
 
     it("claims Escape on the mask so a parent dialog never sees it", () => {
         expect(dialog).toMatch(
-            /const dialogPt = computed\(\(\) =>\s*props\.isolateEscape \? \{ mask: \{ tabindex: -1, onKeydown: onMaskKeydown \} \} : undefined,?\s*\);/,
+            /\.\.\.\(props\.isolateEscape \? \{ mask: \{ tabindex: -1, onKeydown: onMaskKeydown \} \} : \{\}\),/,
         );
         expect(dialog).toContain(':pt="dialogPt"');
         expect(dialog).toMatch(
@@ -35,5 +35,41 @@ describe("FormDialog Escape", () => {
 
     it("closes through the same path as the header close, and not while busy", () => {
         expect(dialog).toMatch(/if \(!props\.busy\) emit\("update:visible", false\);/);
+    });
+});
+
+describe("FormDialog fill body", () => {
+    const dialog = source("./FormDialog.vue");
+
+    it("lets the body fill a fullscreen dialog below md, only when asked", () => {
+        expect(dialog).toContain("fillBody: false,");
+        expect(dialog).toContain("...(props.fillBody");
+        expect(dialog).toContain(
+            'content: { class: "max-md:flex max-md:min-h-0 max-md:flex-col max-md:overflow-hidden" }',
+        );
+        expect(dialog).toContain(`:class="{ 'max-md:min-h-0 max-md:flex-1': fillBody }"`);
+    });
+});
+
+describe("FormDialog back step", () => {
+    const dialog = source("./FormDialog.vue");
+
+    it("takes an optional back label and emits back", () => {
+        expect(dialog).toContain("backLabel?: string;");
+        expect(dialog).toContain("back: [];");
+    });
+
+    it("puts a labelled back arrow before the title only when a back label is set", () => {
+        expect(dialog).toContain('v-if="backLabel"');
+        expect(dialog).toContain('icon="pi pi-arrow-left"');
+        expect(dialog).toContain(':aria-label="backLabel"');
+    });
+
+    it("names the dialog itself, since the custom header's title is not the labelledby target", () => {
+        expect(dialog).toContain(':aria-label="backLabel ? header : undefined"');
+    });
+
+    it("makes the footer cancel return to the previous step instead of closing", () => {
+        expect(dialog).toContain("@click=\"backLabel ? emit('back') : emit('update:visible', false)\"");
     });
 });

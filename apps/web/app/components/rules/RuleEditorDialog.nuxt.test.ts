@@ -5,10 +5,18 @@ import { computed, ref } from "vue";
 import Checkbox from "primevue/checkbox";
 import Select from "primevue/select";
 import { RULE_NAME_MAX_LENGTH } from "@badger/shared-data";
-import type { Category, IAccountResponse, IRule, ITransactionResponse, RulePreviewResponse } from "@badger/types";
+import type {
+    Category,
+    IAccountResponse,
+    IRule,
+    ITransactionResponse,
+    RulePreviewItem,
+    RulePreviewResponse,
+} from "@badger/types";
 import type { RuleEditorDialogState } from "~/composables/useRuleEditorDialog";
 import CategorySelect from "~/components/categories/CategorySelect.vue";
 import RuleConditionRow from "./RuleConditionRow.vue";
+import RuleReview from "./RuleReview.vue";
 import RuleEditorDialog from "./RuleEditorDialog.vue";
 
 const dialog = vi.hoisted(() => ({
@@ -26,6 +34,7 @@ const api = vi.hoisted(() => ({
     updateRule: vi.fn(),
 }));
 const previewState = vi.hoisted(() => ({ value: null as RulePreviewResponse | null, checking: false }));
+const listState = vi.hoisted(() => ({ items: [] as RulePreviewItem[], total: 0 }));
 
 mockNuxtImport("useRuleEditorDialog", () => () => ({ state: ref(dialog.state), close: dialog.close }));
 mockNuxtImport("useApiClient", () => () => api);
@@ -35,6 +44,20 @@ vi.mock("~/composables/rules/useRulePreview", () => ({
     useRulePreviewCount: () => ({
         preview: computed(() => previewState.value),
         checking: computed(() => previewState.checking),
+    }),
+}));
+
+vi.mock("~/composables/rules/useRulePreviewList", () => ({
+    useRulePreviewList: () => ({
+        items: computed(() => listState.items),
+        wouldChangeCount: computed(() => listState.total),
+        alreadyTargetCount: computed(() => 1),
+        counts: computed(() => ({ all: listState.total, uncategorized: listState.total, categorized: 0 })),
+        fetchNextPage: vi.fn(),
+        hasNextPage: ref(false),
+        isFetchingNextPage: ref(false),
+        isLoading: ref(false),
+        error: ref(null),
     }),
 }));
 
@@ -174,6 +197,8 @@ beforeEach(() => {
     dialog.close.mockReset();
     previewState.value = null;
     previewState.checking = false;
+    listState.items = [];
+    listState.total = 0;
 });
 
 afterEach(() => {
@@ -351,5 +376,98 @@ describe("RuleEditorDialog started from a transaction", () => {
         expect(valueInput().selectionStart).toBe(0);
         expect(valueInput().selectionEnd).toBe("LUNCHSPOT PAY".length);
         expect(document.body.textContent).toContain("From the transaction you started on");
+    });
+});
+
+describe("RuleEditorDialog review step", () => {
+    const rowItem = (id: string): RulePreviewItem => ({
+        id,
+        description: `Coffee ${id}`,
+        transactionDate: "2026-10-01",
+        amount: 4,
+        type: "expense",
+        transferDirection: null,
+        currencyCode: "USD",
+        accountName: "Checking",
+        category: null,
+    });
+
+    /** Opens the review from the apply box with three would-change rows; the checkbox at index 0 is the header. */
+    const openReviewWithThree = async () => {
+        previewState.value = preview(3);
+        listState.items = [rowItem("a"), rowItem("b"), rowItem("c")];
+        listState.total = 3;
+        const wrapper = await mountDialog();
+        await fillComplete(wrapper);
+        await clickButton("Review");
+        return wrapper;
+    };
+
+    const reviewRowCheckbox = (wrapper: VueWrapper, index: number) => {
+        const checkbox = wrapper.findComponent(RuleReview).findAllComponents(Checkbox)[index];
+        if (!checkbox) throw new Error(`no review checkbox ${index}`);
+        return checkbox;
+    };
+
+    const clickBackToRule = async () => {
+        const back = document.querySelector<HTMLButtonElement>('button[aria-label="Back to the rule"]');
+        if (!back) throw new Error("no back button");
+        back.click();
+        await flushPromises();
+    };
+
+    it("opens the review in the same dialog with the save labelled for the selection", async () => {
+        const wrapper = await openReviewWithThree();
+
+        expect(document.body.textContent).toContain('Apply "');
+        expect(wrapper.findComponent(RuleReview).exists()).toBe(true);
+        expect(buttonLabelled("Save and apply to 3")).toBeDefined();
+    });
+
+    it("moves focus to the back arrow when the review opens, and back to Review when it closes", async () => {
+        await openReviewWithThree();
+
+        expect(document.activeElement?.getAttribute("aria-label")).toBe("Back to the rule");
+
+        await clickBackToRule();
+
+        expect(document.activeElement?.id).toBe("rule-review-open");
+    });
+
+    it("keeps the unticked row through back and the form title reads of", async () => {
+        const wrapper = await openReviewWithThree();
+
+        reviewRowCheckbox(wrapper, 2).vm.$emit("update:modelValue", false);
+        await flushPromises();
+        expect(buttonLabelled("Save and apply to 2")).toBeDefined();
+
+        await clickBackToRule();
+
+        expect(wrapper.findComponent(RuleReview).exists()).toBe(false);
+        expect(document.body.textContent).toContain("Also apply to 2 of 3 existing transactions");
+    });
+
+    it("resets the exclusions when a condition changes", async () => {
+        const wrapper = await openReviewWithThree();
+        reviewRowCheckbox(wrapper, 2).vm.$emit("update:modelValue", false);
+        await flushPromises();
+        await clickBackToRule();
+
+        await typeInto(valueInput(), "lunchspot2");
+
+        expect(document.body.textContent).toContain("Also apply to 3 existing transactions");
+        expect(document.body.textContent).not.toContain("of 3 existing transactions");
+    });
+
+    it("saves from the review with the excluded id and no other ids", async () => {
+        const wrapper = await openReviewWithThree();
+        reviewRowCheckbox(wrapper, 2).vm.$emit("update:modelValue", false);
+        await flushPromises();
+
+        await clickButton("Save and apply to 2");
+
+        expect(api.createRule).toHaveBeenCalledTimes(1);
+        expect(api.createRule.mock.calls[0]?.[0].apply).toEqual({ mode: "allExcept", ids: ["b"] });
+        expect(dialog.close).toHaveBeenCalled();
     });
 });

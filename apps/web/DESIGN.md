@@ -32,6 +32,7 @@ Rules and tokens for the web UI. Read before any UI change. How the app is built
 - Close: PrimeVue's plain ✕ (`text rounded secondary`, 40px), with no circle or extra ring.
 - Focus: a create form autofocuses its first field. An edit form focuses the dialog itself (except when opened to fix a login), so no keyboard opens and no ✕ ring shows, and Tab still reaches the first field.
 - Layout: single column, a large amount input first where the form has one (`TransactionForm`, budget form). Mobile: fullscreen below `md`, with Cancel/Save pinned in the footer under the scrolling body.
+- Lists: a fullscreen dialog follows the page rules, so a list in it is flush divided rows to the dialog edges, filling the screen (`SharedFormDialog` `fill-body`). From `md` up, a floating dialog frames a list that scrolls inside it in a bordered box.
 - Errors: an API error is a `Message` banner above the form, and the dialog stays open. Inline field errors use the `TransactionForm` `labelClass` and `errorClass`.
 - Button labels are sentence case: "Save changes", "Delete budget", "Enter sync PIN".
 - Entry points open a form dialog in place; they never navigate to a form route.

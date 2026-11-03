@@ -5,6 +5,7 @@ import { useConfirm } from "primevue/useconfirm";
 import { useToast } from "primevue/usetoast";
 import { getApiErrorMessage } from "~/utils/apiError";
 import type { RuleDisplayContext } from "~/utils/ruleSentence";
+import ApplyRuleDialog from "../../components/rules/ApplyRuleDialog.vue";
 import RulesList from "../../components/rules/RulesList.vue";
 
 // fullBleed: below md the band runs edge to edge, as on Overview (see layouts/app.vue).
@@ -25,6 +26,13 @@ const { mutate: deleteRule } = useDeleteRuleMutation();
 const menu = ref();
 const selectedRule = ref<IRule | null>(null);
 const reorderMode = ref(false);
+// The one Apply dialog, pointed at a rule from the row menu. The rule stays set while the dialog closes.
+const applyOpen = ref(false);
+const applyRule = ref<IRule | null>(null);
+const openApply = (rule: IRule) => {
+    applyRule.value = rule;
+    applyOpen.value = true;
+};
 
 // Names for the account and category ids a rule refers to, so the sentence and search read as text.
 const displayContext = computed<RuleDisplayContext>(() => ({
@@ -45,6 +53,11 @@ const menuItems = computed<MenuItem[]>(() => {
             label: "Edit",
             icon: "pi pi-pencil",
             command: () => openEdit(rule),
+        },
+        {
+            label: "Apply now…",
+            icon: "pi pi-play",
+            command: () => openApply(rule),
         },
         { separator: true },
         {
@@ -138,6 +151,12 @@ const confirmDelete = (rule: IRule) => {
             ref="menu"
             :model="menuItems"
             popup
+        />
+
+        <ApplyRuleDialog
+            :visible="applyOpen"
+            :rule="applyRule"
+            @update:visible="applyOpen = $event"
         />
     </div>
 </template>
