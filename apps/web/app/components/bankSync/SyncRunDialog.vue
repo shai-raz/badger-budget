@@ -14,7 +14,7 @@ import { formatDuration, initialExpanded, runResult, runScope, runSyncedCount } 
 // Mounted once in layouts/app.vue. Shows one run's per-connection results; failed rows expand to explain the error.
 const { state, close } = useSyncRunDialog();
 const toast = useToast();
-const { requestSync } = useBankSyncFlow();
+const { busy, requestSync } = useBankSyncFlow();
 const { openEdit } = useConnectionEditor();
 
 const { data: run, isError } = useSyncJobQuery(computed(() => state.value.jobId));
@@ -86,6 +86,9 @@ const actionLabelFor = (job: IScraperJob): string | null => {
     return action ? SYNC_ERROR_ACTION_LABEL[action] : null;
 };
 
+// requestSync does nothing while a sync runs, so Retry is disabled then, as it is on the failure strip.
+const actionDisabledFor = (job: IScraperJob): boolean => actionFor(job) === "retry" && busy.value;
+
 const rowMeta = (job: IScraperJob): string => {
     if (job.status === "pending") return "Waiting";
     if (job.status === "running") return "Syncing\u2026";
@@ -99,6 +102,8 @@ const closeThen = (next: () => void) => {
     close();
 };
 const onAfterHide = () => {
+    // Stop polling the run once hidden. Only if still closed: open() can run during the hide animation.
+    if (!state.value.visible) state.value = { ...state.value, jobId: null };
     const next = afterHide.value;
     afterHide.value = null;
     next?.();
@@ -170,7 +175,7 @@ const onVisibleChange = (value: boolean) => {
                             @click="toggleExpanded(job.id)"
                         >
                             <i
-                                class="pi pi-exclamation-circle shrink-0 text-[var(--p-message-error-color)]"
+                                class="pi pi-exclamation-circle shrink-0 text-[var(--p-sync-error-color)]"
                                 aria-hidden="true"
                             />
                             <span class="min-w-0 flex-1">
@@ -196,6 +201,7 @@ const onVisibleChange = (value: boolean) => {
                             <div v-if="actionLabelFor(job)">
                                 <Button
                                     :label="actionLabelFor(job) ?? undefined"
+                                    :disabled="actionDisabledFor(job)"
                                     outlined
                                     size="small"
                                     @click="onAction(job)"
