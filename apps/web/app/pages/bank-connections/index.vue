@@ -138,6 +138,8 @@ const openMenu = ({ connection, event }: { connection: IScraperConnectionRespons
         <SharedSectionBand
             title="Connections"
             :meta="connectionCountLabel"
+            link-to="/bank-connections/history"
+            link-label="Sync history"
             :loading="connectionsLoading"
             :error="connectionsError"
             :empty="!scraperConnections || scraperConnections.length === 0"

@@ -32,6 +32,7 @@ describe("page header contract", () => {
         ["transactions/[id].vue", 'title="Transaction"', 'back-to="/transactions"'],
         ["settings/card-payoff-patterns.vue", 'title="Card payoff patterns"', 'back-to="/settings"'],
         ["settings/appearance.vue", 'title="Appearance"', 'back-to="/settings"'],
+        ["bank-connections/history.vue", 'title="Sync history"', 'back-to="/bank-connections"'],
     ])("%s keeps its title and back target", (rel, title, backTo) => {
         const tag = headerTag(rel);
         expect(tag).toContain(title);
