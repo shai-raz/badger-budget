@@ -31,13 +31,20 @@ const STOP_TOOLTIP = "Rules below this one won't run on transactions it matches.
                 :icon="parts.category.icon"
                 :show-icon="false"
             />
+            <!-- The comma sits on the chip so a wrap never starts the next line with it. -->
+            <span
+                v-if="parts.stop"
+                class="-ml-1.5"
+                >,</span
+            >
         </span>
         <span
             v-if="parts.stop"
             v-tooltip.top="STOP_TOOLTIP"
-            class="whitespace-nowrap font-semibold text-color"
+            class="ml-1 whitespace-nowrap font-semibold text-color"
             :title="STOP_TOOLTIP"
-            >,&nbsp;<i
+            ><template v-if="!parts.category">,&nbsp;</template
+            ><i
                 class="pi pi-stop-circle text-xs"
                 aria-hidden="true"
             ></i
