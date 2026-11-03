@@ -72,6 +72,7 @@ const header = computed(() => `Apply "${props.rule?.name ?? ""}"`);
 
 const nothingText = computed(() => {
     const total = matchCount.value;
+    if (total === 0) return "No existing transactions match this rule yet.";
     if (total === 1) return `All 1 transaction this rule matches already has ${categoryName.value}.`;
     return `All ${total} transactions this rule matches already have ${categoryName.value}.`;
 });

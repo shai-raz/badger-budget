@@ -147,6 +147,16 @@ describe("ApplyRuleDialog", () => {
         expect(document.body.textContent).not.toContain("Apply to");
     });
 
+    it("says no transaction matches yet, rather than counting zero, when the rule matches nothing", async () => {
+        list.items = [];
+        list.total = 0;
+        list.matchCount = 0;
+        await mountDialog();
+
+        expect(document.body.textContent).toContain("No existing transactions match this rule yet.");
+        expect(document.body.textContent).not.toContain("All 0");
+    });
+
     it("disables Apply when no transaction is selected", async () => {
         const wrapper = await mountDialog();
 
