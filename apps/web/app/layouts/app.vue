@@ -7,6 +7,7 @@ import NavDrawer from "~/components/layout/NavDrawer.vue";
 import UpdateDialog from "~/components/layout/UpdateDialog.vue";
 import WhatsNewDialog from "~/components/layout/WhatsNewDialog.vue";
 import BudgetFormDialog from "~/components/budgets/BudgetFormDialog.vue";
+import RuleEditorDialog from "~/components/rules/RuleEditorDialog.vue";
 import BankSyncSyncFlowHost from "~/components/bankSync/SyncFlowHost.vue";
 import BankSyncSyncRunDialog from "~/components/bankSync/SyncRunDialog.vue";
 import BankSyncSyncResultToast from "~/components/bankSync/SyncResultToast.vue";
@@ -20,6 +21,7 @@ import ReimbursementPickerDialog from "~/components/transactions/ReimbursementPi
 const route = useRoute();
 provideBankSyncFlow();
 const { state: connectionEditor, close: closeConnectionEditor } = useConnectionEditor();
+const { state: ruleEditorState } = useRuleEditorDialog();
 
 // Below md, the toast spans the screen with 1rem gutters instead of its fixed
 // 25rem top-right box. PrimeVue turns this into a `max-width` media query.
@@ -90,6 +92,7 @@ useHead({ bodyAttrs: { class: "app-layout-body" } });
         <UpdateDialog />
         <WhatsNewDialog />
         <BudgetFormDialog />
+        <RuleEditorDialog :key="ruleEditorState.openCount" />
         <BankSyncSyncFlowHost />
         <BankSyncSyncRunDialog />
         <BankSyncScraperConnectionModal
