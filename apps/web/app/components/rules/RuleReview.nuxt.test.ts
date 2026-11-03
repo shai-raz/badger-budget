@@ -4,6 +4,7 @@ import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { computed, ref } from "vue";
 import Checkbox from "primevue/checkbox";
 import type { RuleDraft, RulePreviewItem } from "@badger/types";
+import { formatCurrency } from "~/utils/currency";
 import { selectAll, type RuleSelection } from "~/utils/ruleReviewSelection";
 import RuleReview from "./RuleReview.vue";
 
@@ -41,6 +42,7 @@ const row = (id: string, description: string, categoryName: string | null = null
     transactionDate: "2026-10-01",
     amount: 4.5,
     type: "expense",
+    transferDirection: null,
     currencyCode: "USD",
     accountName: "Checking",
     category: categoryName ? { id: `cat-${id}`, name: categoryName, color: "#16a34a", icon: null } : null,
@@ -123,6 +125,19 @@ describe("RuleReview", () => {
         await pill("Has a category")?.trigger("click");
         expect(pill("Has a category")?.attributes("aria-pressed")).toBe("true");
         expect(pill("All")?.attributes("aria-pressed")).toBe("false");
+    });
+
+    it("signs an incoming transfer with a plus and an outgoing one with a minus", async () => {
+        list.items = [
+            { ...row("in", "Cash surplus"), type: "transfer", transferDirection: "in", amount: 100 },
+            { ...row("out", "To savings"), type: "transfer", transferDirection: "out", amount: 50 },
+        ];
+        list.total = 2;
+
+        const wrapper = await mountReview();
+
+        expect(wrapper.text()).toContain(`+${formatCurrency(100, "USD")}`);
+        expect(wrapper.text()).toContain(`-${formatCurrency(50, "USD")}`);
     });
 
     it("marks an unticked row as staying in its category", async () => {

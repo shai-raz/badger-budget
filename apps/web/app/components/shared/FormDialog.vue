@@ -88,6 +88,7 @@ const dialogPt = computed(() =>
     <Dialog
         :visible="visible"
         :header="header"
+        :aria-label="backLabel ? header : undefined"
         modal
         :draggable="false"
         :style="{ width }"

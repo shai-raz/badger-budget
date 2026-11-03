@@ -57,6 +57,7 @@ const item = (id: string): RulePreviewItem => ({
     transactionDate: "2026-10-01",
     amount: -4.5,
     type: "expense",
+    transferDirection: null,
     currencyCode: "USD",
     accountName: null,
     category: null,

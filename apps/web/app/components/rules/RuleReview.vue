@@ -81,9 +81,6 @@ const fromName = (item: RulePreviewItem) => item.category?.name ?? UNCATEGORIZED
 const targetColor = computed(() => normalizeHex(props.category.color) ?? UNCATEGORIZED_CATEGORY.color);
 const avatarColor = (item: RulePreviewItem) => normalizeHex(item.category?.color) ?? UNCATEGORIZED_CATEGORY.color;
 
-// The preview carries no transfer direction, and an expense or income never needs one for its sign.
-const signLike = (item: RulePreviewItem) => ({ type: item.type, transferDirection: null });
-
 const rowMeta = (item: RulePreviewItem) =>
     [
         formatDate(item.transactionDate),
@@ -199,9 +196,9 @@ const rowMeta = (item: RulePreviewItem) =>
                     </div>
                     <div
                         class="shrink-0 text-right text-sm font-semibold tabular-nums"
-                        :class="transactionAmountClass(signLike(item))"
+                        :class="transactionAmountClass(item)"
                     >
-                        {{ transactionSign(signLike(item)) }}{{ formatCurrency(item.amount, item.currencyCode) }}
+                        {{ transactionSign(item) }}{{ formatCurrency(item.amount, item.currencyCode) }}
                     </div>
                 </li>
             </ul>

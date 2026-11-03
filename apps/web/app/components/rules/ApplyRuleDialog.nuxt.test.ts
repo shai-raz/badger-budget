@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockNuxtImport, mountSuspended } from "@nuxt/test-utils/runtime";
 import { flushPromises, type VueWrapper } from "@vue/test-utils";
-import { computed, ref } from "vue";
+import { computed, ref, toValue, watch, type MaybeRefOrGetter } from "vue";
 import Checkbox from "primevue/checkbox";
-import type { Category, IRule, RulePreviewItem } from "@badger/types";
+import type { Category, IRule, RuleDraft, RulePreviewItem } from "@badger/types";
 import ApplyRuleDialog from "./ApplyRuleDialog.vue";
 
 const api = vi.hoisted(() => ({ applyRule: vi.fn() }));
@@ -13,24 +13,33 @@ const list = vi.hoisted(() => ({
     total: 0,
     matchCount: 0,
     counts: null as { all: number; uncategorized: number; categorized: number } | null,
+    draft: null as RuleDraft | null,
 }));
 
 vi.mock("primevue/usetoast", () => ({ useToast: () => toast }));
 mockNuxtImport("useApiClient", () => () => api);
 mockNuxtImport("useGetCategoriesQuery", () => () => ({ data: ref(categories) }));
 vi.mock("~/composables/rules/useRulePreviewList", () => ({
-    useRulePreviewList: () => ({
-        items: computed(() => list.items),
-        wouldChangeCount: computed(() => list.total),
-        matchCount: computed(() => list.matchCount),
-        alreadyTargetCount: computed(() => list.matchCount - list.total),
-        counts: computed(() => list.counts),
-        fetchNextPage: vi.fn(),
-        hasNextPage: ref(false),
-        isFetchingNextPage: ref(false),
-        isLoading: ref(false),
-        error: ref(null),
-    }),
+    useRulePreviewList: (draft: MaybeRefOrGetter<RuleDraft | null>) => {
+        // Watching the draft, as the real query does, so each change reaches the list state.
+        watch(
+            () => toValue(draft),
+            (value) => (list.draft = value),
+            { immediate: true },
+        );
+        return {
+            items: computed(() => list.items),
+            wouldChangeCount: computed(() => list.total),
+            matchCount: computed(() => list.matchCount),
+            alreadyTargetCount: computed(() => list.matchCount - list.total),
+            counts: computed(() => list.counts),
+            fetchNextPage: vi.fn(),
+            hasNextPage: ref(false),
+            isFetchingNextPage: ref(false),
+            isLoading: ref(false),
+            error: ref(null),
+        };
+    },
 }));
 
 const categories: Category[] = [
@@ -63,6 +72,7 @@ const row = (id: string, description: string): RulePreviewItem => ({
     transactionDate: "2026-10-01",
     amount: -4.5,
     type: "expense",
+    transferDirection: null,
     currencyCode: "USD",
     accountName: "Checking",
     category: null,
@@ -155,6 +165,17 @@ describe("ApplyRuleDialog", () => {
 
         expect(document.body.textContent).toContain("No existing transactions match this rule yet.");
         expect(document.body.textContent).not.toContain("All 0");
+    });
+
+    it("previews only while open, so a closed dialog keeps no live query", async () => {
+        const wrapper = await mountDialog();
+        expect(list.draft).not.toBeNull();
+
+        await wrapper.setProps({ visible: false });
+        expect(list.draft).toBeNull();
+
+        await wrapper.setProps({ visible: true });
+        expect(list.draft).not.toBeNull();
     });
 
     it("disables Apply when no transaction is selected", async () => {

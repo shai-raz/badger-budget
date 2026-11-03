@@ -36,6 +36,8 @@ import RuleReview from "./RuleReview.vue";
 
 const TRANSACTION_HINT = 'From the transaction you started on. Shorten it to match more, for example "starbucks".';
 const CATEGORY_FIELD_ID = "rule-category";
+const BACK_TO_RULE_LABEL = "Back to the rule";
+const REVIEW_BUTTON_ID = "rule-review-open";
 
 const valueFieldId = (key: string) => `rule-condition-value-${key}`;
 
@@ -178,10 +180,20 @@ watch(
     },
 );
 
-const openReview = () => {
+const openReview = async () => {
     // Reviewing is for applying, so the box is ticked when the review opens.
     applyTicked.value = true;
     view.value = "review";
+    // The Review button unmounts with the form, so focus moves to the review's back arrow.
+    await nextTick();
+    document.querySelector<HTMLElement>(`[aria-label="${BACK_TO_RULE_LABEL}"]`)?.focus();
+};
+
+const backToForm = async () => {
+    view.value = "form";
+    // The back arrow unmounts with the review, so focus returns to the Review button that opened it.
+    await nextTick();
+    (document.getElementById(REVIEW_BUTTON_ID) ?? document.getElementById("rule-name"))?.focus();
 };
 
 /** The first field with an error, in the order the form shows them. */
@@ -261,12 +273,12 @@ onMounted(() => {
         :busy="busy"
         :api-error="apiError"
         :save-label="view === 'review' ? reviewPrimaryLabel : primaryLabel"
-        :back-label="view === 'review' ? 'Back to the rule' : undefined"
+        :back-label="view === 'review' ? BACK_TO_RULE_LABEL : undefined"
         :cancel-label="view === 'review' ? 'Back' : undefined"
         width="45rem"
         @update:visible="onVisibleChange"
         @save="handleSave"
-        @back="view = 'form'"
+        @back="backToForm"
     >
         <template v-if="view === 'form'">
             <div class="flex flex-col gap-1">
@@ -385,6 +397,7 @@ onMounted(() => {
                     </div>
                     <Button
                         v-if="!applyCopy.disabled"
+                        :id="REVIEW_BUTTON_ID"
                         label="Review"
                         icon="pi pi-list"
                         severity="secondary"

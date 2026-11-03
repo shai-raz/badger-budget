@@ -222,6 +222,7 @@ export class RulesService {
                 description: true,
                 transactionDate: true,
                 amount: true,
+                transferDirection: true,
                 currency: { select: { code: true } },
                 account: { select: { name: true } },
                 category: { select: { id: true, name: true, color: true, icon: true } },
@@ -239,6 +240,10 @@ export class RulesService {
                     transactionDate: toIsoDateString(detail.transactionDate),
                     amount: Number(detail.amount),
                     type: row.type,
+                    transferDirection:
+                        detail.transferDirection === "in" || detail.transferDirection === "out"
+                            ? detail.transferDirection
+                            : null,
                     currencyCode: detail.currency.code,
                     accountName: detail.account.name,
                     category: detail.category,

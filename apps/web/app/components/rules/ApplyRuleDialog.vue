@@ -32,10 +32,11 @@ const selection = ref<RuleSelection>(selectAll());
 const filter = ref<RulePreviewFilter>("all");
 const search = ref("");
 
-// The rule's own conditions and actions, in the shape the preview and the review take.
+// The rule's own conditions and actions, in the shape the preview and the review take. Null while closed, so a
+// closed dialog keeps no live preview that later saves would refetch.
 const draft = computed<RuleDraft | null>(() => {
     const rule = props.rule;
-    if (!rule) return null;
+    if (!rule || !props.visible) return null;
     return {
         conditions: rule.conditions.map(({ field, operator, value }) => ({ field, operator, value })),
         actions: rule.actions.map(({ type, value }) => ({ type, value })),

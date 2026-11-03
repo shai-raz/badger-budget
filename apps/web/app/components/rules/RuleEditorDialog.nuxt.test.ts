@@ -386,6 +386,7 @@ describe("RuleEditorDialog review step", () => {
         transactionDate: "2026-10-01",
         amount: 4,
         type: "expense",
+        transferDirection: null,
         currencyCode: "USD",
         accountName: "Checking",
         category: null,
@@ -421,6 +422,16 @@ describe("RuleEditorDialog review step", () => {
         expect(document.body.textContent).toContain('Apply "');
         expect(wrapper.findComponent(RuleReview).exists()).toBe(true);
         expect(buttonLabelled("Save and apply to 3")).toBeDefined();
+    });
+
+    it("moves focus to the back arrow when the review opens, and back to Review when it closes", async () => {
+        await openReviewWithThree();
+
+        expect(document.activeElement?.getAttribute("aria-label")).toBe("Back to the rule");
+
+        await clickBackToRule();
+
+        expect(document.activeElement?.id).toBe("rule-review-open");
     });
 
     it("keeps the unticked row through back and the form title reads of", async () => {

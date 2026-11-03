@@ -52,6 +52,10 @@ describe("FormDialog back step", () => {
         expect(dialog).toContain(':aria-label="backLabel"');
     });
 
+    it("names the dialog itself, since the custom header's title is not the labelledby target", () => {
+        expect(dialog).toContain(':aria-label="backLabel ? header : undefined"');
+    });
+
     it("makes the footer cancel return to the previous step instead of closing", () => {
         expect(dialog).toContain("@click=\"backLabel ? emit('back') : emit('update:visible', false)\"");
     });
