@@ -15,12 +15,18 @@ const mocks = await vi.hoisted(async () => {
         invalidate: vi.fn(),
         // The job the mocked sync-job query returns. Tests set it to drive the flow's job watch.
         jobData: ref<ISyncJob | null>(null),
+        // The job the mocked active-job query returns on page load.
+        activeJob: ref<ISyncJob | null>(null),
+        // Lifecycle hooks the flow registers on mount; a test runs them to simulate the page mounting.
+        mounted: [] as Array<() => unknown>,
     };
 });
 vi.mock("vue", async (original) => ({
     ...(await original<typeof import("vue")>()),
     provide: vi.fn(),
-    onMounted: vi.fn(),
+    onMounted: (callback: () => unknown) => {
+        mocks.mounted.push(callback);
+    },
     onBeforeUnmount: vi.fn(),
     useId: () => "test",
 }));
@@ -44,7 +50,7 @@ vi.mock("./useBankSync", () => ({
     },
     useTriggerSyncMutation: () => ({ isPending: ref(false), mutateAsync: mocks.full }),
     useTriggerConnectionSyncMutation: () => ({ isPending: ref(false), mutateAsync: mocks.single }),
-    useActiveSyncJobQuery: () => ({ data: ref(null), refetch: vi.fn() }),
+    useActiveSyncJobQuery: () => ({ data: mocks.activeJob, refetch: async () => undefined }),
     useSyncJobQuery: () => ({ data: mocks.jobData }),
     useSyncPasskeysQuery: () => ({ data: ref([{ credentialId: "passkey-1" }]) }),
 }));
@@ -83,6 +89,9 @@ let flow: ReturnType<typeof provideBankSyncFlow>;
 beforeEach(() => {
     vi.resetAllMocks();
     mocks.jobData.value = null;
+    mocks.activeJob.value = null;
+    mocks.mounted.length = 0;
+    mocks.invalidate.mockResolvedValue(undefined);
     mocks.full.mockResolvedValue({ jobId: "full-job" });
     mocks.single.mockResolvedValue({ jobId: "single-job" });
     mocks.unlock.mockResolvedValue("1234");
@@ -383,5 +392,87 @@ describe("per-connection sync state", () => {
         ]);
         await settle();
         expect(connectionsCalls()).toBe(1);
+    });
+
+    describe("while the connections refetch is pending", () => {
+        const CONNECTIONS_KEY = JSON.stringify(["bank-sync", "connections"]);
+        // Holds every connections refetch until the test releases it, the way a slow network would. Returns the release.
+        const holdConnectionsRefetch = () => {
+            const releases: Array<() => void> = [];
+            mocks.invalidate.mockImplementation((options?: { queryKey?: unknown }) =>
+                JSON.stringify(options?.queryKey) === CONNECTIONS_KEY
+                    ? new Promise<void>((resolve) => releases.push(resolve))
+                    : Promise.resolve(),
+            );
+            return () => releases.splice(0).forEach((release) => release());
+        };
+
+        it("keeps a bank that finished mid-run in its syncing state until the refetch lands", async () => {
+            const releaseRefetch = holdConnectionsRefetch();
+            await startSingleSync();
+            mocks.jobData.value = runningJob([
+                scraperJob({ id: "scraper-a", scraperConnectionId: "conn-a", status: "running", finishedAt: null }),
+                scraperJob({ id: "scraper-b", scraperConnectionId: "conn-b", status: "running", finishedAt: null }),
+            ]);
+            await settle();
+
+            // conn-a's scraper job fails while the refetch is still pending: its row must not show the pre-run latestJob.
+            mocks.jobData.value = runningJob([
+                scraperJob({ id: "scraper-a", scraperConnectionId: "conn-a", status: "failed" }),
+                scraperJob({ id: "scraper-b", scraperConnectionId: "conn-b", status: "running", finishedAt: null }),
+            ]);
+            await settle();
+            expect(flow.connectionSyncState("conn-a")).toBe("running");
+            expect(flow.connectionSyncState("conn-b")).toBe("running");
+
+            releaseRefetch();
+            await settle();
+            expect(flow.connectionSyncState("conn-a")).toBeNull();
+            expect(flow.connectionSyncState("conn-b")).toBe("running");
+        });
+
+        it("keeps the rows of a run that just ended in their syncing state until the refetch lands", async () => {
+            const releaseRefetch = holdConnectionsRefetch();
+            await startSingleSync();
+            mocks.jobData.value = runningJob([
+                scraperJob({ id: "scraper-a", scraperConnectionId: "conn-a", status: "running", finishedAt: null }),
+            ]);
+            await settle();
+
+            mocks.jobData.value = syncJob({
+                id: "single-job",
+                status: "failed",
+                scraperJobs: [scraperJob({ scraperConnectionId: "conn-a" })],
+            });
+            await settle();
+            expect(flow.activeJobId.value).toBeNull();
+            expect(flow.connectionSyncState("conn-a")).toBe("running");
+
+            releaseRefetch();
+            await settle();
+            expect(flow.connectionSyncState("conn-a")).toBeNull();
+        });
+    });
+});
+
+describe("per-connection sync state on page load", () => {
+    it("reports the connections of a run already in progress without any submission", async () => {
+        mocks.activeJob.value = syncJob({
+            id: "resumed-job",
+            status: "running",
+            scraperJobs: [
+                scraperJob({ id: "scraper-a", scraperConnectionId: "conn-a", status: "running", finishedAt: null }),
+                scraperJob({ id: "scraper-b", scraperConnectionId: "conn-b", status: "pending", finishedAt: null }),
+            ],
+        });
+        for (const onMounted of mocks.mounted) await onMounted();
+        expect(flow.activeJobId.value).toBe("resumed-job");
+
+        mocks.jobData.value = mocks.activeJob.value;
+        await settle();
+        expect(flow.connectionSyncState("conn-a")).toBe("running");
+        expect(flow.connectionSyncState("conn-b")).toBe("pending");
+        expect(mocks.single).not.toHaveBeenCalled();
+        expect(mocks.full).not.toHaveBeenCalled();
     });
 });

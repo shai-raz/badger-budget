@@ -96,6 +96,21 @@ function createBankSyncFlow() {
     const activeJobId = ref<string | null>(null);
     const syncedCount = ref<number | null>(null);
 
+    // Connections whose row waits for the connections refetch after their scraper job finished. Shown as running until
+    // that refetch lands, so the pre-run latestJob (an old failure strip, an old sync time) never flashes.
+    const refetchingConnectionIds = ref<ReadonlySet<string>>(new Set());
+    let latestConnectionsRefetch = 0;
+    const refreshConnections = (connectionIds: Iterable<string>) => {
+        const refetch = ++latestConnectionsRefetch;
+        refetchingConnectionIds.value = new Set([...refetchingConnectionIds.value, ...connectionIds]);
+        void queryClient.invalidateQueries({ queryKey: bankSyncKeys.connections() }).finally(() => {
+            // Only the newest refetch clears: it was issued last, so its data is the freshest.
+            if (refetch === latestConnectionsRefetch) refetchingConnectionIds.value = new Set();
+        });
+    };
+    const connectionIdsOf = (job: ISyncJob) =>
+        job.scraperJobs.flatMap((scraperJob) => scraperJob.scraperConnectionId ?? []);
+
     // Poll active job on mount to resume any in-progress sync
     const { data: activeJobData, refetch: refetchActiveJob } = useActiveSyncJobQuery();
 
@@ -119,7 +134,8 @@ function createBankSyncFlow() {
         return connectionSyncStates(job && job.id === activeJobId.value ? job : null);
     });
     const connectionSyncState = (connectionId: string): ConnectionSyncState | null =>
-        syncingConnections.value.get(connectionId) ?? null;
+        syncingConnections.value.get(connectionId) ??
+        (refetchingConnectionIds.value.has(connectionId) ? "running" : null);
 
     // One group for every sync result, so the "See why" link can close the toast and open that run's dialog.
     const addSyncResultToast = (job: ISyncJob, message: ToastMessageOptions, seeWhy: boolean) => {
@@ -142,9 +158,8 @@ function createBankSyncFlow() {
             const finished = finishedConnectionIds(job);
             const seen = finishedSeen?.jobId === job.id ? finishedSeen.ids : new Set<string>();
             // A finished bank's row must show its new last-sync time or failure within one poll, not only at the end of the run.
-            if ([...finished].some((id) => !seen.has(id))) {
-                queryClient.invalidateQueries({ queryKey: bankSyncKeys.connections() });
-            }
+            const newlyFinished = [...finished].filter((id) => !seen.has(id));
+            if (newlyFinished.length > 0) refreshConnections(newlyFinished);
             finishedSeen = { jobId: job.id, ids: finished };
         }
 
@@ -162,7 +177,7 @@ function createBankSyncFlow() {
                 life: 5000,
             });
             queryClient.invalidateQueries({ queryKey: ["transactions"] });
-            queryClient.invalidateQueries({ queryKey: ["bank-sync", "connections"] });
+            refreshConnections(connectionIdsOf(job));
             queryClient.invalidateQueries({ queryKey: accountKeys.all });
             queryClient.invalidateQueries({ queryKey: budgetKeys.all });
             queryClient.invalidateQueries({ queryKey: reportKeys.all });
@@ -183,7 +198,7 @@ function createBankSyncFlow() {
                 true,
             );
             queryClient.invalidateQueries({ queryKey: ["transactions"] });
-            queryClient.invalidateQueries({ queryKey: ["bank-sync", "connections"] });
+            refreshConnections(connectionIdsOf(job));
             queryClient.invalidateQueries({ queryKey: accountKeys.all });
             queryClient.invalidateQueries({ queryKey: budgetKeys.all });
             queryClient.invalidateQueries({ queryKey: reportKeys.all });
@@ -196,7 +211,7 @@ function createBankSyncFlow() {
                 { severity: "error", summary: "Sync failed", detail: problemSentence(job), life: 7000 },
                 true,
             );
-            queryClient.invalidateQueries({ queryKey: ["bank-sync", "connections"] });
+            refreshConnections(connectionIdsOf(job));
             activeJobId.value = null;
             syncedCount.value = null;
         } else if (job.status === "interrupted") {
@@ -207,7 +222,7 @@ function createBankSyncFlow() {
                 { severity: "warn", summary: "Sync interrupted", detail: problemSentence(job), life: 8000 },
                 false,
             );
-            queryClient.invalidateQueries({ queryKey: ["bank-sync", "connections"] });
+            refreshConnections(connectionIdsOf(job));
             activeJobId.value = null;
             syncedCount.value = null;
         }
