@@ -4,7 +4,7 @@ import { useNuxtApp } from "#app";
 import type { VueWrapper } from "@vue/test-utils";
 import { ref } from "vue";
 import type { IScraperConnectionResponse } from "@badger/types";
-import BankConnections from "./bank-connections/index.vue";
+import BankConnections from "./index.vue";
 
 const api = vi.hoisted(() => ({
     getScraperConnections: vi.fn(),
@@ -13,8 +13,8 @@ const api = vi.hoisted(() => ({
 const toastAdd = vi.hoisted(() => vi.fn());
 
 // The real queries and mutations run against this fake API; the layout-provided sync flow and toast are stubbed.
-vi.mock("../composables/useApiClient", () => ({ useApiClient: () => api }));
-vi.mock("../composables/bankSync/useBankSyncFlow", () => ({
+vi.mock("../../composables/useApiClient", () => ({ useApiClient: () => api }));
+vi.mock("../../composables/bankSync/useBankSyncFlow", () => ({
     useBankSyncFlow: () => ({ busy: ref(false), requestSync: vi.fn() }),
 }));
 vi.mock("primevue/usetoast", () => ({ useToast: () => ({ add: toastAdd }) }));
