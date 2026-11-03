@@ -1,9 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/vue-query";
 import type { CreateRuleDto, IRule, UpdateRuleDto } from "@badger/types";
 import { budgetKeys } from "../useBudgets";
 import { accountKeys } from "../accounts/accountKeys";
 import { reportKeys } from "../reports/useSpendingReport";
 import { transactionKeys } from "../transactions/useTransactions";
+import { toApplySelection, type RuleSelection } from "../../utils/ruleReviewSelection";
 import { ruleKeys } from "./ruleKeys";
 
 /** A new rule has no id; an edit carries the id of the rule it replaces. */
@@ -101,12 +102,31 @@ export function useSaveRuleMutation() {
         onSuccess: ({ appliedCount }) => {
             queryClient.invalidateQueries({ queryKey: ruleKeys.all });
 
-            if (appliedCount !== null && appliedCount > 0) {
-                queryClient.invalidateQueries({ queryKey: transactionKeys.all });
-                queryClient.invalidateQueries({ queryKey: budgetKeys.all });
-                queryClient.invalidateQueries({ queryKey: accountKeys.all });
-                queryClient.invalidateQueries({ queryKey: reportKeys.all });
-            }
+            if (appliedCount !== null && appliedCount > 0) invalidateAppliedCaches(queryClient);
         },
     });
+}
+
+/** Applies a rule to the existing transactions it matches, from the row menu. The review decides which ones. */
+export function useApplyRuleMutation() {
+    const apiClient = useApiClient();
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({ id, selection }: { id: string; selection: RuleSelection }) =>
+            apiClient.applyRule(id, toApplySelection(selection)),
+        onSuccess: ({ count }) => {
+            queryClient.invalidateQueries({ queryKey: ruleKeys.previews() });
+
+            if (count > 0) invalidateAppliedCaches(queryClient);
+        },
+    });
+}
+
+/** The caches an applied rule changes: transactions, and everything summed from them. */
+function invalidateAppliedCaches(queryClient: QueryClient) {
+    queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+    queryClient.invalidateQueries({ queryKey: budgetKeys.all });
+    queryClient.invalidateQueries({ queryKey: accountKeys.all });
+    queryClient.invalidateQueries({ queryKey: reportKeys.all });
 }

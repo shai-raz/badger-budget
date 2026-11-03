@@ -50,6 +50,7 @@ export function useRulePreviewList(
 
     return {
         items,
+        matchCount: computed(() => firstPage.value?.matchCount ?? 0),
         wouldChangeCount: computed(() => firstPage.value?.wouldChangeCount ?? 0),
         alreadyTargetCount: computed(() => firstPage.value?.alreadyTargetCount ?? 0),
         counts: computed(() => firstPage.value?.counts ?? null),
