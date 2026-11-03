@@ -1,7 +1,7 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { CreateRuleDto, RuleConditionDto, UpdateRuleDto } from "./dto/rule.dto";
+import { CreateRuleDto, RuleConditionDto, RulePreviewDto, UpdateRuleDto } from "./dto/rule.dto";
 import { RulesService } from "./rules.service";
 
 const USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -17,6 +17,7 @@ const mockPrisma = {
     ruleAction: { deleteMany: jest.fn(), createMany: jest.fn() },
     account: { findMany: jest.fn() },
     category: { findMany: jest.fn() },
+    transaction: { findMany: jest.fn(), updateMany: jest.fn() },
     $transaction: jest.fn(),
 };
 
@@ -460,6 +461,305 @@ describe("RulesService", () => {
 
             expect(rule.conditions.map((c) => c.id)).toEqual(["ok"]);
             expect(rule.actions).toEqual([]);
+        });
+    });
+    describe("preview, apply and save and apply", () => {
+        const CATEGORY_B_ID = "77777777-7777-4777-8777-777777777777";
+        const preview: RulePreviewDto = {
+            conditions: [{ field: "description", operator: "contains", value: "starbucks" }],
+            actions: [{ type: "set_category", value: CATEGORY_ID }],
+        };
+
+        function txId(n: number): string {
+            return `00000000-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
+        }
+
+        function txRow(n: number, overrides: Record<string, unknown> = {}) {
+            return {
+                id: txId(n),
+                description: "Starbucks",
+                originalCategory: null,
+                amount: -12.5,
+                accountId: ACCOUNT_ID,
+                type: "expense",
+                categoryId: null,
+                transactionDate: new Date("2026-02-01T00:00:00.000Z"),
+                createdAt: new Date("2026-02-01T10:00:00.000Z"),
+                ...overrides,
+            };
+        }
+
+        /** Answers the candidate query (no id filter) with every row, and the page detail query with the matching rows. */
+        function givenTransactions(rows: ReturnType<typeof txRow>[]) {
+            mockPrisma.transaction.findMany.mockImplementation(
+                async ({ where }: { where: { id?: { in: string[] } } }) => {
+                    if (!where.id) return rows;
+                    const wanted = new Set(where.id.in);
+                    return rows
+                        .filter((row) => wanted.has(row.id))
+                        .map((row) => ({
+                            id: row.id,
+                            description: row.description,
+                            transactionDate: row.transactionDate,
+                            amount: row.amount,
+                            currency: { code: "ILS" },
+                            account: { name: "Checking" },
+                            category: row.categoryId
+                                ? { id: row.categoryId, name: "Food", color: "#ff0000", icon: null }
+                                : null,
+                        }));
+                },
+            );
+        }
+
+        // Matched rows: 1 uncategorized, 2 in another category, 3 already in the target, 4 not matched.
+        const fourRows = () => [
+            txRow(1, { categoryId: null }),
+            txRow(2, { description: "Starbucks Reserve", categoryId: CATEGORY_B_ID }),
+            txRow(3, { categoryId: CATEGORY_ID }),
+            txRow(4, { description: "Shell", categoryId: null }),
+        ];
+
+        beforeEach(() => {
+            mockPrisma.transaction.updateMany.mockResolvedValue({ count: 0 });
+        });
+
+        describe("preview", () => {
+            it("counts matches, would-change and already-target rows, and lists only rows that would change", async () => {
+                givenTransactions(fourRows());
+
+                const result = await service.preview(USER_ID, preview);
+
+                expect(result.matchCount).toBe(3);
+                expect(result.wouldChangeCount).toBe(2);
+                expect(result.alreadyTargetCount).toBe(1);
+                expect(result.counts).toEqual({ all: 2, uncategorized: 1, categorized: 1 });
+                expect(result.items.map((item) => item.id)).toEqual([txId(1), txId(2)]);
+                expect(result.page).toBe(1);
+                expect(result.totalPages).toBe(1);
+            });
+
+            it("reads only live transactions and never mirror rows of linked transfers", async () => {
+                givenTransactions([]);
+
+                await service.preview(USER_ID, preview);
+
+                expect(mockPrisma.transaction.findMany).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        where: { userId: USER_ID, deletedAt: null, counterpartOfId: null },
+                    }),
+                );
+            });
+
+            it("filters the items but keeps the counts and totals", async () => {
+                givenTransactions(fourRows());
+
+                const result = await service.preview(USER_ID, { ...preview, filter: "uncategorized" });
+
+                expect(result.items.map((item) => item.id)).toEqual([txId(1)]);
+                expect(result.counts).toEqual({ all: 2, uncategorized: 1, categorized: 1 });
+                expect(result.wouldChangeCount).toBe(2);
+            });
+
+            it("searches the description case-insensitively, then counts what is left", async () => {
+                givenTransactions(fourRows());
+
+                const result = await service.preview(USER_ID, { ...preview, search: "  RESERVE " });
+
+                expect(result.items.map((item) => item.id)).toEqual([txId(2)]);
+                expect(result.counts).toEqual({ all: 1, uncategorized: 0, categorized: 1 });
+                expect(result.matchCount).toBe(3);
+                expect(result.wouldChangeCount).toBe(2);
+            });
+
+            it("orders newest first by transaction date, then creation time, then id", async () => {
+                givenTransactions([
+                    txRow(1, { transactionDate: new Date("2026-01-01T00:00:00.000Z") }),
+                    txRow(2, {
+                        transactionDate: new Date("2026-03-01T00:00:00.000Z"),
+                        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                    }),
+                    txRow(3, {
+                        transactionDate: new Date("2026-03-01T00:00:00.000Z"),
+                        createdAt: new Date("2026-03-02T00:00:00.000Z"),
+                    }),
+                ]);
+
+                const result = await service.preview(USER_ID, preview);
+
+                expect(result.items.map((item) => item.id)).toEqual([txId(3), txId(2), txId(1)]);
+            });
+
+            it("pages 50 rows at a time, so 51 matches give two pages", async () => {
+                givenTransactions(Array.from({ length: 51 }, (_, index) => txRow(index + 1)));
+
+                const first = await service.preview(USER_ID, preview);
+                const second = await service.preview(USER_ID, { ...preview, page: 2 });
+
+                expect(first.matchCount).toBe(51);
+                expect(first.totalPages).toBe(2);
+                expect(first.items).toHaveLength(50);
+                expect(second.page).toBe(2);
+                expect(second.items).toHaveLength(1);
+                expect(second.items[0].id).toBe(txId(51));
+            });
+
+            it("returns one empty page when nothing matches", async () => {
+                givenTransactions([txRow(1, { description: "Shell" })]);
+
+                const result = await service.preview(USER_ID, preview);
+
+                expect(result.items).toEqual([]);
+                expect(result.counts).toEqual({ all: 0, uncategorized: 0, categorized: 0 });
+                expect(result.totalPages).toBe(1);
+                expect(mockPrisma.transaction.findMany).toHaveBeenCalledTimes(1);
+            });
+
+            it("maps each item with its account, currency, type and category", async () => {
+                givenTransactions([txRow(1, { categoryId: null })]);
+
+                const [item] = (await service.preview(USER_ID, preview)).items;
+
+                expect(item).toEqual({
+                    id: txId(1),
+                    description: "Starbucks",
+                    transactionDate: "2026-02-01",
+                    amount: -12.5,
+                    type: "expense",
+                    currencyCode: "ILS",
+                    accountName: "Checking",
+                    category: null,
+                });
+            });
+
+            it("validates the draft before reading any transaction", async () => {
+                const bad: RulePreviewDto = {
+                    conditions: [{ field: "amount", operator: "contains", value: "5" }],
+                    actions: [{ type: "set_category", value: CATEGORY_ID }],
+                };
+
+                await expect(service.preview(USER_ID, bad)).rejects.toThrow(BadRequestException);
+                expect(mockPrisma.transaction.findMany).not.toHaveBeenCalled();
+            });
+        });
+
+        describe("apply", () => {
+            beforeEach(() => {
+                mockPrisma.rule.findFirst.mockResolvedValue(ruleRow());
+                // Row 1 and row 2 would change; row 3 is already in the target; row 4 does not match.
+                givenTransactions(fourRows());
+                mockPrisma.transaction.updateMany.mockResolvedValue({ count: 2 });
+            });
+
+            it("allExcept updates the would-change rows that are not listed", async () => {
+                const result = await service.apply(RULE_ID, USER_ID, { mode: "allExcept", ids: [txId(1)] });
+
+                expect(mockPrisma.transaction.updateMany).toHaveBeenCalledWith({
+                    where: { id: { in: [txId(2)] }, userId: USER_ID },
+                    data: { categoryId: CATEGORY_ID },
+                });
+                expect(result).toEqual({ count: 2 });
+            });
+
+            it("only updates the listed rows that would change and ignores any other id", async () => {
+                await service.apply(RULE_ID, USER_ID, {
+                    mode: "only",
+                    ids: [txId(1), txId(3), txId(4), txId(99)],
+                });
+
+                expect(mockPrisma.transaction.updateMany).toHaveBeenCalledWith({
+                    where: { id: { in: [txId(1)] }, userId: USER_ID },
+                    data: { categoryId: CATEGORY_ID },
+                });
+            });
+
+            it("never touches already-target rows when allExcept lists nothing", async () => {
+                await service.apply(RULE_ID, USER_ID, { mode: "allExcept", ids: [] });
+
+                expect(mockPrisma.transaction.updateMany).toHaveBeenCalledWith({
+                    where: { id: { in: [txId(1), txId(2)] }, userId: USER_ID },
+                    data: { categoryId: CATEGORY_ID },
+                });
+            });
+
+            it("writes nothing and returns zero when the selection is empty", async () => {
+                const result = await service.apply(RULE_ID, USER_ID, { mode: "only", ids: [] });
+
+                expect(mockPrisma.transaction.updateMany).not.toHaveBeenCalled();
+                expect(result).toEqual({ count: 0 });
+            });
+
+            it("throws NotFound for a rule of another user", async () => {
+                mockPrisma.rule.findFirst.mockResolvedValue(null);
+
+                await expect(service.apply(RULE_ID, USER_ID, { mode: "allExcept", ids: [] })).rejects.toThrow(
+                    NotFoundException,
+                );
+                expect(mockPrisma.transaction.updateMany).not.toHaveBeenCalled();
+            });
+        });
+
+        describe("save and apply", () => {
+            beforeEach(() => {
+                givenTransactions([txRow(1)]);
+                mockPrisma.transaction.updateMany.mockResolvedValue({ count: 1 });
+                mockPrisma.rule.update.mockResolvedValue(ruleRow());
+            });
+
+            it("create with apply runs the save and the update in one transaction with a 60 second timeout", async () => {
+                const result = await service.create(USER_ID, validCreate({ apply: { mode: "allExcept", ids: [] } }));
+
+                expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+                expect(mockPrisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { timeout: 60_000 });
+                expect(mockPrisma.rule.create).toHaveBeenCalled();
+                expect(mockPrisma.transaction.updateMany).toHaveBeenCalledWith({
+                    where: { id: { in: [txId(1)] }, userId: USER_ID },
+                    data: { categoryId: CATEGORY_ID },
+                });
+                expect(result.appliedCount).toBe(1);
+                expect(result.rule.id).toBe(RULE_ID);
+            });
+
+            it("create without apply keeps the plain path and returns appliedCount null", async () => {
+                const result = await service.create(USER_ID, validCreate());
+
+                expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+                expect(mockPrisma.transaction.updateMany).not.toHaveBeenCalled();
+                expect(result.appliedCount).toBeNull();
+            });
+
+            it("create rejects when the apply write fails, so the save is rolled back", async () => {
+                mockPrisma.transaction.updateMany.mockRejectedValue(new Error("write failed"));
+
+                await expect(
+                    service.create(USER_ID, validCreate({ apply: { mode: "allExcept", ids: [] } })),
+                ).rejects.toThrow("write failed");
+                expect(mockPrisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { timeout: 60_000 });
+            });
+
+            it("update with apply replaces the rule and applies it inside one transaction", async () => {
+                mockPrisma.rule.findFirst.mockResolvedValue({ id: RULE_ID });
+
+                const result = await service.update(
+                    RULE_ID,
+                    USER_ID,
+                    validUpdate({ apply: { mode: "allExcept", ids: [] } }),
+                );
+
+                expect(mockPrisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { timeout: 60_000 });
+                expect(mockPrisma.ruleCondition.deleteMany).toHaveBeenCalled();
+                expect(mockPrisma.transaction.updateMany).toHaveBeenCalled();
+                expect(result.appliedCount).toBe(1);
+            });
+
+            it("update rejects when the apply write fails", async () => {
+                mockPrisma.rule.findFirst.mockResolvedValue({ id: RULE_ID });
+                mockPrisma.transaction.updateMany.mockRejectedValue(new Error("write failed"));
+
+                await expect(
+                    service.update(RULE_ID, USER_ID, validUpdate({ apply: { mode: "allExcept", ids: [] } })),
+                ).rejects.toThrow("write failed");
+            });
         });
     });
 });

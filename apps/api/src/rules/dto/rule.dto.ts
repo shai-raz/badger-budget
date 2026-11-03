@@ -4,10 +4,12 @@ import {
     IsArray,
     IsBoolean,
     IsIn,
+    IsInt,
     IsNotEmpty,
     IsOptional,
     IsString,
     IsUUID,
+    Min,
     MaxLength,
     ValidateNested,
 } from "class-validator";
@@ -20,8 +22,15 @@ import {
     RULE_CONDITION_VALUE_MAX_LENGTH,
     RULE_NAME_MAX_LENGTH,
     RULE_OPERATORS,
+    RULE_PREVIEW_FILTERS,
 } from "@badger/shared-data";
-import type { RuleActionType, RuleApplyMode, RuleConditionField, RuleOperator } from "@badger/shared-data";
+import type {
+    RuleActionType,
+    RuleApplyMode,
+    RuleConditionField,
+    RuleOperator,
+    RulePreviewFilter,
+} from "@badger/shared-data";
 
 export class RuleConditionDto {
     @ApiProperty({ enum: [...RULE_CONDITION_FIELDS], example: "description" })
@@ -139,4 +148,38 @@ export class ReorderRulesDto {
     @ArrayMinSize(1)
     @IsUUID("all", { each: true })
     ids: string[];
+}
+
+export class RulePreviewDto {
+    @ApiProperty({ type: [RuleConditionDto], description: "Every condition must match (AND)." })
+    @IsArray()
+    @ArrayMinSize(1)
+    @ValidateNested({ each: true })
+    @Type(() => RuleConditionDto)
+    conditions: RuleConditionDto[];
+
+    @ApiProperty({ type: [RuleActionDto] })
+    @IsArray()
+    @ArrayMinSize(1)
+    @ValidateNested({ each: true })
+    @Type(() => RuleActionDto)
+    actions: RuleActionDto[];
+
+    @ApiPropertyOptional({ enum: [...RULE_PREVIEW_FILTERS], default: "all" })
+    @IsOptional()
+    @IsIn([...RULE_PREVIEW_FILTERS])
+    filter?: RulePreviewFilter;
+
+    @ApiPropertyOptional({ description: "Case-insensitive text matched against the description." })
+    @IsOptional()
+    @IsString()
+    @MaxLength(200)
+    search?: string;
+
+    @ApiPropertyOptional({ default: 1, minimum: 1 })
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    page?: number;
 }

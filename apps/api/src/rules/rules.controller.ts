@@ -13,10 +13,17 @@ import {
     UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
-import type { IRule, RuleSaveResponse } from "@badger/types";
+import type { ApplyRuleResponse, IRule, RulePreviewResponse, RuleSaveResponse } from "@badger/types";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
-import { CreateRuleDto, ReorderRulesDto, SetRuleActiveDto, UpdateRuleDto } from "./dto/rule.dto";
+import {
+    ApplyRuleSelectionDto,
+    CreateRuleDto,
+    ReorderRulesDto,
+    RulePreviewDto,
+    SetRuleActiveDto,
+    UpdateRuleDto,
+} from "./dto/rule.dto";
 import { RulesService } from "./rules.service";
 
 @ApiTags("rules")
@@ -42,14 +49,24 @@ export class RulesController {
     }
 
     @Post()
-    @ApiOperation({ summary: "Create a rule" })
+    @ApiOperation({ summary: "Create a rule, optionally applying it to matching transactions" })
     @ApiResponse({ status: 201, description: "Rule created" })
     create(@Body() dto: CreateRuleDto, @CurrentUser() user: { id: string }): Promise<RuleSaveResponse> {
         return this.rulesService.create(user.id, dto);
     }
 
+    @Post("preview")
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: "Preview the transactions a draft rule would change" })
+    @ApiResponse({ status: 200, description: "Preview page" })
+    preview(@Body() dto: RulePreviewDto, @CurrentUser() user: { id: string }): Promise<RulePreviewResponse> {
+        return this.rulesService.preview(user.id, dto);
+    }
+
     @Put(":id")
-    @ApiOperation({ summary: "Replace a rule's name, stop flag, conditions and actions" })
+    @ApiOperation({
+        summary: "Replace a rule's name, stop flag, conditions and actions, optionally applying it",
+    })
     @ApiResponse({ status: 200, description: "Rule updated" })
     @ApiResponse({ status: 404, description: "Rule not found" })
     update(
@@ -58,6 +75,19 @@ export class RulesController {
         @CurrentUser() user: { id: string },
     ): Promise<RuleSaveResponse> {
         return this.rulesService.update(id, user.id, dto);
+    }
+
+    @Post(":id/apply")
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: "Apply a saved rule to the selected transactions it would change" })
+    @ApiResponse({ status: 200, description: "Number of transactions changed" })
+    @ApiResponse({ status: 404, description: "Rule not found" })
+    apply(
+        @Param("id", ParseUUIDPipe) id: string,
+        @Body() dto: ApplyRuleSelectionDto,
+        @CurrentUser() user: { id: string },
+    ): Promise<ApplyRuleResponse> {
+        return this.rulesService.apply(id, user.id, dto);
     }
 
     @Patch(":id/active")

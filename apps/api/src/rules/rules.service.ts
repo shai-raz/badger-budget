@@ -1,13 +1,36 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { isUUID } from "class-validator";
-import { isOperatorForField, isTransactionType, RULE_FIELD_LABELS } from "@badger/shared-data";
+import type { Prisma } from "@prisma/client";
+import { isOperatorForField, isTransactionType, RULE_FIELD_LABELS, RULE_PREVIEW_PAGE_SIZE } from "@badger/shared-data";
 import type { RuleActionType, RuleConditionField, RuleOperator } from "@badger/shared-data";
-import type { IRule, RuleDraft, RuleSaveResponse } from "@badger/types";
+import type {
+    ApplyRuleResponse,
+    IRule,
+    RuleDraft,
+    RulePreviewItem,
+    RulePreviewResponse,
+    RuleSaveResponse,
+} from "@badger/types";
+import { toIsoDateString } from "@badger/utils";
 import { PrismaService } from "../prisma/prisma.service";
-import { CreateRuleDto, UpdateRuleDto } from "./dto/rule.dto";
+import { ApplyRuleSelectionDto, CreateRuleDto, RulePreviewDto, UpdateRuleDto } from "./dto/rule.dto";
 import { ruleInclude, RuleRow, toRuleResponse } from "./rule-mapping";
+import {
+    applyRuleSelection,
+    comparePreviewOrder,
+    loadRuleCandidates,
+    matchesPreviewFilter,
+    partitionMatches,
+    previewTotalPages,
+    RuleCandidate,
+} from "./rule-matches";
 
 const AMOUNT_PATTERN = /^\d+(\.\d{1,2})?$/;
+
+/** Save-and-apply can rewrite every matching transaction, so it gets more time than the Prisma default of 5 seconds. */
+const SAVE_AND_APPLY_TIMEOUT_MS = 60_000;
+
+type Db = Prisma.TransactionClient | PrismaService;
 
 interface ValidDraft {
     conditions: { field: RuleConditionField; operator: RuleOperator; value: string }[];
@@ -34,51 +57,32 @@ export class RulesService {
     async create(userId: string, dto: CreateRuleDto): Promise<RuleSaveResponse> {
         const name = normalizeName(dto.name);
         const draft = await assertValidDraft(this.prisma, userId, dto);
+        const apply = dto.apply;
 
-        const last = await this.prisma.rule.findFirst({
-            where: { userId, deletedAt: null },
-            orderBy: { priority: "desc" },
-            select: { priority: true },
-        });
+        const save = async (db: Db): Promise<RuleSaveResponse> => {
+            const rule = await this.insertRule(db, userId, name, dto, draft);
+            const appliedCount = apply ? await applyRuleSelection(db, userId, draft, apply) : null;
+            return { rule, appliedCount };
+        };
 
-        const row = await this.prisma.rule.create({
-            data: {
-                userId,
-                name,
-                priority: last ? last.priority + 1 : 1,
-                stopOnMatch: dto.stopOnMatch ?? false,
-                isActive: true,
-                conditions: { create: draft.conditions.map((condition, position) => ({ ...condition, position })) },
-                actions: { create: draft.actions.map((action, position) => ({ ...action, position })) },
-            },
-            include: ruleInclude,
-        });
-
-        return { rule: toRuleResponse(row), appliedCount: null };
+        if (!apply) return save(this.prisma);
+        return this.prisma.$transaction(save, { timeout: SAVE_AND_APPLY_TIMEOUT_MS });
     }
 
     async update(id: string, userId: string, dto: UpdateRuleDto): Promise<RuleSaveResponse> {
         await this.assertOwned(id, userId);
         const name = normalizeName(dto.name);
         const draft = await assertValidDraft(this.prisma, userId, dto);
+        const apply = dto.apply;
 
-        const row = await this.prisma.$transaction(async (tx) => {
-            await tx.ruleCondition.deleteMany({ where: { ruleId: id } });
-            await tx.ruleAction.deleteMany({ where: { ruleId: id } });
-            await tx.ruleCondition.createMany({
-                data: draft.conditions.map((condition, position) => ({ ...condition, ruleId: id, position })),
-            });
-            await tx.ruleAction.createMany({
-                data: draft.actions.map((action, position) => ({ ...action, ruleId: id, position })),
-            });
-            return tx.rule.update({
-                where: { id },
-                data: { name, stopOnMatch: dto.stopOnMatch },
-                include: ruleInclude,
-            });
-        });
+        const save = async (db: Db): Promise<RuleSaveResponse> => {
+            const rule = await this.replaceRule(db, id, name, dto, draft);
+            const appliedCount = apply ? await applyRuleSelection(db, userId, draft, apply) : null;
+            return { rule, appliedCount };
+        };
 
-        return { rule: toRuleResponse(row), appliedCount: null };
+        if (!apply) return this.prisma.$transaction(save);
+        return this.prisma.$transaction(save, { timeout: SAVE_AND_APPLY_TIMEOUT_MS });
     }
 
     async setActive(id: string, userId: string, isActive: boolean): Promise<IRule> {
@@ -109,6 +113,130 @@ export class RulesService {
     async remove(id: string, userId: string): Promise<void> {
         await this.assertOwned(id, userId);
         await this.prisma.rule.update({ where: { id }, data: { deletedAt: new Date() } });
+    }
+
+    /** Lists the transactions a draft would change, filtered, searched and paged. Totals ignore search and filter. */
+    async preview(userId: string, dto: RulePreviewDto): Promise<RulePreviewResponse> {
+        const draft = await assertValidDraft(this.prisma, userId, dto);
+        const { matched, wouldChange, alreadyTarget } = partitionMatches(
+            await loadRuleCandidates(this.prisma, userId),
+            draft,
+        );
+
+        const needle = dto.search?.trim().toLowerCase() ?? "";
+        const searched = needle
+            ? wouldChange.filter((candidate) => candidate.description.toLowerCase().includes(needle))
+            : wouldChange;
+        const counts = {
+            all: searched.length,
+            uncategorized: searched.filter((candidate) => candidate.categoryId === null).length,
+            categorized: searched.filter((candidate) => candidate.categoryId !== null).length,
+        };
+
+        const filter = dto.filter ?? "all";
+        const filtered = searched
+            .filter((candidate) => matchesPreviewFilter(candidate, filter))
+            .sort(comparePreviewOrder);
+        const page = dto.page ?? 1;
+        const pageRows = filtered.slice((page - 1) * RULE_PREVIEW_PAGE_SIZE, page * RULE_PREVIEW_PAGE_SIZE);
+
+        return {
+            matchCount: matched.length,
+            wouldChangeCount: wouldChange.length,
+            alreadyTargetCount: alreadyTarget.length,
+            counts,
+            items: await this.loadPreviewItems(userId, pageRows),
+            page,
+            totalPages: previewTotalPages(filtered.length),
+        };
+    }
+
+    /** Sets the category of the transactions a saved rule would change, limited to the selection. */
+    async apply(id: string, userId: string, selection: ApplyRuleSelectionDto): Promise<ApplyRuleResponse> {
+        const rule = await this.findOne(id, userId);
+        const count = await applyRuleSelection(this.prisma, userId, rule, selection);
+        return { count };
+    }
+
+    private async insertRule(
+        db: Db,
+        userId: string,
+        name: string,
+        dto: CreateRuleDto,
+        draft: ValidDraft,
+    ): Promise<IRule> {
+        const last = await db.rule.findFirst({
+            where: { userId, deletedAt: null },
+            orderBy: { priority: "desc" },
+            select: { priority: true },
+        });
+
+        const row = await db.rule.create({
+            data: {
+                userId,
+                name,
+                priority: last ? last.priority + 1 : 1,
+                stopOnMatch: dto.stopOnMatch ?? false,
+                isActive: true,
+                conditions: { create: draft.conditions.map((condition, position) => ({ ...condition, position })) },
+                actions: { create: draft.actions.map((action, position) => ({ ...action, position })) },
+            },
+            include: ruleInclude,
+        });
+        return toRuleResponse(row);
+    }
+
+    private async replaceRule(db: Db, id: string, name: string, dto: UpdateRuleDto, draft: ValidDraft): Promise<IRule> {
+        await db.ruleCondition.deleteMany({ where: { ruleId: id } });
+        await db.ruleAction.deleteMany({ where: { ruleId: id } });
+        await db.ruleCondition.createMany({
+            data: draft.conditions.map((condition, position) => ({ ...condition, ruleId: id, position })),
+        });
+        await db.ruleAction.createMany({
+            data: draft.actions.map((action, position) => ({ ...action, ruleId: id, position })),
+        });
+        const row = await db.rule.update({
+            where: { id },
+            data: { name, stopOnMatch: dto.stopOnMatch },
+            include: ruleInclude,
+        });
+        return toRuleResponse(row);
+    }
+
+    /** Preview rows in page order, with the account, currency and category details the list shows. */
+    private async loadPreviewItems(userId: string, rows: RuleCandidate[]): Promise<RulePreviewItem[]> {
+        if (rows.length === 0) return [];
+
+        const details = await this.prisma.transaction.findMany({
+            where: { id: { in: rows.map((row) => row.id) }, userId },
+            select: {
+                id: true,
+                description: true,
+                transactionDate: true,
+                amount: true,
+                currency: { select: { code: true } },
+                account: { select: { name: true } },
+                category: { select: { id: true, name: true, color: true, icon: true } },
+            },
+        });
+        const byId = new Map(details.map((detail) => [detail.id, detail]));
+
+        return rows.flatMap((row) => {
+            const detail = byId.get(row.id);
+            if (!detail) return [];
+            return [
+                {
+                    id: detail.id,
+                    description: detail.description,
+                    transactionDate: toIsoDateString(detail.transactionDate),
+                    amount: Number(detail.amount),
+                    type: row.type,
+                    currencyCode: detail.currency.code,
+                    accountName: detail.account.name,
+                    category: detail.category,
+                },
+            ];
+        });
     }
 
     private async findRowOrThrow(id: string, userId: string): Promise<RuleRow> {
@@ -142,8 +270,8 @@ function normalizeName(name: string): string {
 }
 
 /**
- * Checks every condition and action of a draft against the rules vocabulary and the user's own accounts and
- * categories. Returns the draft with values trimmed, ready to store.
+ * Checks every condition and action of a draft against the rules vocabulary and the own accounts and
+ * categories of the user. Returns the draft with values trimmed, ready to store.
  */
 async function assertValidDraft(
     db: Pick<PrismaService, "account" | "category">,

@@ -1,6 +1,6 @@
 import { plainToInstance } from "class-transformer";
 import { validate, ValidationError } from "class-validator";
-import { CreateRuleDto, ReorderRulesDto, SetRuleActiveDto, UpdateRuleDto } from "./rule.dto";
+import { CreateRuleDto, ReorderRulesDto, RulePreviewDto, SetRuleActiveDto, UpdateRuleDto } from "./rule.dto";
 
 const CATEGORY_ID = "55555555-5555-4555-8555-555555555555";
 const RULE_ID = "11111111-1111-4111-8111-111111111111";
@@ -144,5 +144,39 @@ describe("ReorderRulesDto", () => {
         expect(failures(await validate(plainToInstance(ReorderRulesDto, { ids: ["nope"] }), strict))).toContain(
             "ids:isUuid",
         );
+    });
+});
+
+describe("RulePreviewDto", () => {
+    const buildPreview = (extra: Record<string, unknown> = {}) =>
+        plainToInstance(RulePreviewDto, { conditions: validBody().conditions, actions: validBody().actions, ...extra });
+
+    it("accepts a draft with no filter, search or page", async () => {
+        expect(await validate(buildPreview(), strict)).toHaveLength(0);
+    });
+
+    it("accepts a filter, a search and a page number sent as text", async () => {
+        const body = buildPreview({ filter: "uncategorized", search: "star", page: "2" });
+        expect(await validate(body, strict)).toHaveLength(0);
+        expect(body.page).toBe(2);
+    });
+
+    it("rejects an unknown filter", async () => {
+        expect(failures(await validate(buildPreview({ filter: "some" }), strict))).toContain("filter:isIn");
+    });
+
+    it("rejects a search longer than 200 characters", async () => {
+        expect(failures(await validate(buildPreview({ search: "x".repeat(201) }), strict))).toContain(
+            "search:maxLength",
+        );
+    });
+
+    it("rejects a page below one or not a whole number", async () => {
+        expect(failures(await validate(buildPreview({ page: 0 }), strict))).toContain("page:min");
+        expect(failures(await validate(buildPreview({ page: 1.5 }), strict))).toContain("page:isInt");
+    });
+
+    it("requires at least one condition and one action, like a rule", async () => {
+        expect(failures(await validate(buildPreview({ conditions: [] }), strict))).toContain("conditions:arrayMinSize");
     });
 });
