@@ -15,3 +15,11 @@ export const SAVINGS_ADJUSTMENT_DESCRIPTION = "Savings adjustment";
  * would also match cheque and Bit/PayBox rows.
  */
 export const CASH_WITHDRAWAL_LABEL = "משיכת מזומן";
+
+/** Transaction types (income, expense, transfer). */
+export const TRANSACTION_TYPES = ["income", "expense", "transfer"] as const;
+export type TransactionType = (typeof TRANSACTION_TYPES)[number];
+
+export function isTransactionType(value: string): value is TransactionType {
+    return TRANSACTION_TYPES.some((type) => type === value);
+}
