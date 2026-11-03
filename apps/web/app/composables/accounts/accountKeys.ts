@@ -5,4 +5,5 @@ export const accountKeys = {
     list: () => [...accountKeys.lists()] as const,
     details: () => [...accountKeys.all, "detail"] as const,
     detail: (id: string) => [...accountKeys.details(), id] as const,
+    ruleUsage: (id: string) => [...accountKeys.all, "rule-usage", id] as const,
 };

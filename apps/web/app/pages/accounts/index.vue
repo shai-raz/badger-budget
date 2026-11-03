@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import type { IAccountResponse } from "@badger/types";
 import { isLedgerAccountType } from "@badger/shared-data";
-import { useToast } from "primevue/usetoast";
-import { useConfirm } from "primevue/useconfirm";
 import { sortAccountsForDisplay } from "~/utils/accountBalance";
 
 // fullBleed: below md the band runs edge to edge, as on Overview (see layouts/app.vue).
@@ -11,12 +9,9 @@ definePageMeta({
     fullBleed: true,
 });
 
-const toast = useToast();
-const confirm = useConfirm();
 const isDesktop = useIsDesktop();
 
 const { data: accounts, isLoading, error } = useGetAccounts();
-const deleteMutation = useDeleteAccount();
 
 const rows = computed(() => sortAccountsForDisplay(accounts.value ?? []));
 
@@ -40,33 +35,11 @@ const handleEditAccount = (account: IAccountResponse) => {
     showFormModal.value = true;
 };
 
+const showDeleteDialog = ref(false);
+const deletingAccount = ref<IAccountResponse | null>(null);
 const handleDeleteAccount = (account: IAccountResponse) => {
-    confirm.require({
-        message: `Are you sure you want to delete the account "${account.name}"? This action cannot be undone.`,
-        header: "Delete account",
-        icon: "pi pi-exclamation-triangle",
-        rejectLabel: "Cancel",
-        acceptLabel: "Delete",
-        acceptClass: "p-button-danger",
-        accept: async () => {
-            try {
-                await deleteMutation.mutateAsync(account.id);
-                toast.add({
-                    severity: "success",
-                    summary: "Success",
-                    detail: "Account deleted successfully",
-                    life: 3000,
-                });
-            } catch (deleteError) {
-                toast.add({
-                    severity: "error",
-                    summary: "Error",
-                    detail: getApiErrorMessage(deleteError, "Failed to delete account"),
-                    life: 5000,
-                });
-            }
-        },
-    });
+    deletingAccount.value = account;
+    showDeleteDialog.value = true;
 };
 
 const handleFormClose = () => {
@@ -217,6 +190,11 @@ const openMenu = ({ account, event }: { account: IAccountResponse; event: Event 
                 </a>
             </template>
         </Menu>
+
+        <AccountsDeleteAccountDialog
+            v-model:visible="showDeleteDialog"
+            :account="deletingAccount"
+        />
 
         <AccountsUpdateLedgerBalanceDialog
             v-model:visible="showUpdateBalance"

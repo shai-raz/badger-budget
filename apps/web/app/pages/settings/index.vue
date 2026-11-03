@@ -71,6 +71,23 @@ const appearanceSummary = computed(() => `${THEMES[themeStore.colorTheme].label}
                     />
                 </NuxtLink>
                 <NuxtLink
+                    to="/settings/rules"
+                    class="flex items-center gap-3 px-4 py-3 md:px-0"
+                >
+                    <i
+                        class="pi pi-bolt text-muted-color"
+                        aria-hidden="true"
+                    />
+                    <span class="flex min-w-0 flex-1 flex-col">
+                        <span class="text-sm font-semibold">Rules</span>
+                        <span class="text-xs text-muted-color">Set a category on new transactions automatically.</span>
+                    </span>
+                    <i
+                        class="pi pi-chevron-right text-surface-400"
+                        aria-hidden="true"
+                    />
+                </NuxtLink>
+                <NuxtLink
                     to="/settings/card-payoff-patterns"
                     class="flex items-center gap-3 px-4 py-3 md:px-0"
                 >

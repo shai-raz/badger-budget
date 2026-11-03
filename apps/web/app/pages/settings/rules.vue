@@ -1,0 +1,123 @@
+<script setup lang="ts">
+import type { Category, IRule } from "@badger/types";
+import type { MenuItem } from "primevue/menuitem";
+import { useConfirm } from "primevue/useconfirm";
+import { useToast } from "primevue/usetoast";
+import { getApiErrorMessage } from "~/utils/apiError";
+import type { RuleDisplayContext } from "~/utils/ruleSentence";
+import RulesList from "../../components/rules/RulesList.vue";
+
+// fullBleed: below md the band runs edge to edge, as on Overview (see layouts/app.vue).
+definePageMeta({
+    layout: "app",
+    fullBleed: true,
+});
+
+const confirm = useConfirm();
+const toast = useToast();
+const { data: rules, isLoading, error } = useRulesQuery();
+const { data: accounts, isLoading: accountsLoading } = useGetAccounts();
+const { data: categories, isLoading: categoriesLoading } = useGetCategoriesQuery();
+const { mutate: setActive } = useSetRuleActiveMutation();
+const { mutate: deleteRule } = useDeleteRuleMutation();
+
+const menu = ref();
+const selectedRule = ref<IRule | null>(null);
+const reorderMode = ref(false);
+
+// Names for the account and category ids a rule refers to, so the sentence and search read as text.
+const displayContext = computed<RuleDisplayContext>(() => ({
+    accountName: (id) => accounts.value?.find((account) => account.id === id)?.name,
+    category: (id) => {
+        const category = categories.value?.find((item: Category) => item.id === id);
+        return category ? { name: category.name, color: category.color, icon: category.icon } : undefined;
+    },
+}));
+
+const isBandLoading = computed(() => isLoading.value || accountsLoading.value || categoriesLoading.value);
+
+const menuItems = computed<MenuItem[]>(() => {
+    const rule = selectedRule.value;
+    if (!rule) return [];
+    return [
+        {
+            label: "Delete",
+            icon: "pi pi-trash",
+            class: "text-red-500",
+            command: () => confirmDelete(rule),
+        },
+    ];
+});
+
+// Mobile rows share one ⋮ menu, pointed at the row it was opened from.
+const openMenu = (event: Event, rule: IRule) => {
+    selectedRule.value = rule;
+    menu.value?.toggle(event);
+};
+
+const handleToggle = (rule: IRule, isActive: boolean) => {
+    setActive(
+        { id: rule.id, isActive },
+        {
+            onError: (err) => {
+                toast.add({
+                    severity: "error",
+                    summary: "Error",
+                    detail: getApiErrorMessage(err, "Couldn't update the rule."),
+                    life: 5000,
+                });
+            },
+        },
+    );
+};
+
+const confirmDelete = (rule: IRule) => {
+    confirm.require({
+        header: `Delete "${rule.name}"?`,
+        message: "It stops running on new transactions. Transactions it already categorized keep their category.",
+        icon: "pi pi-exclamation-triangle",
+        rejectProps: { label: "Cancel", severity: "secondary", text: true },
+        acceptProps: { label: "Delete rule", severity: "danger" },
+        accept: () => {
+            deleteRule(rule.id, {
+                onSuccess: () => {
+                    toast.add({ severity: "success", summary: "Rule deleted", life: 3000 });
+                },
+                onError: (err) => {
+                    toast.add({
+                        severity: "error",
+                        summary: "Error",
+                        detail: getApiErrorMessage(err, "Couldn't delete the rule."),
+                        life: 5000,
+                    });
+                },
+            });
+        },
+    });
+};
+</script>
+
+<template>
+    <div class="flex flex-col gap-3 pb-8 md:gap-6">
+        <LayoutPageHeader
+            title="Rules"
+            back-to="/settings"
+        />
+
+        <RulesList
+            v-model:reorder-mode="reorderMode"
+            :rules="rules"
+            :context="displayContext"
+            :loading="isBandLoading"
+            :error="error"
+            @toggle="handleToggle"
+            @actions="openMenu"
+        />
+
+        <Menu
+            ref="menu"
+            :model="menuItems"
+            popup
+        />
+    </div>
+</template>
