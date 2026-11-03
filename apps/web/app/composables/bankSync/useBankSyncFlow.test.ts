@@ -2,15 +2,21 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { effectScope, nextTick, ref, type EffectScope } from "vue";
 import { provideBankSyncFlow } from "./useBankSyncFlow";
 import { SyncUnlockError } from "../../utils/syncPasskeyWebAuthn";
+import type { IScraperJob, ISyncJob } from "@badger/types";
 
-const mocks = vi.hoisted(() => ({
-    full: vi.fn(),
-    single: vi.fn(),
-    unlock: vi.fn(),
-    available: vi.fn(),
-    addToast: vi.fn(),
-    invalidate: vi.fn(),
-}));
+const mocks = await vi.hoisted(async () => {
+    const { ref } = await import("vue");
+    return {
+        full: vi.fn(),
+        single: vi.fn(),
+        unlock: vi.fn(),
+        available: vi.fn(),
+        addToast: vi.fn(),
+        invalidate: vi.fn(),
+        // The job the mocked sync-job query returns. Tests set it to drive the flow's job watch.
+        jobData: ref<ISyncJob | null>(null),
+    };
+});
 vi.mock("vue", async (original) => ({
     ...(await original<typeof import("vue")>()),
     provide: vi.fn(),
@@ -35,7 +41,7 @@ vi.mock("./useBankSync", () => ({
     useTriggerSyncMutation: () => ({ isPending: ref(false), mutateAsync: mocks.full }),
     useTriggerConnectionSyncMutation: () => ({ isPending: ref(false), mutateAsync: mocks.single }),
     useActiveSyncJobQuery: () => ({ data: ref(null), refetch: vi.fn() }),
-    useSyncJobQuery: () => ({ data: ref(null) }),
+    useSyncJobQuery: () => ({ data: mocks.jobData }),
     useSyncPasskeysQuery: () => ({ data: ref([{ credentialId: "passkey-1" }]) }),
 }));
 
@@ -43,6 +49,7 @@ let scope: EffectScope;
 let flow: ReturnType<typeof provideBankSyncFlow>;
 beforeEach(() => {
     vi.resetAllMocks();
+    mocks.jobData.value = null;
     mocks.full.mockResolvedValue({ jobId: "full-job" });
     mocks.single.mockResolvedValue({ jobId: "single-job" });
     mocks.unlock.mockResolvedValue("1234");
@@ -169,5 +176,104 @@ describe("syncConnectionWithPin", () => {
         expect(mocks.addToast).toHaveBeenCalledWith(
             expect.objectContaining({ severity: "error", summary: "Failed to Start Sync" }),
         );
+    });
+});
+
+describe("sync result toasts", () => {
+    const scraperJob = (overrides: Partial<IScraperJob>): IScraperJob => ({
+        id: "scraper-1",
+        syncJobId: "single-job",
+        scraperConnectionId: "bank-1",
+        companyId: "visaCal",
+        displayName: "Visa Cal",
+        status: "failed",
+        transactionsSynced: 0,
+        accountsSynced: 0,
+        error: "RAW BANK TEXT",
+        errorCode: "INVALID_PASSWORD",
+        startedAt: new Date("2026-03-01T10:00:00Z"),
+        finishedAt: new Date("2026-03-01T10:00:30Z"),
+        createdAt: new Date("2026-03-01T10:00:00Z"),
+        ...overrides,
+    });
+    const syncJob = (overrides: Partial<ISyncJob>): ISyncJob => ({
+        id: "single-job",
+        userId: "user-1",
+        status: "success",
+        transactionsSynced: 0,
+        accountsSynced: 0,
+        error: null,
+        startedAt: new Date("2026-03-01T10:00:00Z"),
+        finishedAt: new Date("2026-03-01T10:01:00Z"),
+        createdAt: new Date("2026-03-01T10:00:00Z"),
+        scraperJobs: [],
+        ...overrides,
+    });
+    // Starts a single-connection sync, then reports its job as finished.
+    const finishRun = async (job: ISyncJob) => {
+        await flow.syncConnectionWithPin("bank-1", "1234", { typed: true });
+        mocks.jobData.value = job;
+        await settle();
+    };
+
+    it("links a partial sync toast to its run, without raw bank error text", async () => {
+        await finishRun(
+            syncJob({
+                status: "partial",
+                transactionsSynced: 3,
+                scraperJobs: [
+                    scraperJob({ id: "scraper-1", displayName: "Visa Cal", status: "success", errorCode: null }),
+                    scraperJob({ id: "scraper-2", displayName: "Leumi", errorCode: "TIMEOUT" }),
+                ],
+            }),
+        );
+        expect(mocks.addToast).toHaveBeenCalledWith(
+            expect.objectContaining({
+                group: "sync-result",
+                severity: "warn",
+                summary: "Sync partly complete",
+                detail: "Synced 3 transactions. The bank's site didn't respond.",
+                data: { jobId: "single-job", seeWhy: true },
+            }),
+        );
+        expect(JSON.stringify(mocks.addToast.mock.calls)).not.toContain("RAW BANK TEXT");
+        expect(flow.activeJobId.value).toBeNull();
+    });
+
+    it("links a failed sync toast to its run", async () => {
+        await finishRun(syncJob({ status: "failed", scraperJobs: [scraperJob({})] }));
+        expect(mocks.addToast).toHaveBeenCalledWith(
+            expect.objectContaining({
+                group: "sync-result",
+                severity: "error",
+                summary: "Sync failed",
+                detail: "Wrong username or password.",
+                data: { jobId: "single-job", seeWhy: true },
+            }),
+        );
+        expect(flow.activeJobId.value).toBeNull();
+    });
+
+    it("ends an interrupted run cleanly, with no See why link", async () => {
+        await finishRun(syncJob({ status: "interrupted" }));
+        expect(mocks.addToast).toHaveBeenCalledWith(
+            expect.objectContaining({
+                group: "sync-result",
+                severity: "warn",
+                summary: "Sync interrupted",
+                detail: "The server restarted during the sync.",
+                data: { jobId: "single-job", seeWhy: false },
+            }),
+        );
+        expect(flow.activeJobId.value).toBeNull();
+        expect(flow.syncedCount.value).toBeNull();
+    });
+
+    it("keeps the success toast outside the sync-result group", async () => {
+        await finishRun(syncJob({ status: "success", transactionsSynced: 1 }));
+        expect(mocks.addToast).toHaveBeenCalledWith(
+            expect.objectContaining({ severity: "success", summary: "Sync complete" }),
+        );
+        expect(mocks.addToast.mock.calls[0]?.[0]).not.toHaveProperty("group");
     });
 });

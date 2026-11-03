@@ -10,8 +10,9 @@ import {
 } from "./useBankSync";
 import { MAX_PASSKEYS } from "@badger/shared-data";
 import { useToast } from "primevue/usetoast";
+import type { ToastMessageOptions } from "primevue/toast";
 import { useQueryClient } from "@tanstack/vue-query";
-import type { ISyncPasskey } from "@badger/types";
+import type { ISyncJob, ISyncPasskey } from "@badger/types";
 import { accountKeys } from "~/composables/accounts/useAccounts";
 import { budgetKeys } from "~/composables/useBudgets";
 import { reportKeys } from "~/composables/reports/useSpendingReport";
@@ -24,6 +25,31 @@ import {
     unlockFallbackMessage,
 } from "~/utils/syncPasskeyWebAuthn";
 import { hasRegisteredOnDevice, isOfferDismissed, markOfferDismissed } from "~/utils/syncPasskeyDeviceFlags";
+import { runProblemSummary } from "~/utils/syncRuns";
+import { syncErrorCopy } from "~/utils/syncErrors";
+
+export const SYNC_RESULT_TOAST_GROUP = "sync-result";
+
+/** What a sync-result toast carries: the run it describes, and whether it links to that run's failure details. */
+export interface SyncResultToastData {
+    jobId: string;
+    /** False for interrupted runs, which have no failure to explain. */
+    seeWhy: boolean;
+}
+
+export function isSyncResultToastData(data: unknown): data is SyncResultToastData {
+    return (
+        typeof data === "object" &&
+        data !== null &&
+        "jobId" in data &&
+        typeof data.jobId === "string" &&
+        "seeWhy" in data &&
+        typeof data.seeWhy === "boolean"
+    );
+}
+
+/** A result line from the run's problem summary, ended with a full stop. Never raw bank error text. */
+const problemSentence = (job: ISyncJob) => `${runProblemSummary(job) ?? syncErrorCopy("UNKNOWN").short}.`;
 
 const bankSyncFlowKey: InjectionKey<ReturnType<typeof createBankSyncFlow>> = Symbol("bank-sync-flow");
 
@@ -82,6 +108,16 @@ function createBankSyncFlow() {
     const jobId = computed(() => activeJobId.value);
     const { data: jobData } = useSyncJobQuery(jobId);
 
+    // One group for every sync result, so the "See why" link can close the toast and open that run's dialog.
+    const addSyncResultToast = (job: ISyncJob, message: ToastMessageOptions, seeWhy: boolean) => {
+        const syncResult: ToastMessageOptions & { data: SyncResultToastData } = {
+            ...message,
+            group: SYNC_RESULT_TOAST_GROUP,
+            data: { jobId: job.id, seeWhy },
+        };
+        toast.add(syncResult);
+    };
+
     // Watch job data for updates
     watch(jobData, (job) => {
         if (!job || job.id !== activeJobId.value) return;
@@ -91,7 +127,7 @@ function createBankSyncFlow() {
         if (job.status === "success") {
             toast.add({
                 severity: "success",
-                summary: "Sync Complete",
+                summary: "Sync complete",
                 detail: `Successfully synced ${job.transactionsSynced ?? 0} transaction${job.transactionsSynced !== 1 ? "s" : ""}`,
                 life: 5000,
             });
@@ -105,14 +141,17 @@ function createBankSyncFlow() {
             void maybeOfferPasskey();
         } else if (job.status === "partial") {
             offerPin = null;
-            const failed = job.scraperJobs?.filter((s) => s.status === "failed") ?? [];
-            const failedNames = failed.map((s) => s.displayName).join(", ");
-            toast.add({
-                severity: "warn",
-                summary: "Sync Partially Complete",
-                detail: `Synced ${job.transactionsSynced ?? 0} transaction${job.transactionsSynced !== 1 ? "s" : ""}. Failed: ${failedNames}`,
-                life: 8000,
-            });
+            const synced = job.transactionsSynced ?? 0;
+            addSyncResultToast(
+                job,
+                {
+                    severity: "warn",
+                    summary: "Sync partly complete",
+                    detail: `Synced ${synced} transaction${synced !== 1 ? "s" : ""}. ${problemSentence(job)}`,
+                    life: 8000,
+                },
+                true,
+            );
             queryClient.invalidateQueries({ queryKey: ["transactions"] });
             queryClient.invalidateQueries({ queryKey: ["bank-sync", "connections"] });
             queryClient.invalidateQueries({ queryKey: accountKeys.all });
@@ -122,17 +161,22 @@ function createBankSyncFlow() {
             syncedCount.value = null;
         } else if (job.status === "failed") {
             offerPin = null;
-            const failed = job.scraperJobs?.filter((s) => s.status === "failed") ?? [];
-            const detail =
-                failed.length > 0
-                    ? failed.map((s) => `${s.displayName}: ${s.error ?? "unknown error"}`).join("\n")
-                    : job.error || "An error occurred during sync";
-            toast.add({
-                severity: "error",
-                summary: "Sync Failed",
-                detail,
-                life: 7000,
-            });
+            addSyncResultToast(
+                job,
+                { severity: "error", summary: "Sync failed", detail: problemSentence(job), life: 7000 },
+                true,
+            );
+            queryClient.invalidateQueries({ queryKey: ["bank-sync", "connections"] });
+            activeJobId.value = null;
+            syncedCount.value = null;
+        } else if (job.status === "interrupted") {
+            // Terminal: clear the job so the spinner can't stick on a run the server will never finish.
+            offerPin = null;
+            addSyncResultToast(
+                job,
+                { severity: "warn", summary: "Sync interrupted", detail: problemSentence(job), life: 8000 },
+                false,
+            );
             queryClient.invalidateQueries({ queryKey: ["bank-sync", "connections"] });
             activeJobId.value = null;
             syncedCount.value = null;
