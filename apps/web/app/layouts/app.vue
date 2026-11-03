@@ -69,11 +69,13 @@ useHead({ bodyAttrs: { class: "app-layout-body" } });
                     <Toast :breakpoints="toastBreakpoints" />
                     <CashFollowupToast />
                     <UpgradeToast />
+                    <!-- PrimeVue takes reject props per confirm.require call, so the text Cancel style lives here once (matches FormDialog). -->
                     <ConfirmDialog
                         :pt="{
                             root: { class: 'max-w-[calc(100vw-2rem)] md:max-w-xl' },
                             icon: { class: 'shrink-0' },
                             message: { class: 'min-w-0 whitespace-pre-line [overflow-wrap:anywhere]' },
+                            pcRejectButton: { root: { class: 'p-button-text p-button-secondary' } },
                         }"
                     />
                 </div>

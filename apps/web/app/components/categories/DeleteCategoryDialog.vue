@@ -251,6 +251,7 @@ const handleConfirm = async () => {
         <template #footer>
             <Button
                 label="Cancel"
+                severity="secondary"
                 text
                 :disabled="deleting"
                 @click="handleClose"

@@ -115,4 +115,19 @@ describe("ConfirmDialog overflow guard", () => {
         expect(tag).toContain("min-w-0");
         expect(tag).toContain("whitespace-pre-line");
     });
+
+    it("styles the Cancel button as secondary text", () => {
+        const tag = confirmTag();
+        expect(tag).toContain("pcRejectButton");
+        expect(tag).toContain("p-button-text");
+        expect(tag).toContain("p-button-secondary");
+    });
+});
+
+describe("delete category dialog", () => {
+    it("keeps Cancel as a secondary text button", () => {
+        const source = readFileSync(`${appDir}/components/categories/DeleteCategoryDialog.vue`, "utf8");
+        const cancel = source.match(/<Button[^>]*label="Cancel"[^>]*>/)?.[0] ?? "";
+        expect(cancel).toContain('severity="secondary"');
+    });
 });
