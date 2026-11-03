@@ -733,7 +733,7 @@ describe("design contract: failure strip", () => {
             return /<button\b|<Button\b/.test(text.slice(start, close));
         });
 
-    it("draws no hex colour literal, colours come from the message tokens", () => {
+    it("draws no hex colour literal, colours come from the sync-error theme tokens", () => {
         expect(source).not.toMatch(/#[0-9a-fA-F]{3,6}/);
     });
 
