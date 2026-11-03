@@ -35,3 +35,9 @@ export {
     cashWithdrawalPatternKeys,
     useGetCashWithdrawalPatterns,
 } from "./cash-withdrawal-patterns/useCashWithdrawalPatterns";
+export {
+    useRulesQuery,
+    useSetRuleActiveMutation,
+    useReorderRulesMutation,
+    useDeleteRuleMutation,
+} from "./rules/useRules";
