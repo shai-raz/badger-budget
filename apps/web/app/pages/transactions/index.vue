@@ -4,10 +4,16 @@ import { useQueryClient } from "@tanstack/vue-query";
 import {
     transactionKeys,
     useInfiniteTransactions,
+    useTransactionCategoryFacets,
     useTransactionsSummary,
 } from "../../composables/transactions/useTransactions";
 import { useTransactionFilters } from "../../composables/transactions/useTransactionFilters";
 import { listScrollKey, saveListScroll, takeListScroll } from "../../utils/listScroll";
+import {
+    buildCategoryFilterOptions,
+    type CategoryFilterOption,
+    UNCATEGORIZED_VALUE,
+} from "../../utils/categoryFilterOptions";
 // Imported explicitly (Nuxt would otherwise auto-import it) so its instance
 // type is in scope for the template ref below.
 import TransactionsListRows from "../../components/transactions/ListRows.vue";
@@ -24,38 +30,15 @@ definePageMeta({
 
 const router = useRouter();
 
-// Category filter options come from the categories endpoint (not derived from
-// the loaded rows), plus an "Uncategorized" pseudo-option. The page owns these
-// in one place; the filters panel and chips both read from here.
-const UNCATEGORIZED_VALUE = "uncategorized";
-// Kept as hex: FiltersPanel's chipStyle parses it with hexToRgba, which a var() would break.
-const UNCATEGORIZED_COLOR = "#9CA3AF"; // neutral gray, matches surface-400
-
 const { data: categoriesData, isPending: isCategoriesPending } = useGetCategoriesQuery();
 
-// Empty while the query is in flight, rather than the lone "Uncategorized"
-// pseudo-entry: a single option looks like a full selection to the filter's
-// collapse-to-"all" rule, so the first tap would be silently swallowed. An
-// empty chip row also reads as "loading" rather than as one broken option.
-const categoryOptions = computed(() => {
-    if (isCategoriesPending.value) return [];
-
-    const options = ((categoriesData.value ?? []) as ICategoryResponse[])
-        .map((category) => ({ value: category.id, label: category.name, color: category.color }))
-        .sort((left, right) => left.label.localeCompare(right.label));
-
-    return [{ value: UNCATEGORIZED_VALUE, label: "Uncategorized", color: UNCATEGORIZED_COLOR }, ...options];
-});
-
-// Real categories + the Uncategorized entry, used for the "N of M categories" chip.
-const totalCategoryCount = computed(() => categoryOptions.value.length);
-
-// Ids the URL's category filter is checked against. Undefined until the list has loaded, so a shared link is not
-// pruned before the categories are known.
+// Ids the URL's category filter is checked against. Built from the full categories list, not the offered options,
+// so a shared link's category is not pruned just because it has no matches in the current view. Undefined until the
+// list has loaded, so a shared link is not pruned before the categories are known.
 const knownCategoryIds = () =>
     isCategoriesPending.value || !categoriesData.value
         ? undefined
-        : categoryOptions.value.map((option) => option.value);
+        : [UNCATEGORIZED_VALUE, ...(categoriesData.value as ICategoryResponse[]).map((category) => category.id)];
 
 // Single source of filter state: everything but the search input text lives in the URL (see useTransactionFilters).
 const {
@@ -67,6 +50,7 @@ const {
     showHidden,
     listParams,
     summaryParams,
+    facetParams,
     activeFilterCount,
     activeChips,
     hasActiveFilters,
@@ -75,6 +59,30 @@ const {
     totalCategoryCount: () => totalCategoryCount.value,
     knownCategoryIds,
 });
+
+// Per-category counts for the current view (every filter except the category selection). They decide which categories
+// are offered. keepPreviousData keeps the previous counts on screen while a refetch is in flight.
+const { data: facetData, isPending: isFacetPending, isError: isFacetError } = useTransactionCategoryFacets(facetParams);
+
+const facetFailed = computed(() => isFacetError.value && !facetData.value);
+
+// Offered categories: those with rows in the current view, plus any selected one (kept, dimmed as stale, so it can
+// still be cleared). If the counts fail, every category is offered instead. Empty until both queries have data: a lone
+// "Uncategorized" entry would look like a full selection to the filter's collapse-to-"all" rule, so the first tap
+// would be silently swallowed. An empty chip row also reads as "loading".
+const categoryOptions = computed<CategoryFilterOption[]>(() => {
+    if (isCategoriesPending.value || (isFacetPending.value && !facetFailed.value)) return [];
+
+    return buildCategoryFilterOptions({
+        categories: categoriesData.value as ICategoryResponse[] | undefined,
+        facets: facetData.value?.categories,
+        facetFailed: facetFailed.value,
+        selectedIds: selectedCategoryIds.value,
+    });
+});
+
+// Offered categories (not every category), used for the "N of M categories" chip.
+const totalCategoryCount = computed(() => categoryOptions.value.length);
 
 // Below md the page switches to the compact mobile experience: compact header,
 // collapsible summary, bottom-sheet filters, and tap-to-navigate rows.

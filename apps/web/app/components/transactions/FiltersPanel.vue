@@ -1,18 +1,12 @@
 <script setup lang="ts">
 import type { TransactionTypeFilter } from "../../composables/transactions/useTransactionFilters";
 import { useCategoryToggle } from "../../composables/transactions/useCategoryToggle";
+import type { CategoryFilterOption } from "~/utils/categoryFilterOptions";
 import { hexToRgba } from "~/utils/color";
 
-interface CategoryOption {
-    value: string;
-    label: string;
-    /** Category color for the dot (neutral gray for the Uncategorized entry). */
-    color: string;
-}
-
 const props = defineProps<{
-    /** All categories (including the "Uncategorized" pseudo-entry) to offer as chips. */
-    categoryOptions: CategoryOption[];
+    /** Categories in the current view (plus stale selections) to offer. */
+    categoryOptions: CategoryFilterOption[];
 }>();
 
 const emit = defineEmits<{ (event: "clear-all"): void }>();
