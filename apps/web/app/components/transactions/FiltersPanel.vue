@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TransactionTypeFilter } from "../../composables/transactions/useTransactionFilters";
 import { useCategoryToggle } from "../../composables/transactions/useCategoryToggle";
-import type { CategoryFilterOption } from "~/utils/categoryFilterOptions";
+import { transactionCountLabel, type CategoryFilterOption } from "~/utils/categoryFilterOptions";
 import { hexToRgba } from "~/utils/color";
 
 const props = defineProps<{
@@ -31,9 +31,10 @@ const { isAllActive, canInvert, countLabel, isSelected, toggle, selectAll, inver
 
 // PrimeVue 4's Chip has no outlined variant, so the chip frame is ours: every
 // state carries a 1px border (widths must match or the chips resize on toggle).
-// The font weight is constant for the same reason: these chips sit in a wrap
-// row, so anything that resizes one on toggle can rewrap the row and move the
-// chips out from under the cursor between two clicks.
+// The font weight and the count are constant for the same reason: these chips
+// sit in a wrap row, so anything that resizes one on toggle (border, weight,
+// count mounting or unmounting) can rewrap the row and move the chips out from
+// under the cursor between two clicks. Only the count's colour changes.
 const CHIP_BASE = "cursor-pointer border";
 const CHIP_IDLE =
     "border-surface-200 bg-surface-0 text-surface-700 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-200";
@@ -152,11 +153,13 @@ function chipStyle(color: string) {
                             CHIP_BASE,
                             'font-semibold',
                             isSelected(option.value) ? 'text-surface-900 dark:text-surface-0' : CHIP_IDLE,
+                            option.stale && 'opacity-60',
                         ]"
                         :style="isSelected(option.value) ? chipStyle(option.color) : undefined"
                         role="button"
                         tabindex="0"
                         :aria-pressed="isSelected(option.value)"
+                        :aria-label="transactionCountLabel(option.label, option.count)"
                         @click="toggle(option.value)"
                         @keydown.enter.prevent="toggle(option.value)"
                         @keydown.space.prevent="toggle(option.value)"
@@ -167,6 +170,16 @@ function chipStyle(color: string) {
                             :style="{ backgroundColor: option.color }"
                         ></span>
                         <span class="text-[12.5px]">{{ option.label }}</span>
+                        <!-- Mounted in every state with a constant weight, so only its colour changes on toggle. -->
+                        <span
+                            v-if="option.count !== undefined"
+                            class="-ml-[2px] text-[11.5px] font-medium tabular-nums"
+                            :class="
+                                isSelected(option.value) ? 'text-surface-700 dark:text-surface-300' : 'text-muted-color'
+                            "
+                            aria-hidden="true"
+                            >{{ option.count }}</span
+                        >
                     </Chip>
                 </div>
             </div>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TransactionTypeFilter } from "../../composables/transactions/useTransactionFilters";
 import { useCategoryToggle } from "../../composables/transactions/useCategoryToggle";
-import type { CategoryFilterOption } from "~/utils/categoryFilterOptions";
+import { transactionCountLabel, type CategoryFilterOption } from "~/utils/categoryFilterOptions";
 
 const props = defineProps<{
     /** Categories in the current view (plus stale selections) to offer. */
@@ -147,7 +147,9 @@ useDragToDismiss(handleEl, () => (handleEl.value?.closest("[data-filters-sheet]"
                     :key="option.value"
                     type="button"
                     :aria-pressed="isSelected(option.value)"
+                    :aria-label="transactionCountLabel(option.label, option.count)"
                     class="flex items-center gap-3 py-3 text-left"
+                    :class="option.stale ? 'opacity-60' : ''"
                     @click="toggle(option.value)"
                 >
                     <span
@@ -165,9 +167,16 @@ useDragToDismiss(handleEl, () => (handleEl.value?.closest("[data-filters-sheet]"
                     >
                         {{ option.label }}
                     </span>
+                    <span
+                        v-if="option.count !== undefined"
+                        class="text-[13px] tabular-nums text-muted-color"
+                        aria-hidden="true"
+                        >{{ option.count }}</span
+                    >
+                    <!-- Mounted in every state and hidden with `invisible`, so the count column does not shift on toggle. -->
                     <i
-                        v-if="isSelected(option.value)"
                         class="pi pi-check text-[13px] text-surface-900 dark:text-surface-0"
+                        :class="{ invisible: !isSelected(option.value) }"
                         aria-hidden="true"
                     ></i>
                 </button>
