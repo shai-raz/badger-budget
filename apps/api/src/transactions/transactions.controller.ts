@@ -20,6 +20,8 @@ import { ListTransactionsQueryDto } from "./dto/list-transactions-query.dto";
 import { SummaryTransactionsQueryDto } from "./dto/summary-transactions-query.dto";
 import { PaginatedTransactionsResponseDto } from "./dto/transaction-list-response.dto";
 import { TransactionsSummaryResponseDto } from "./dto/transactions-summary-response.dto";
+import { CategoryFacetsQueryDto } from "./dto/category-facets-query.dto";
+import { TransactionCategoryFacetsResponseDto } from "./dto/category-facets-response.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 
@@ -69,8 +71,8 @@ export class TransactionsController {
         return this.transactionsService.findAll(user.id, query);
     }
 
-    // NOTE: this MUST stay above `@Get(":id")` — otherwise "summary" is
-    // captured as an :id and routed to findOne.
+    // NOTE: these MUST stay above `@Get(":id")` — otherwise "summary" and
+    // "category-facets" are captured as an :id and routed to findOne.
     @Get("summary")
     @ApiOperation({
         summary: "Aggregate totals (income/expenses/net/transferred/available) for the filtered list",
@@ -90,6 +92,26 @@ export class TransactionsController {
         @CurrentUser() user: any,
     ): Promise<TransactionsSummaryResponseDto> {
         return this.transactionsService.getSummary(user.id, query);
+    }
+
+    @Get("category-facets")
+    @ApiOperation({
+        summary: "Per-category transaction counts for the current filters, ignoring the category filter",
+        description:
+            "Applies the same filters as `GET /transactions` (search, type, date range, includeHidden, " +
+            "legacy accountId/budgetId) but ignores `categoryIds`/`categoryId`, so every category with rows " +
+            "in the rest of the view is listed. A `null` categoryId counts uncategorized transactions.",
+    })
+    @ApiResponse({
+        status: 200,
+        description: "Per-category transaction counts.",
+        type: TransactionCategoryFacetsResponseDto,
+    })
+    getCategoryFacets(
+        @Query() query: CategoryFacetsQueryDto,
+        @CurrentUser() user: any,
+    ): Promise<TransactionCategoryFacetsResponseDto> {
+        return this.transactionsService.getCategoryFacets(user.id, query);
     }
 
     @Get(":id")

@@ -20,6 +20,9 @@ const loadWithSwcDesignTypes = <T>(load: () => T): T => {
 const dtos = loadWithSwcDesignTypes(() => ({
     account: jest.requireActual<typeof import("./account-response.dto")>("./account-response.dto"),
     budget: jest.requireActual<typeof import("./budget-response.dto")>("./budget-response.dto"),
+    categoryFacets: jest.requireActual<typeof import("./category-facets-response.dto")>(
+        "./category-facets-response.dto",
+    ),
     category: jest.requireActual<typeof import("./category-response.dto")>("./category-response.dto"),
     transaction: jest.requireActual<typeof import("./transaction-response.dto")>("./transaction-response.dto"),
     sheetConnection: jest.requireActual<typeof import("../../google-sheets/dto/sheet-connection.dto")>(
@@ -42,6 +45,7 @@ const rows = [
     { dto: dtos.transaction.TransactionResponseDto, property: "reimbursement", type: Object },
     ...["icon", "color"].map((property) => ({ dto: dtos.account.AccountResponseDto, property, type: String })),
     { dto: dtos.category.CategoryResponseDto, property: "icon", type: String },
+    { dto: dtos.categoryFacets.TransactionCategoryFacetDto, property: "categoryId", type: String },
     ...["startDate", "endDate", "deletedAt"].map((property) => ({
         dto: dtos.budget.BudgetResponseDto,
         property,

@@ -28,6 +28,7 @@ import { assertReimbursementEditAllowed } from "./reimbursement-edit-guard";
 import { lockReimbursements } from "./reimbursement-lock";
 import { TransactionAttachmentsService } from "./attachments/transaction-attachments.service";
 import { isLedgerAccountType, parseAccountType } from "@badger/shared-data";
+import type { ITransactionCategoryFacetsResponse } from "@badger/types";
 
 /** Filters accepted by the transaction list endpoint (superset of legacy params). */
 export interface ListTransactionsFilters {
@@ -58,6 +59,13 @@ export type SummaryTransactionsFilters = Omit<
     ListTransactionsFilters,
     "page" | "limit" | "sortBy" | "sortOrder" | "includeHidden"
 >;
+
+/**
+ * Filters accepted by the category-facets endpoint. The category keys are kept
+ * only so `getCategoryFacets` can strip them: the counts ignore the category
+ * selection.
+ */
+export type CategoryFacetFilters = Omit<ListTransactionsFilters, "page" | "limit" | "sortBy" | "sortOrder">;
 
 /** Lean, relation-flattened transaction row (no attachments / nested objects). */
 export interface TransactionLeanRow {
@@ -516,6 +524,35 @@ export class TransactionsService {
         const currencyCode = mostRecent?.currency?.code ?? "ILS";
 
         return { income, expenses, net, transferred, available, count, currencyCode };
+    }
+
+    /**
+     * Per-category row counts for the transaction filters, so the category picker
+     * only offers categories present in the filtered view.
+     *
+     * Applies the list's filters but ignores the category selection, so every
+     * category with rows in the rest of the view stays offered while one is
+     * picked. `includeHidden` is applied exactly as the list applies it (unlike
+     * `getSummary`, hidden rows are not forced out).
+     */
+    async getCategoryFacets(
+        userId: string,
+        filters: CategoryFacetFilters = {},
+    ): Promise<ITransactionCategoryFacetsResponse> {
+        const where = this.buildListWhere(userId, { ...filters, categoryIds: undefined, categoryId: undefined });
+
+        const groups = (await this.db.transaction.groupBy({
+            by: ["categoryId"],
+            where,
+            _count: { _all: true },
+        })) as Array<{ categoryId: string | null; _count: { _all: number } }>;
+
+        return {
+            categories: groups.map((group) => ({
+                categoryId: group.categoryId ?? null,
+                count: group._count._all,
+            })),
+        };
     }
 
     /**

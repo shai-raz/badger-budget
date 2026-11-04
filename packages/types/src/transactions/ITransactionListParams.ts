@@ -55,3 +55,16 @@ export type ITransactionSummaryParams = Omit<
     ITransactionListParams,
     "page" | "limit" | "sortBy" | "sortOrder" | "includeHidden"
 >;
+
+/**
+ * Params for the `GET /transactions/category-facets` per-category counts.
+ *
+ * `includeHidden` is kept: the facet follows the list's show-hidden toggle, so
+ * the counts match what the list would show. The category filters
+ * (`categoryIds` / `categoryId`) are omitted because the facet counts ignore the
+ * category selection — every category stays offered while one is picked.
+ */
+export type ITransactionCategoryFacetParams = Omit<
+    ITransactionListParams,
+    "page" | "limit" | "sortBy" | "sortOrder" | "categoryIds" | "categoryId"
+>;

@@ -3,8 +3,16 @@ export type { IBudgetResponse } from "./IBudgetResponse";
 export type { ICategoryResponse } from "./ICategoryResponse";
 export type { ICurrencyResponse } from "./ICurrencyResponse";
 export type { ITransactionResponse } from "./ITransactionResponse";
-export type { ITransactionListParams, ITransactionSummaryParams } from "./ITransactionListParams";
+export type {
+    ITransactionListParams,
+    ITransactionSummaryParams,
+    ITransactionCategoryFacetParams,
+} from "./ITransactionListParams";
 export type { ITransactionsSummaryResponse } from "./ITransactionsSummaryResponse";
+export type {
+    ITransactionCategoryFacet,
+    ITransactionCategoryFacetsResponse,
+} from "./ITransactionCategoryFacetsResponse";
 export type { ITransactionCounterpart, ITransactionCounterpartSource } from "./ITransactionCounterpart";
 export type { ITransactionAttachmentResponse } from "./ITransactionAttachmentResponse";
 export type { IAttachmentUrlResponse } from "./IAttachmentUrlResponse";
