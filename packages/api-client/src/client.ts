@@ -6,6 +6,8 @@ import type {
     ITransactionListParams,
     ITransactionSummaryParams,
     ITransactionsSummaryResponse,
+    ITransactionCategoryFacetParams,
+    ITransactionCategoryFacetsResponse,
     PaginatedResponse,
     ITransactionAttachmentResponse,
     IAttachmentUrlResponse,
@@ -466,6 +468,17 @@ export class ApiClient {
     async getTransactionsSummary(params: ITransactionSummaryParams): Promise<ITransactionsSummaryResponse> {
         const query = this.serializeTransactionParams(params);
         const response = await this.client.get<ITransactionsSummaryResponse>("/transactions/summary", {
+            params: query,
+        });
+        return response.data;
+    }
+
+    /** Per-category transaction counts for the current filters (category filter ignored; follows includeHidden). */
+    async getTransactionCategoryFacets(
+        params: ITransactionCategoryFacetParams,
+    ): Promise<ITransactionCategoryFacetsResponse> {
+        const query = this.serializeTransactionParams(params);
+        const response = await this.client.get<ITransactionCategoryFacetsResponse>("/transactions/category-facets", {
             params: query,
         });
         return response.data;
