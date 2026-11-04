@@ -473,11 +473,23 @@ export class ApiClient {
         return response.data;
     }
 
-    /** Per-category transaction counts for the current filters (category filter ignored; follows includeHidden). */
+    /**
+     * Per-category transaction counts for the current filters (category filter ignored; follows includeHidden).
+     * Only the keys the facet endpoint accepts are sent: it rejects anything else with a 400, so a wider
+     * object (e.g. the list's params) is narrowed to an explicit allow-list here instead of being forwarded.
+     */
     async getTransactionCategoryFacets(
         params: ITransactionCategoryFacetParams,
     ): Promise<ITransactionCategoryFacetsResponse> {
-        const query = this.serializeTransactionParams(params);
+        const query = this.serializeTransactionParams({
+            search: params.search,
+            type: params.type,
+            startDate: params.startDate,
+            endDate: params.endDate,
+            includeHidden: params.includeHidden,
+            accountId: params.accountId,
+            budgetId: params.budgetId,
+        });
         const response = await this.client.get<ITransactionCategoryFacetsResponse>("/transactions/category-facets", {
             params: query,
         });
