@@ -426,3 +426,47 @@ describe("useTransactionFilters writes made in the same task", () => {
         expect(nav.counts).toEqual({ pushes: 1, replaces: 1 });
     });
 });
+
+describe("useTransactionFilters facetParams", () => {
+    it("keeps the same values through a category toggle, so the facet key does not change", async () => {
+        const filters = mountFilters({ knownCategoryIds: ["a", "b"] });
+        const before = filters.facetParams.value;
+
+        filters.selectedCategoryIds.value = ["a"];
+        await nextTick();
+
+        expect(filters.facetParams.value).toEqual(before);
+        expect(filters.facetParams.value).not.toHaveProperty("categoryIds");
+    });
+
+    it("follows the search, type, period and show-hidden filters", () => {
+        const filters = mountFilters();
+
+        expect(filters.facetParams.value).toEqual({
+            includeHidden: false,
+            startDate: "2026-10-01",
+            endDate: "2026-10-31",
+        });
+
+        route.query = { ...route.query, q: "rent" };
+        expect(filters.facetParams.value.search).toBe("rent");
+
+        route.query = { ...route.query, type: "expense" };
+        expect(filters.facetParams.value.type).toBe("expense");
+
+        route.query = { ...route.query, from: "2026-08", to: "2026-08" };
+        expect(filters.facetParams.value).toMatchObject({ startDate: "2026-08-01", endDate: "2026-08-31" });
+
+        route.query = { ...route.query, hidden: "1" };
+        expect(filters.facetParams.value.includeHidden).toBe(true);
+    });
+
+    it("never carries the list-only keys", () => {
+        route.query = { categories: "a", sort: "name" };
+        const { facetParams } = mountFilters({ knownCategoryIds: ["a", "b"] });
+
+        for (const key of ["categoryIds", "limit", "sortBy", "sortOrder"]) {
+            expect(facetParams.value).not.toHaveProperty(key);
+        }
+    });
+});
