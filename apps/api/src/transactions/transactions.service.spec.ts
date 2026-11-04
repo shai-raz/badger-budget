@@ -1080,6 +1080,104 @@ describe("TransactionsService", () => {
         });
     });
 
+    describe("getCategoryFacets", () => {
+        const searchOr = [
+            { description: { contains: "rent", mode: "insensitive" } },
+            { additionalDescription: { contains: "rent", mode: "insensitive" } },
+            { category: { name: { contains: "rent", mode: "insensitive" } } },
+        ];
+
+        it("groups by categoryId and counts every row with the list filters applied", async () => {
+            mockPrismaService.transaction.groupBy.mockResolvedValueOnce([]);
+
+            await service.getCategoryFacets("test-user", {
+                search: "rent",
+                type: "expense",
+                startDate: "2025-12-01",
+                endDate: "2025-12-31",
+                accountId: "acc-1",
+                budgetId: "budget-1",
+                includeHidden: true,
+            });
+
+            expect(mockPrismaService.transaction.groupBy).toHaveBeenCalledWith({
+                by: ["categoryId"],
+                where: {
+                    userId: "test-user",
+                    deletedAt: null,
+                    accountId: "acc-1",
+                    budgetId: "budget-1",
+                    type: "expense",
+                    transactionDate: {
+                        gte: new Date("2025-12-01"),
+                        lte: new Date("2025-12-31"),
+                    },
+                    AND: [{ OR: searchOr }],
+                },
+                _count: { _all: true },
+            });
+        });
+
+        it("ignores categoryIds and categoryId so the facet still offers every category", async () => {
+            mockPrismaService.transaction.groupBy.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+            await service.getCategoryFacets("test-user", { type: "expense" });
+            await service.getCategoryFacets("test-user", {
+                type: "expense",
+                categoryIds: ["c1", "uncategorized"],
+                categoryId: "c2",
+            });
+
+            const baseWhere = mockPrismaService.transaction.groupBy.mock.calls[0][0].where;
+            const withCategoryWhere = mockPrismaService.transaction.groupBy.mock.calls[1][0].where;
+            expect(withCategoryWhere).toEqual(baseWhere);
+            expect(withCategoryWhere).not.toHaveProperty("categoryId");
+            expect(withCategoryWhere.AND).toBeUndefined();
+        });
+
+        it("follows the show-hidden toggle: hidden=false only when includeHidden is explicitly false", async () => {
+            mockPrismaService.transaction.groupBy
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([]);
+
+            await service.getCategoryFacets("test-user", { includeHidden: false });
+            await service.getCategoryFacets("test-user", { includeHidden: true });
+            await service.getCategoryFacets("test-user", {});
+
+            const [hiddenOff, hiddenOn, hiddenAbsent] = mockPrismaService.transaction.groupBy.mock.calls.map(
+                (call) => call[0].where,
+            );
+            expect(hiddenOff.hidden).toBe(false);
+            expect(hiddenOn).not.toHaveProperty("hidden");
+            expect(hiddenAbsent).not.toHaveProperty("hidden");
+        });
+
+        it("maps grouped rows to categories, keeping null as the uncategorized bucket", async () => {
+            mockPrismaService.transaction.groupBy.mockResolvedValueOnce([
+                { categoryId: "c1", _count: { _all: 3 } },
+                { categoryId: null, _count: { _all: 2 } },
+            ]);
+
+            const result = await service.getCategoryFacets("test-user", {});
+
+            expect(result).toEqual({
+                categories: [
+                    { categoryId: "c1", count: 3 },
+                    { categoryId: null, count: 2 },
+                ],
+            });
+        });
+
+        it("returns an empty categories list when nothing matches", async () => {
+            mockPrismaService.transaction.groupBy.mockResolvedValueOnce([]);
+
+            const result = await service.getCategoryFacets("test-user", { search: "nothing" });
+
+            expect(result).toEqual({ categories: [] });
+        });
+    });
+
     describe("findOne", () => {
         it("includes the live attachments from the attachments service", async () => {
             const attachments = [
