@@ -1,6 +1,6 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/vue-query";
 import type { MaybeRefOrGetter } from "vue";
-import type { ITransactionListParams, ITransactionSummaryParams } from "@badger/types";
+import type { ITransactionCategoryFacetParams, ITransactionListParams, ITransactionSummaryParams } from "@badger/types";
 import { useApiClient } from "../useApiClient";
 import { accountKeys } from "../accounts/accountKeys";
 import { reportKeys } from "../reports/useSpendingReport";
@@ -13,13 +13,15 @@ export const transactionKeys = {
     infinite: (params: ITransactionListParams) => [...transactionKeys.lists(), "infinite", params] as const,
     recent: (limit: number) => [...transactionKeys.lists(), "recent", limit] as const,
     summary: (params: ITransactionSummaryParams) => [...transactionKeys.all, "summary", params] as const,
+    categoryFacets: (params: ITransactionCategoryFacetParams) =>
+        [...transactionKeys.all, "categoryFacets", params] as const,
     details: () => [...transactionKeys.all, "detail"] as const,
     detail: (id: string) => [...transactionKeys.details(), id] as const,
 };
 
 /**
  * Unfiltered full transaction list, used by the budget detail page. Filtering
- * lives in `useInfiniteTransactions`/`useTransactionsSummary`.
+ * lives in `useInfiniteTransactions`/`useTransactionsSummary`/`useTransactionCategoryFacets`.
  */
 export function useGetTransactions() {
     const apiClient = useApiClient();
@@ -81,6 +83,20 @@ export function useTransactionsSummary(params: Ref<ITransactionSummaryParams>) {
     return useQuery({
         queryKey: computed(() => transactionKeys.summary(params.value)),
         queryFn: () => apiClient.getTransactionsSummary(params.value),
+        placeholderData: keepPreviousData,
+    });
+}
+
+/**
+ * Per-category transaction counts for the current filters, so the category picker only offers categories present in
+ * the view. Keyed under the root so every transaction invalidation refreshes it.
+ */
+export function useTransactionCategoryFacets(params: Ref<ITransactionCategoryFacetParams>) {
+    const apiClient = useApiClient();
+
+    return useQuery({
+        queryKey: computed(() => transactionKeys.categoryFacets(params.value)),
+        queryFn: () => apiClient.getTransactionCategoryFacets(params.value),
         placeholderData: keepPreviousData,
     });
 }

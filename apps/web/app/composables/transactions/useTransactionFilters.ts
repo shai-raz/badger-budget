@@ -1,5 +1,5 @@
 import type { ComputedRef, MaybeRefOrGetter, Ref, WritableComputedRef } from "vue";
-import type { ITransactionListParams, ITransactionSummaryParams } from "@badger/types";
+import type { ITransactionCategoryFacetParams, ITransactionListParams, ITransactionSummaryParams } from "@badger/types";
 import { useMonthRangeQuery } from "../useMonthRangeQuery";
 import { selectionToDateBounds } from "../../utils/monthRange";
 import {
@@ -168,6 +168,21 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
         return params;
     });
 
+    // Built without the category selection, so a chip click does not re-run it: the facet counts stay put while a
+    // category is picked (every category stays offered).
+    const facetParams: ComputedRef<ITransactionCategoryFacetParams> = computed(() => {
+        const { startDate, endDate } = selectionToDateBounds(period.value);
+
+        const params: ITransactionCategoryFacetParams = { includeHidden: showHidden.value };
+
+        if (startDate) params.startDate = startDate;
+        if (endDate) params.endDate = endDate;
+        if (urlFilters.value.search) params.search = urlFilters.value.search;
+        if (typeFilter.value !== "all") params.type = typeFilter.value;
+
+        return params;
+    });
+
     // Chips & counts ---------------------------------------------------------
     // Search is intentionally NOT counted in the filter badge (product decision).
     const activeFilterCount = computed(
@@ -248,6 +263,7 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
         // Derived params
         listParams,
         summaryParams,
+        facetParams,
 
         // Chips & counts
         activeFilterCount,
