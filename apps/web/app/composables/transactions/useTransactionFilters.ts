@@ -135,7 +135,7 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
     });
 
     // Empty array === all categories (no filter param sent). Ids the user no longer has are ignored once the list has
-    // loaded, and a selection of every category reads as none (the same collapse useCategoryToggle writes).
+    // loaded, and a selection of every category reads as none (the same collapse useFilterToggle writes).
     const selectedCategoryIds: WritableComputedRef<string[]> = computed({
         get: () => prunedSelection(urlFilters.value.categoryIds, toValue(options.knownCategoryIds)),
         set: (ids) => writeFilters({ categoryIds: ids }, { kind: "edit", control: "categories" }),

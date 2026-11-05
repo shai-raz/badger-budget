@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TransactionType } from "@badger/shared-data";
-import { useCategoryToggle } from "../../composables/transactions/useCategoryToggle";
+import { useFilterToggle } from "../../composables/transactions/useFilterToggle";
 import { transactionCountLabel, type CategoryFilterOption } from "~/utils/categoryFilterOptions";
 import { hexToRgba } from "~/utils/color";
 
@@ -31,9 +31,12 @@ const typeOptions: Array<{ label: string; value: TransactionType | "all" }> = [
 ];
 
 // Category selection math is shared with the mobile bottom sheet.
-const { isAllActive, canInvert, countLabel, isSelected, toggle, selectAll, invert } = useCategoryToggle(
+const { allValues, isAllActive, canInvert, selectedValues, isSelected, toggle, selectAll, invert } = useFilterToggle(
     selectedCategoryIds,
     () => props.categoryOptions,
+);
+const countLabel = computed(() =>
+    isAllActive.value ? "All categories" : `${selectedValues.value.length} of ${allValues.value.length} selected`,
 );
 
 // PrimeVue 4's Chip has no outlined variant, so the chip frame is ours: every

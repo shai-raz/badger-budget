@@ -3,7 +3,7 @@ import { computed, effectScope, nextTick, reactive, ref, toValue, watch, type Ef
 import { refDebounced } from "@vueuse/core";
 
 import { useTransactionFilters, type UseTransactionFiltersOptions } from "./useTransactionFilters";
-import { useCategoryToggle } from "./useCategoryToggle";
+import { useFilterToggle } from "./useFilterToggle";
 import { endEditRun, writeQuery } from "../../utils/queryHistory";
 
 // Spy on the real writer, so each test can assert which QueryWrite kind a control chose.
@@ -367,7 +367,7 @@ describe("useTransactionFilters writes made in the same task", () => {
                 filters.selectedCategoryIds.value = ids;
             },
         });
-        const toggles = useCategoryToggle(model, CATEGORY_OPTIONS);
+        const toggles = useFilterToggle(model, CATEGORY_OPTIONS);
         const render = () => {
             rendered.value = filters.selectedCategoryIds.value;
         };
