@@ -163,10 +163,18 @@ describe("SearchTransactionsTool", () => {
         expect((await run({ page: 1, pageSize: 501 })).ok).toBe(false);
         expect((await run({ startDate: "2026-03-10", endDate: "2026-03-01" })).ok).toBe(false);
         expect((await run({ accountIds: ["nope"] })).ok).toBe(false);
-        expect((await run({ types: [] })).ok).toBe(false);
         expect((await run({ type: "expense" })).ok).toBe(false);
         expect((await run({ unknown: 1 })).ok).toBe(false);
         expect(searchLean).not.toHaveBeenCalled();
+    });
+
+    it("treats empty type, account and category arrays as no filter", async () => {
+        await data({ types: [], accountIds: [], categoryIds: [] });
+        expect(searchLean).toHaveBeenCalledWith(
+            "user-1",
+            expect.objectContaining({ types: [], accountIds: [], categoryIds: [] }),
+            expect.anything(),
+        );
     });
 
     it("passes filters and the caller's userId", async () => {

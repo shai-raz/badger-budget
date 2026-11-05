@@ -57,12 +57,7 @@ const inputSchema = z
         startDate: dateField("Inclusive start date, YYYY-MM-DD (UTC).").optional(),
         endDate: dateField("Inclusive end date, YYYY-MM-DD (UTC). Must not be before startDate.").optional(),
         search: z.string().min(1).max(200).optional().describe("Case-insensitive text matched against descriptions."),
-        types: z
-            .array(z.enum(TRANSACTION_TYPES))
-            .min(1)
-            .max(3)
-            .optional()
-            .describe("Only transactions of these types."),
+        types: z.array(z.enum(TRANSACTION_TYPES)).max(3).optional().describe("Only transactions of these types."),
         categoryIds: z
             .array(z.union([z.uuid(), z.literal("uncategorized")]))
             .max(100)
