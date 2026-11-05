@@ -12,6 +12,8 @@ import {
     MaxLength,
     Min,
 } from "class-validator";
+import { TRANSACTION_TYPES, type TransactionType } from "@badger/shared-data";
+import { CsvToArray } from "./csv-array.transform";
 
 /**
  * Query params for `GET /transactions`.
@@ -55,10 +57,14 @@ export class ListTransactionsQueryDto {
     @MaxLength(200)
     search?: string;
 
-    @ApiPropertyOptional({ enum: ["income", "expense", "transfer"] })
+    @ApiPropertyOptional({
+        description: "CSV of transaction types (income, expense, transfer). Omit to include all types.",
+        example: "income,expense",
+    })
     @IsOptional()
-    @IsIn(["income", "expense", "transfer"])
-    type?: "income" | "expense" | "transfer";
+    @CsvToArray()
+    @IsIn(TRANSACTION_TYPES, { each: true })
+    types?: TransactionType[];
 
     @ApiPropertyOptional({
         description:
@@ -66,22 +72,18 @@ export class ListTransactionsQueryDto {
         example: "id1,id2,uncategorized",
     })
     @IsOptional()
-    @Transform(({ value }) => {
-        if (typeof value === "string") {
-            return value
-                .split(",")
-                .map((id) => id.trim())
-                .filter((id) => id.length > 0);
-        }
-        if (Array.isArray(value)) {
-            return value
-                .map((id) => (typeof id === "string" ? id.trim() : id))
-                .filter((id) => typeof id === "string" && id.length > 0);
-        }
-        return value;
-    })
+    @CsvToArray()
     @IsString({ each: true })
     categoryIds?: string[];
+
+    @ApiPropertyOptional({
+        description: "CSV of account ids to filter by, e.g. `id1,id2`. Omit to include all accounts.",
+        example: "id1,id2",
+    })
+    @IsOptional()
+    @CsvToArray()
+    @IsUUID(undefined, { each: true })
+    accountIds?: string[];
 
     @ApiPropertyOptional({
         description: "Inclusive lower bound on transactionDate (YYYY-MM-DD).",
@@ -132,13 +134,8 @@ export class ListTransactionsQueryDto {
     @IsIn(["asc", "desc"])
     sortOrder?: "asc" | "desc";
 
-    // Legacy filters — kept for backward compatibility with existing callers
-    // (store, dashboard, budgets detail page). IDs are DB-generated UUIDs.
-    @ApiPropertyOptional()
-    @IsOptional()
-    @IsUUID()
-    accountId?: string;
-
+    // Legacy filters — kept for backward compatibility with existing callers.
+    // IDs are DB-generated UUIDs.
     @ApiPropertyOptional()
     @IsOptional()
     @IsUUID()
