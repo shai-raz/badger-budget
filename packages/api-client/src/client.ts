@@ -8,6 +8,10 @@ import type {
     ITransactionsSummaryResponse,
     ITransactionCategoryFacetParams,
     ITransactionCategoryFacetsResponse,
+    ITransactionAccountFacetParams,
+    ITransactionAccountFacetsResponse,
+    ITransactionTypeFacetParams,
+    ITransactionTypeFacetsResponse,
     PaginatedResponse,
     ITransactionAttachmentResponse,
     IAttachmentUrlResponse,
@@ -489,6 +493,50 @@ export class ApiClient {
             budgetId: params.budgetId,
         });
         const response = await this.client.get<ITransactionCategoryFacetsResponse>("/transactions/category-facets", {
+            params: query,
+        });
+        return response.data;
+    }
+
+    /**
+     * Per-account transaction counts for the current filters (account filter ignored; follows includeHidden).
+     * Narrowed to the keys the facet endpoint accepts, like {@link getTransactionCategoryFacets}.
+     */
+    async getTransactionAccountFacets(
+        params: ITransactionAccountFacetParams,
+    ): Promise<ITransactionAccountFacetsResponse> {
+        const query = this.serializeTransactionParams({
+            search: params.search,
+            types: params.types,
+            categoryIds: params.categoryIds,
+            categoryId: params.categoryId,
+            startDate: params.startDate,
+            endDate: params.endDate,
+            includeHidden: params.includeHidden,
+            budgetId: params.budgetId,
+        });
+        const response = await this.client.get<ITransactionAccountFacetsResponse>("/transactions/account-facets", {
+            params: query,
+        });
+        return response.data;
+    }
+
+    /**
+     * Per-type transaction counts for the current filters (type filter ignored; follows includeHidden).
+     * Narrowed to the keys the facet endpoint accepts, like {@link getTransactionCategoryFacets}.
+     */
+    async getTransactionTypeFacets(params: ITransactionTypeFacetParams): Promise<ITransactionTypeFacetsResponse> {
+        const query = this.serializeTransactionParams({
+            search: params.search,
+            accountIds: params.accountIds,
+            categoryIds: params.categoryIds,
+            categoryId: params.categoryId,
+            startDate: params.startDate,
+            endDate: params.endDate,
+            includeHidden: params.includeHidden,
+            budgetId: params.budgetId,
+        });
+        const response = await this.client.get<ITransactionTypeFacetsResponse>("/transactions/type-facets", {
             params: query,
         });
         return response.data;
