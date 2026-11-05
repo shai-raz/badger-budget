@@ -27,8 +27,12 @@ import {
 import { assertReimbursementEditAllowed } from "./reimbursement-edit-guard";
 import { lockReimbursements } from "./reimbursement-lock";
 import { TransactionAttachmentsService } from "./attachments/transaction-attachments.service";
-import { isLedgerAccountType, parseAccountType, type TransactionType } from "@badger/shared-data";
-import type { ITransactionCategoryFacetsResponse } from "@badger/types";
+import { isLedgerAccountType, isTransactionType, parseAccountType, type TransactionType } from "@badger/shared-data";
+import type {
+    ITransactionAccountFacetsResponse,
+    ITransactionCategoryFacetsResponse,
+    ITransactionTypeFacetsResponse,
+} from "@badger/types";
 
 /** Filters accepted by the transaction list endpoint (superset of legacy params). */
 export interface ListTransactionsFilters {
@@ -61,11 +65,18 @@ export type SummaryTransactionsFilters = Omit<
 >;
 
 /**
- * Filters accepted by the category-facets endpoint. The category keys are kept
- * only so `getCategoryFacets` can strip them: the counts ignore the category
- * selection.
+ * Filters accepted by the facet endpoints (category, account and type). Each
+ * facet strips its own selection key so its counts ignore that selection.
  */
-export type CategoryFacetFilters = Omit<ListTransactionsFilters, "page" | "limit" | "sortBy" | "sortOrder">;
+export type TransactionFacetFilters = Omit<ListTransactionsFilters, "page" | "limit" | "sortBy" | "sortOrder">;
+
+/** One `groupBy` row; only the grouped column is set. */
+interface FacetGroupRow {
+    categoryId?: string | null;
+    accountId?: string;
+    type?: string;
+    _count: { _all: number };
+}
 
 /** Lean, relation-flattened transaction row (no attachments / nested objects). */
 export interface TransactionLeanRow {
@@ -548,15 +559,13 @@ export class TransactionsService {
      */
     async getCategoryFacets(
         userId: string,
-        filters: CategoryFacetFilters = {},
+        filters: TransactionFacetFilters = {},
     ): Promise<ITransactionCategoryFacetsResponse> {
-        const where = this.buildListWhere(userId, { ...filters, categoryIds: undefined, categoryId: undefined });
-
-        const groups = (await this.db.transaction.groupBy({
-            by: ["categoryId"],
-            where,
-            _count: { _all: true },
-        })) as Array<{ categoryId: string | null; _count: { _all: number } }>;
+        const groups = await this.countRowsBy(userId, "categoryId", {
+            ...filters,
+            categoryIds: undefined,
+            categoryId: undefined,
+        });
 
         return {
             categories: groups.map((group) => ({
@@ -564,6 +573,66 @@ export class TransactionsService {
                 count: group._count._all,
             })),
         };
+    }
+
+    /**
+     * Per-account row counts for the transaction filters, so the account picker
+     * only offers accounts present in the filtered view.
+     *
+     * Applies the list's filters but ignores the account selection. `includeHidden`
+     * is applied exactly as the list applies it.
+     */
+    async getAccountFacets(
+        userId: string,
+        filters: TransactionFacetFilters = {},
+    ): Promise<ITransactionAccountFacetsResponse> {
+        const groups = await this.countRowsBy(userId, "accountId", { ...filters, accountIds: undefined });
+
+        return {
+            accounts: groups.map((group) => ({
+                accountId: group.accountId as string,
+                count: group._count._all,
+            })),
+        };
+    }
+
+    /**
+     * Per-type row counts for the transaction filters, so the type picker only
+     * offers types present in the filtered view.
+     *
+     * Applies the list's filters but ignores the type selection. `includeHidden`
+     * is applied exactly as the list applies it. Rows with a value outside
+     * `TRANSACTION_TYPES` are dropped.
+     */
+    async getTypeFacets(
+        userId: string,
+        filters: TransactionFacetFilters = {},
+    ): Promise<ITransactionTypeFacetsResponse> {
+        const groups = await this.countRowsBy(userId, "type", { ...filters, types: undefined });
+
+        return {
+            types: groups.flatMap((group) =>
+                group.type && isTransactionType(group.type) ? [{ type: group.type, count: group._count._all }] : [],
+            ),
+        };
+    }
+
+    /**
+     * `groupBy` over the list's `where` (built by `buildListWhere`, so filters
+     * and `userId`/`deletedAt` stay in one place) for the facet endpoints.
+     */
+    private async countRowsBy(
+        userId: string,
+        field: "categoryId" | "accountId" | "type",
+        filters: ListTransactionsFilters,
+    ): Promise<FacetGroupRow[]> {
+        const where = this.buildListWhere(userId, filters);
+
+        return (await this.db.transaction.groupBy({
+            by: [field],
+            where,
+            _count: { _all: true },
+        })) as FacetGroupRow[];
     }
 
     /**
