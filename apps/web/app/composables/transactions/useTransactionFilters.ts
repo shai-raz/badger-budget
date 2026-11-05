@@ -262,7 +262,7 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
             chips.push({
                 key: "categories",
                 icon: "pi-tag",
-                label: `${selected} categories`,
+                label: selected === 1 ? "1 category" : `${selected} categories`,
                 clear: () => writeFilters({ categoryIds: [] }, { kind: "push" }),
             });
         }

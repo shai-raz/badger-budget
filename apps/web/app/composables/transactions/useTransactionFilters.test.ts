@@ -640,6 +640,15 @@ describe("useTransactionFilters chips", () => {
         expect(activeChips.value.find((chip) => chip.key === "accounts")!.label).toBe("2 accounts");
     });
 
+    it("labels the category chip by count", () => {
+        route.query = { categories: "cat-a" };
+        const { activeChips } = mountFilters();
+        expect(activeChips.value.find((chip) => chip.key === "categories")!.label).toBe("1 category");
+
+        route.query = { categories: "cat-a,cat-b" };
+        expect(activeChips.value.find((chip) => chip.key === "categories")!.label).toBe("2 categories");
+    });
+
     it("clears the account chip as one push, keeping other keys", () => {
         route.query = { accounts: "acc-a", create: "expense" };
         const { activeChips } = mountFilters();
