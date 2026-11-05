@@ -425,10 +425,11 @@ export class TransactionsService {
      * like the web client's `Total.vue`. `currencyCode` is a best-effort display
      * hint from the most recent matching transaction (fallback "ILS").
      *
-     * Linked transfer legs (source + ledger mirror) are excluded from
-     * `transferred` in the all-accounts view, so a cross-currency pair can't
-     * distort it and a same-currency pair stays neutral. With an account selection
-     * they count as money leaving or entering that account.
+     * A linked transfer pair (source + ledger mirror) is backed out of
+     * `transferred` when both legs' accounts are selected (no selection = every
+     * account), so a cross-currency pair can't distort it and a same-currency
+     * pair stays neutral. With one leg selected, that leg counts as money leaving
+     * (out) or entering (in) the selection.
      *
      * `income` and `expenses` are net of active reimbursement links: an
      * expense's reimbursed part and an income's allocated part are subtracted
@@ -493,27 +494,32 @@ export class TransactionsService {
         income = fromCents(toCents(income) - toCents(this.decimalToNumber(asIncome._sum?.amount)));
 
         // Linked transfer legs (a source and its ledger mirror) are backed
-        // out of `transferred` in the all-accounts view: a same-currency pair is
-        // neutral and a cross-currency pair would otherwise distort the sum.
-        if (!filters?.accountIds?.length) {
-            const existingAnd = where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : [];
-            const linked = (await this.db.transaction.groupBy({
-                by: ["transferDirection"],
-                where: {
-                    ...where,
-                    AND: [
-                        ...existingAnd,
-                        { type: "transfer" },
-                        { OR: [{ counterpartOfId: { not: null } }, { counterpart: { isNot: null } }] },
-                    ],
-                },
-                _sum: { amount: true },
-            })) as Array<{ transferDirection: string | null; _sum: { amount: unknown } }>;
+        // out of `transferred` when both legs' accounts are selected (no selection
+        // = every account): a same-currency pair is neutral and a cross-currency
+        // pair would otherwise distort the sum. With one leg selected, that leg
+        // stays a plain money out (+) or in (-).
+        const selected = filters?.accountIds?.length ? filters.accountIds : null;
+        const linkedClause = selected
+            ? {
+                  OR: [
+                      { counterpartOf: { is: { accountId: { in: selected } } } },
+                      { counterpart: { is: { accountId: { in: selected } } } },
+                  ],
+              }
+            : { OR: [{ counterpartOfId: { not: null } }, { counterpart: { isNot: null } }] };
+        const existingAnd = where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : [];
+        const linked = (await this.db.transaction.groupBy({
+            by: ["transferDirection"],
+            where: {
+                ...where,
+                AND: [...existingAnd, { type: "transfer" }, linkedClause],
+            },
+            _sum: { amount: true },
+        })) as Array<{ transferDirection: string | null; _sum: { amount: unknown } }>;
 
-            for (const bucket of linked) {
-                const sign = bucket.transferDirection === "in" ? -1 : 1;
-                transferred -= sign * this.decimalToNumber(bucket._sum.amount);
-            }
+        for (const bucket of linked) {
+            const sign = bucket.transferDirection === "in" ? -1 : 1;
+            transferred -= sign * this.decimalToNumber(bucket._sum.amount);
         }
 
         const net = income - expenses;

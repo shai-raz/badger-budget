@@ -1075,14 +1075,74 @@ describe("TransactionsService", () => {
                 expect(result.transferred).toBe(0);
             });
 
-            it("should skip the linked query and count legs when filtering by account", async () => {
-                mockPrismaService.transaction.groupBy.mockResolvedValueOnce([group("transfer", "out", 370)]);
-                mockPrismaService.transaction.findFirst.mockResolvedValue(null);
+            // Synthetic account ids. Checking pays 4740 out: a linked 1500 transfer to savings (source out on
+            // checking, mirror in on savings) plus an unlinked 3240 payoff.
+            describe("account selection (AC4)", () => {
+                const CHECKING = "acc-checking";
+                const SAVINGS = "acc-savings";
+                const linkedClause = (ids: string[]) => ({
+                    OR: [
+                        { counterpartOf: { is: { accountId: { in: ids } } } },
+                        { counterpart: { is: { accountId: { in: ids } } } },
+                    ],
+                });
+                const notNullClause = {
+                    OR: [{ counterpartOfId: { not: null } }, { counterpart: { isNot: null } }],
+                };
 
-                const result = await service.getSummary("test-user", { accountIds: ["acc-1"] });
+                it.each([
+                    {
+                        name: "no selection",
+                        accountIds: undefined,
+                        groups: [group("transfer", "out", 4740), group("transfer", "in", 1500)],
+                        linked: [linkedBucket("out", 1500), linkedBucket("in", 1500)],
+                        transferred: 3240,
+                        clause: notNullClause,
+                    },
+                    {
+                        name: "checking only",
+                        accountIds: [CHECKING],
+                        groups: [group("transfer", "out", 4740)],
+                        linked: [],
+                        transferred: 4740,
+                        clause: linkedClause([CHECKING]),
+                    },
+                    {
+                        name: "savings only",
+                        accountIds: [SAVINGS],
+                        groups: [group("transfer", "in", 1500)],
+                        linked: [],
+                        transferred: -1500,
+                        clause: linkedClause([SAVINGS]),
+                    },
+                    {
+                        name: "both accounts",
+                        accountIds: [CHECKING, SAVINGS],
+                        groups: [group("transfer", "out", 4740), group("transfer", "in", 1500)],
+                        linked: [linkedBucket("out", 1500), linkedBucket("in", 1500)],
+                        transferred: 3240,
+                        clause: linkedClause([CHECKING, SAVINGS]),
+                    },
+                ])(
+                    "$name: backs the pair out only when both legs are selected",
+                    async ({ accountIds, groups, linked, transferred, clause }) => {
+                        mockPrismaService.transaction.groupBy
+                            .mockResolvedValueOnce(groups)
+                            .mockResolvedValueOnce(linked);
+                        mockPrismaService.transaction.findFirst.mockResolvedValue(null);
 
-                expect(mockPrismaService.transaction.groupBy).toHaveBeenCalledTimes(1);
-                expect(result.transferred).toBe(370);
+                        const result = await service.getSummary("test-user", accountIds ? { accountIds } : {});
+
+                        expect(result.transferred).toBe(transferred);
+                        expect(mockPrismaService.transaction.groupBy).toHaveBeenCalledTimes(2);
+                        const groupByCalls = mockPrismaService.transaction.groupBy.mock.calls.map(([args]) => args);
+                        if (accountIds) {
+                            expect(groupByCalls[0].where.accountId).toEqual({ in: accountIds });
+                        }
+                        expect(groupByCalls[1].where.AND).toContainEqual({ type: "transfer" });
+                        expect(groupByCalls[1].where.AND).toContainEqual(clause);
+                    },
+                );
             });
 
             it("should keep the type filter and restrict linked legs to transfers via AND", async () => {
