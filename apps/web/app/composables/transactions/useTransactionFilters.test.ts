@@ -470,3 +470,24 @@ describe("useTransactionFilters facetParams", () => {
         }
     });
 });
+
+describe("useTransactionFilters list and summary params", () => {
+    it("send the type filter as a types array, never the legacy type key", () => {
+        route.query = { type: "expense" };
+        const { listParams, summaryParams } = mountFilters();
+
+        expect(listParams.value.types).toEqual(["expense"]);
+        expect(listParams.value).not.toHaveProperty("type");
+        expect(summaryParams.value.types).toEqual(["expense"]);
+        expect(summaryParams.value).not.toHaveProperty("type");
+    });
+
+    it("omit types when no type is selected", () => {
+        const { listParams, summaryParams } = mountFilters();
+
+        expect(listParams.value).not.toHaveProperty("types");
+        expect(listParams.value).not.toHaveProperty("type");
+        expect(summaryParams.value).not.toHaveProperty("types");
+        expect(summaryParams.value).not.toHaveProperty("type");
+    });
+});
