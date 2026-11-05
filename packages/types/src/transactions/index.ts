@@ -7,12 +7,16 @@ export type {
     ITransactionListParams,
     ITransactionSummaryParams,
     ITransactionCategoryFacetParams,
+    ITransactionAccountFacetParams,
+    ITransactionTypeFacetParams,
 } from "./ITransactionListParams";
 export type { ITransactionsSummaryResponse } from "./ITransactionsSummaryResponse";
 export type {
     ITransactionCategoryFacet,
     ITransactionCategoryFacetsResponse,
 } from "./ITransactionCategoryFacetsResponse";
+export type { ITransactionAccountFacet, ITransactionAccountFacetsResponse } from "./ITransactionAccountFacetsResponse";
+export type { ITransactionTypeFacet, ITransactionTypeFacetsResponse } from "./ITransactionTypeFacetsResponse";
 export type { ITransactionCounterpart, ITransactionCounterpartSource } from "./ITransactionCounterpart";
 export type { ITransactionAttachmentResponse } from "./ITransactionAttachmentResponse";
 export type { IAttachmentUrlResponse } from "./IAttachmentUrlResponse";
