@@ -27,7 +27,7 @@ import {
 import { assertReimbursementEditAllowed } from "./reimbursement-edit-guard";
 import { lockReimbursements } from "./reimbursement-lock";
 import { TransactionAttachmentsService } from "./attachments/transaction-attachments.service";
-import { isLedgerAccountType, parseAccountType } from "@badger/shared-data";
+import { isLedgerAccountType, parseAccountType, type TransactionType } from "@badger/shared-data";
 import type { ITransactionCategoryFacetsResponse } from "@badger/types";
 
 /** Filters accepted by the transaction list endpoint (superset of legacy params). */
@@ -38,14 +38,14 @@ export interface ListTransactionsFilters {
     // New filters
     search?: string;
     categoryIds?: string[];
+    accountIds?: string[];
+    types?: TransactionType[];
     includeHidden?: boolean;
     sortBy?: "transactionDate" | "amount" | "description" | "createdAt";
     sortOrder?: "asc" | "desc";
     // Legacy filters
-    accountId?: string;
     categoryId?: string;
     budgetId?: string;
-    type?: string;
     startDate?: string;
     endDate?: string;
 }
@@ -296,10 +296,15 @@ export class TransactionsService {
         }
 
         // Legacy equality filters
-        if (filters.accountId) where.accountId = filters.accountId;
         if (filters.categoryId) where.categoryId = filters.categoryId;
         if (filters.budgetId) where.budgetId = filters.budgetId;
-        if (filters.type) where.type = filters.type;
+
+        if (filters.accountIds && filters.accountIds.length > 0) {
+            where.accountId = { in: filters.accountIds };
+        }
+        if (filters.types && filters.types.length > 0) {
+            where.type = { in: filters.types };
+        }
 
         // Inclusive transactionDate range
         if (filters.startDate || filters.endDate) {
@@ -422,8 +427,8 @@ export class TransactionsService {
      *
      * Linked transfer legs (source + ledger mirror) are excluded from
      * `transferred` in the all-accounts view, so a cross-currency pair can't
-     * distort it and a same-currency pair stays neutral. With an `accountId`
-     * filter they count as money leaving or entering that account.
+     * distort it and a same-currency pair stays neutral. With an account selection
+     * they count as money leaving or entering that account.
      *
      * `income` and `expenses` are net of active reimbursement links: an
      * expense's reimbursed part and an income's allocated part are subtracted
@@ -473,7 +478,7 @@ export class TransactionsService {
         // Net the reimbursement links. Each side is scoped by the same `where`
         // (so a category or search filter applies to that row's own side), and
         // the other side must be active. The `type` is ANDed in, never spread,
-        // so a caller's `type` filter can only narrow these queries.
+        // so a caller's `types` filter (`type: { in }`) can only narrow these queries.
         const [asExpense, asIncome] = await Promise.all([
             this.db.reimbursementAllocation.aggregate({
                 where: { expense: { AND: [where, { type: "expense" }] }, income: ACTIVE_SIDE },
@@ -490,7 +495,7 @@ export class TransactionsService {
         // Linked transfer legs (a source and its ledger mirror) are backed
         // out of `transferred` in the all-accounts view: a same-currency pair is
         // neutral and a cross-currency pair would otherwise distort the sum.
-        if (!filters?.accountId) {
+        if (!filters?.accountIds?.length) {
             const existingAnd = where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : [];
             const linked = (await this.db.transaction.groupBy({
                 by: ["transferDirection"],

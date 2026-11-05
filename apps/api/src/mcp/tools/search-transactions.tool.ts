@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { z } from "zod";
+import { TRANSACTION_TYPES } from "@badger/shared-data";
 import { ListTransactionsFilters, TransactionsService } from "../../transactions/transactions.service";
 import type { TransactionLeanRow } from "../../transactions/transactions.service";
 import { toColumnar, toIsoDate } from "./columnar";
@@ -56,13 +57,18 @@ const inputSchema = z
         startDate: dateField("Inclusive start date, YYYY-MM-DD (UTC).").optional(),
         endDate: dateField("Inclusive end date, YYYY-MM-DD (UTC). Must not be before startDate.").optional(),
         search: z.string().min(1).max(200).optional().describe("Case-insensitive text matched against descriptions."),
-        type: z.enum(["income", "expense", "transfer"]).optional().describe("Only transactions of this type."),
+        types: z
+            .array(z.enum(TRANSACTION_TYPES))
+            .min(1)
+            .max(3)
+            .optional()
+            .describe("Only transactions of these types."),
         categoryIds: z
             .array(z.union([z.uuid(), z.literal("uncategorized")]))
             .max(100)
             .optional()
             .describe('Category ids to include; use "uncategorized" for transactions without a category.'),
-        accountId: z.uuid().optional().describe("Only transactions of this account id."),
+        accountIds: z.array(z.uuid()).max(100).optional().describe("Only transactions of these account ids."),
         budgetId: z.uuid().optional().describe("Only transactions linked to this budget id."),
         includeHidden: z
             .boolean()
@@ -173,9 +179,9 @@ export class SearchTransactionsTool implements McpToolDefinition<typeof inputSch
             startDate: input.startDate,
             endDate: input.endDate,
             search: input.search,
-            type: input.type,
+            types: input.types,
             categoryIds: input.categoryIds,
-            accountId: input.accountId,
+            accountIds: input.accountIds,
             budgetId: input.budgetId,
             includeHidden: input.includeHidden,
             sortBy: input.sortBy,

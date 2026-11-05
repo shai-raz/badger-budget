@@ -494,16 +494,16 @@ describe("TransactionsService", () => {
             });
         });
 
-        it("should filter by accountId", async () => {
+        it("should filter by accountIds using an in clause", async () => {
             mockPrismaService.transaction.findMany.mockResolvedValue([mockTransaction]);
 
-            await service.findAll("test-user", { accountId: "account-id" });
+            await service.findAll("test-user", { accountIds: ["account-id"] });
 
             expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith({
                 where: {
                     userId: "test-user",
                     deletedAt: null,
-                    accountId: "account-id",
+                    accountId: { in: ["account-id"] },
                 },
                 include: expect.any(Object),
                 orderBy: expect.any(Object),
@@ -532,16 +532,16 @@ describe("TransactionsService", () => {
             });
         });
 
-        it("should filter by type", async () => {
+        it("should filter by types using an in clause", async () => {
             mockPrismaService.transaction.findMany.mockResolvedValue([mockTransaction]);
 
-            await service.findAll("test-user", { type: "expense" });
+            await service.findAll("test-user", { types: ["expense"] });
 
             expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith({
                 where: {
                     userId: "test-user",
                     deletedAt: null,
-                    type: "expense",
+                    type: { in: ["expense"] },
                 },
                 include: expect.any(Object),
                 orderBy: expect.any(Object),
@@ -552,9 +552,9 @@ describe("TransactionsService", () => {
             mockPrismaService.transaction.findMany.mockResolvedValue([mockTransaction]);
 
             await service.findAll("test-user", {
-                accountId: "account-id",
+                accountIds: ["account-id"],
                 categoryId: "category-id",
-                type: "expense",
+                types: ["expense"],
                 startDate: "2025-12-01",
                 endDate: "2025-12-31",
             });
@@ -563,9 +563,9 @@ describe("TransactionsService", () => {
                 where: {
                     userId: "test-user",
                     deletedAt: null,
-                    accountId: "account-id",
+                    accountId: { in: ["account-id"] },
                     categoryId: "category-id",
-                    type: "expense",
+                    type: { in: ["expense"] },
                     transactionDate: {
                         gte: new Date("2025-12-01"),
                         lte: new Date("2025-12-31"),
@@ -686,18 +686,26 @@ describe("TransactionsService", () => {
             expect(where).not.toHaveProperty("hidden");
         });
 
+        it("should add no account or type key for empty arrays (no page)", async () => {
+            await service.findAll("test-user", { accountIds: [], types: [] });
+
+            const where = mockPrismaService.transaction.findMany.mock.calls[0][0].where;
+            expect(where).not.toHaveProperty("accountId");
+            expect(where).not.toHaveProperty("type");
+        });
+
         it("should NOT add a hidden filter when includeHidden is absent (legacy)", async () => {
-            await service.findAll("test-user", { type: "expense" });
+            await service.findAll("test-user", { types: ["expense"] });
 
             const where = mockPrismaService.transaction.findMany.mock.calls[0][0].where;
             expect(where).not.toHaveProperty("hidden");
         });
 
-        it("should produce byte-identical legacy findMany args and return an array (no page)", async () => {
+        it("should honour accountIds and types on the unpaginated array shape (no page)", async () => {
             const result = await service.findAll("test-user", {
-                accountId: "account-id",
+                accountIds: ["account-id"],
                 categoryId: "category-id",
-                type: "expense",
+                types: ["expense", "transfer"],
                 startDate: "2025-12-01",
                 endDate: "2025-12-31",
             });
@@ -707,9 +715,9 @@ describe("TransactionsService", () => {
                 where: {
                     userId: "test-user",
                     deletedAt: null,
-                    accountId: "account-id",
+                    accountId: { in: ["account-id"] },
                     categoryId: "category-id",
-                    type: "expense",
+                    type: { in: ["expense", "transfer"] },
                     transactionDate: {
                         gte: new Date("2025-12-01"),
                         lte: new Date("2025-12-31"),
@@ -776,10 +784,37 @@ describe("TransactionsService", () => {
             );
         });
 
-        it("should apply the same where clause to both findMany and count", async () => {
-            await service.findAll("test-user", { page: 1, type: "expense", includeHidden: false });
+        it("should apply accountIds and types as in clauses to both findMany and count", async () => {
+            await service.findAll("test-user", {
+                page: 1,
+                accountIds: ["acc-a", "acc-b"],
+                types: ["income", "transfer"],
+            });
 
-            const expectedWhere = { userId: "test-user", deletedAt: null, type: "expense", hidden: false };
+            const expectedWhere = {
+                userId: "test-user",
+                deletedAt: null,
+                accountId: { in: ["acc-a", "acc-b"] },
+                type: { in: ["income", "transfer"] },
+            };
+            expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: expectedWhere }),
+            );
+            expect(mockPrismaService.transaction.count).toHaveBeenCalledWith({ where: expectedWhere });
+        });
+
+        it("should add no account or type key for empty arrays (paginated)", async () => {
+            await service.findAll("test-user", { page: 1, accountIds: [], types: [] });
+
+            const where = mockPrismaService.transaction.findMany.mock.calls[0][0].where;
+            expect(where).not.toHaveProperty("accountId");
+            expect(where).not.toHaveProperty("type");
+        });
+
+        it("should apply the same where clause to both findMany and count", async () => {
+            await service.findAll("test-user", { page: 1, types: ["expense"], includeHidden: false });
+
+            const expectedWhere = { userId: "test-user", deletedAt: null, type: { in: ["expense"] }, hidden: false };
             expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({ where: expectedWhere }),
             );
@@ -830,7 +865,7 @@ describe("TransactionsService", () => {
 
             // Even though the caller never passes includeHidden (the DTO omits
             // it), assert the summary forces hidden: false on both queries.
-            await service.getSummary("test-user", { type: "expense" });
+            await service.getSummary("test-user", { types: ["expense"] });
 
             const groupByArgs = mockPrismaService.transaction.groupBy.mock.calls[0][0];
             expect(groupByArgs.where.hidden).toBe(false);
@@ -850,7 +885,7 @@ describe("TransactionsService", () => {
             mockPrismaService.transaction.findFirst.mockResolvedValue(null);
 
             await service.getSummary("test-user", {
-                type: "expense",
+                types: ["expense"],
                 categoryIds: ["cat-1", "uncategorized"],
                 search: "coffee",
                 startDate: "2025-12-01",
@@ -863,7 +898,7 @@ describe("TransactionsService", () => {
                         userId: "test-user",
                         deletedAt: null,
                         hidden: false,
-                        type: "expense",
+                        type: { in: ["expense"] },
                         transactionDate: {
                             gte: new Date("2025-12-01"),
                             lte: new Date("2025-12-31"),
@@ -887,11 +922,11 @@ describe("TransactionsService", () => {
             mockPrismaService.transaction.groupBy.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
             mockPrismaService.transaction.findFirst.mockResolvedValue({ currency: { code: "EUR" } });
 
-            const result = await service.getSummary("test-user", { type: "income" });
+            const result = await service.getSummary("test-user", { types: ["income"] });
 
             expect(result.currencyCode).toBe("EUR");
             expect(mockPrismaService.transaction.findFirst).toHaveBeenCalledWith({
-                where: { userId: "test-user", deletedAt: null, hidden: false, type: "income" },
+                where: { userId: "test-user", deletedAt: null, hidden: false, type: { in: ["income"] } },
                 orderBy: { transactionDate: "desc" },
                 select: { currency: { select: { code: true } } },
             });
@@ -984,19 +1019,19 @@ describe("TransactionsService", () => {
                 mockPrismaService.transaction.groupBy.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
                 mockPrismaService.transaction.findFirst.mockResolvedValue(null);
 
-                await service.getSummary("test-user", { type: "income", categoryIds: ["cat-1"] });
+                await service.getSummary("test-user", { types: ["income"], categoryIds: ["cat-1"] });
 
                 const calls = mockPrismaService.reimbursementAllocation.aggregate.mock.calls.map(([args]) => args);
                 const expenseSide = calls.find((args) => sideOf(args) === "expense");
                 const incomeSide = calls.find((args) => sideOf(args) === "income");
                 // The expense side ANDs the row filters with type expense: the caller's type income can only narrow it to nothing.
                 expect(expenseSide.where.expense.AND).toEqual([
-                    expect.objectContaining({ userId: "test-user", hidden: false, type: "income" }),
+                    expect.objectContaining({ userId: "test-user", hidden: false, type: { in: ["income"] } }),
                     { type: "expense" },
                 ]);
                 expect(expenseSide.where.income).toEqual({ deletedAt: null, hidden: false });
                 expect(incomeSide.where.income.AND).toEqual([
-                    expect.objectContaining({ userId: "test-user", hidden: false, type: "income" }),
+                    expect.objectContaining({ userId: "test-user", hidden: false, type: { in: ["income"] } }),
                     { type: "income" },
                 ]);
                 expect(incomeSide.where.expense).toEqual({ deletedAt: null, hidden: false });
@@ -1044,7 +1079,7 @@ describe("TransactionsService", () => {
                 mockPrismaService.transaction.groupBy.mockResolvedValueOnce([group("transfer", "out", 370)]);
                 mockPrismaService.transaction.findFirst.mockResolvedValue(null);
 
-                const result = await service.getSummary("test-user", { accountId: "acc-1" });
+                const result = await service.getSummary("test-user", { accountIds: ["acc-1"] });
 
                 expect(mockPrismaService.transaction.groupBy).toHaveBeenCalledTimes(1);
                 expect(result.transferred).toBe(370);
@@ -1054,12 +1089,12 @@ describe("TransactionsService", () => {
                 mockPrismaService.transaction.groupBy.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
                 mockPrismaService.transaction.findFirst.mockResolvedValue(null);
 
-                const result = await service.getSummary("test-user", { type: "expense" });
+                const result = await service.getSummary("test-user", { types: ["expense"] });
 
-                // where.type stays "expense", so the type=transfer AND clause matches nothing
+                // where.type stays { in: ["expense"] }, so the type=transfer AND clause matches nothing
                 // and cross-currency linked legs cannot distort `transferred`.
                 const linkedArgs = mockPrismaService.transaction.groupBy.mock.calls[1][0];
-                expect(linkedArgs.where.type).toBe("expense");
+                expect(linkedArgs.where.type).toEqual({ in: ["expense"] });
                 expect(linkedArgs.where.AND).toContainEqual({ type: "transfer" });
                 expect(result.transferred).toBe(0);
             });
@@ -1092,10 +1127,10 @@ describe("TransactionsService", () => {
 
             await service.getCategoryFacets("test-user", {
                 search: "rent",
-                type: "expense",
+                types: ["expense"],
                 startDate: "2025-12-01",
                 endDate: "2025-12-31",
-                accountId: "acc-1",
+                accountIds: ["acc-1"],
                 budgetId: "budget-1",
                 includeHidden: true,
             });
@@ -1105,9 +1140,9 @@ describe("TransactionsService", () => {
                 where: {
                     userId: "test-user",
                     deletedAt: null,
-                    accountId: "acc-1",
+                    accountId: { in: ["acc-1"] },
                     budgetId: "budget-1",
-                    type: "expense",
+                    type: { in: ["expense"] },
                     transactionDate: {
                         gte: new Date("2025-12-01"),
                         lte: new Date("2025-12-31"),
@@ -1121,9 +1156,9 @@ describe("TransactionsService", () => {
         it("ignores categoryIds and categoryId so the facet still offers every category", async () => {
             mockPrismaService.transaction.groupBy.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
 
-            await service.getCategoryFacets("test-user", { type: "expense" });
+            await service.getCategoryFacets("test-user", { types: ["expense"] });
             await service.getCategoryFacets("test-user", {
-                type: "expense",
+                types: ["expense"],
                 categoryIds: ["c1", "uncategorized"],
                 categoryId: "c2",
             });
@@ -1783,12 +1818,12 @@ describe("TransactionsService", () => {
                 mockPrismaService.transaction.groupBy.mockResolvedValue([]);
                 mockLinks();
 
-                await service.aggregate("u1", { ...filters, type: "income" }, "month");
+                await service.aggregate("u1", { ...filters, types: ["income"] }, "month");
 
                 const calls = mockPrismaService.reimbursementAllocation.findMany.mock.calls.map(([args]) => args);
                 const expenseSide = calls.find((args) => "AND" in args.where.expense);
                 expect(expenseSide.where.expense.AND).toEqual([
-                    expect.objectContaining({ userId: "u1", type: "income" }),
+                    expect.objectContaining({ userId: "u1", type: { in: ["income"] } }),
                     { type: "expense", hidden: false },
                 ]);
                 expect(expenseSide.where.income).toEqual({ deletedAt: null, hidden: false });
