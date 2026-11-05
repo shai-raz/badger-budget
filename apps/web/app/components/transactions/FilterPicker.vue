@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends string">
 /**
  * One transaction filter on the desktop toolbar: a trigger that summarises the selection, a clear button while
  * something is selected, and a popover holding the option list. The trigger label and avatar come from the selection;
@@ -9,10 +9,10 @@ import type { FilterOption } from "~/utils/filterOptions";
 
 const props = defineProps<{
     noun: FilterNoun;
-    options: FilterOption[];
+    options: FilterOption<T>[];
 }>();
 
-const selected = defineModel<string[]>("selected", { required: true });
+const selected = defineModel<T[]>("selected", { required: true });
 
 const selectedOptions = computed(() => props.options.filter((option) => selected.value.includes(option.value)));
 const label = computed(() => filterSelectionLabel(props.noun, selectedOptions.value) ?? FILTER_COPY[props.noun].title);

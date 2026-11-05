@@ -6,7 +6,7 @@ import type {
     ITransactionSummaryParams,
     ITransactionTypeFacetParams,
 } from "@badger/types";
-import { TRANSACTION_TYPE_LABELS, TRANSACTION_TYPES, type TransactionType } from "@badger/shared-data";
+import { TRANSACTION_TYPES, type TransactionType } from "@badger/shared-data";
 import { useMonthRangeQuery } from "../useMonthRangeQuery";
 import { currentMonthSelection, isCurrentMonthSelection, selectionToDateBounds } from "../../utils/monthRange";
 import {
@@ -19,13 +19,6 @@ import {
 import { latestQuery, writeQuery, type QueryWrite } from "../../utils/queryHistory";
 
 export type { TransactionSortOption } from "../../utils/transactionFilterQuery";
-
-export interface ActiveFilterChip {
-    key: string;
-    icon: string;
-    label: string;
-    clear: () => void;
-}
 
 export interface UseTransactionFiltersOptions {
     /**
@@ -222,7 +215,7 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
         return params;
     });
 
-    // Chips & counts ---------------------------------------------------------
+    // Counts -------------------------------------------------------------------
     // The drawer count covers the selections and show-hidden. Search is intentionally NOT counted (product decision),
     // and the period counts only when it is not this month.
     const drawerFilterCount = computed(
@@ -234,64 +227,6 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
     );
 
     const activeFilterCount = computed(() => drawerFilterCount.value + (isDefaultPeriod.value ? 0 : 1));
-
-    const activeChips: ComputedRef<ActiveFilterChip[]> = computed(() => {
-        const chips: ActiveFilterChip[] = [];
-
-        if (selectedTypes.value.length > 0) {
-            chips.push({
-                key: "type",
-                icon: "pi-filter",
-                label: selectedTypes.value.map((type) => TRANSACTION_TYPE_LABELS[type]).join(" + "),
-                clear: () => writeFilters({ types: [] }, { kind: "push" }),
-            });
-        }
-
-        if (selectedAccountIds.value.length > 0) {
-            const selected = selectedAccountIds.value.length;
-            chips.push({
-                key: "accounts",
-                icon: "pi-wallet",
-                label: selected === 1 ? "1 account" : `${selected} accounts`,
-                clear: () => writeFilters({ accountIds: [] }, { kind: "push" }),
-            });
-        }
-
-        if (selectedCategoryIds.value.length > 0) {
-            const selected = selectedCategoryIds.value.length;
-            chips.push({
-                key: "categories",
-                icon: "pi-tag",
-                label: selected === 1 ? "1 category" : `${selected} categories`,
-                clear: () => writeFilters({ categoryIds: [] }, { kind: "push" }),
-            });
-        }
-
-        if (showHidden.value) {
-            chips.push({
-                key: "hidden",
-                icon: "pi-eye",
-                label: "Showing hidden",
-                clear: () => writeFilters({ showHidden: false }, { kind: "push" }),
-            });
-        }
-
-        if (urlFilters.value.search) {
-            chips.push({
-                key: "search",
-                icon: "pi-search",
-                label: `"${urlFilters.value.search}"`,
-                clear: () => {
-                    searchQuery.value = "";
-                    commitSearch("", { kind: "push" });
-                },
-            });
-        }
-
-        return chips;
-    });
-
-    const hasActiveFilters = computed(() => activeChips.value.length > 0);
 
     // Actions ----------------------------------------------------------------
     // Resets the drawer filters and the period, as one history entry. Search and sort are kept (product decision).
@@ -330,11 +265,9 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
         accountFacetParams,
         typeFacetParams,
 
-        // Chips & counts
+        // Counts
         drawerFilterCount,
         activeFilterCount,
-        activeChips,
-        hasActiveFilters,
 
         // Actions
         clearAllFilters,

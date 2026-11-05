@@ -184,21 +184,6 @@ describe("useTransactionFilters search", () => {
         await passDebounce();
         expect(writeQuery).toHaveBeenLastCalledWith(router, { q: "rento" }, { kind: "edit", control: "search" });
     });
-
-    it("clears the search through its chip as one push, and the debounce adds no second write", async () => {
-        route.query = { q: "rent" };
-        const { activeChips, searchQuery } = mountFilters();
-
-        activeChips.value.find((chip) => chip.key === "search")!.clear();
-
-        expect(searchQuery.value).toBe("");
-        expect(writeQuery).toHaveBeenCalledTimes(1);
-        expect(writeQuery).toHaveBeenLastCalledWith(router, {}, { kind: "push" });
-        expect(route.query).toEqual({});
-
-        await passDebounce();
-        expect(writeQuery).toHaveBeenCalledTimes(1);
-    });
 });
 
 describe("useTransactionFilters filter writes", () => {
@@ -261,15 +246,6 @@ describe("useTransactionFilters filter writes", () => {
         showHidden.value = false;
 
         expect(writeQuery).not.toHaveBeenCalled();
-    });
-
-    it("pushes a type chip clear, keeping create", () => {
-        route.query = { types: "income", create: "expense" };
-        const { activeChips } = mountFilters();
-
-        activeChips.value.find((chip) => chip.key === "type")!.clear();
-
-        expect(writeQuery).toHaveBeenLastCalledWith(router, { create: "expense" }, { kind: "push" });
     });
 
     it("clearAllFilters resets types, accounts, categories, hidden and the period in one push, keeping search, sort and create", () => {
@@ -620,41 +596,5 @@ describe("useTransactionFilters counts", () => {
         expect(isDefaultPeriod.value).toBe(true);
         expect(drawerFilterCount.value).toBe(0);
         expect(activeFilterCount.value).toBe(0);
-    });
-});
-
-describe("useTransactionFilters chips", () => {
-    it("labels the type chip with the selected types in canonical order", () => {
-        route.query = { types: "transfer,income" };
-        const { activeChips } = mountFilters();
-
-        expect(activeChips.value.find((chip) => chip.key === "type")!.label).toBe("Income + Transfer");
-    });
-
-    it("labels the account chip by count", () => {
-        route.query = { accounts: "acc-a" };
-        const { activeChips } = mountFilters();
-        expect(activeChips.value.find((chip) => chip.key === "accounts")!.label).toBe("1 account");
-
-        route.query = { accounts: "acc-a,acc-b" };
-        expect(activeChips.value.find((chip) => chip.key === "accounts")!.label).toBe("2 accounts");
-    });
-
-    it("labels the category chip by count", () => {
-        route.query = { categories: "cat-a" };
-        const { activeChips } = mountFilters();
-        expect(activeChips.value.find((chip) => chip.key === "categories")!.label).toBe("1 category");
-
-        route.query = { categories: "cat-a,cat-b" };
-        expect(activeChips.value.find((chip) => chip.key === "categories")!.label).toBe("2 categories");
-    });
-
-    it("clears the account chip as one push, keeping other keys", () => {
-        route.query = { accounts: "acc-a", create: "expense" };
-        const { activeChips } = mountFilters();
-
-        activeChips.value.find((chip) => chip.key === "accounts")!.clear();
-
-        expect(writeQuery).toHaveBeenLastCalledWith(router, { create: "expense" }, { kind: "push" });
     });
 });
