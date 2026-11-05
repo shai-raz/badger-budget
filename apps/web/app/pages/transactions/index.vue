@@ -31,6 +31,7 @@ definePageMeta({
 const router = useRouter();
 
 const { data: categoriesData, isPending: isCategoriesPending } = useGetCategoriesQuery();
+const { data: accountsData } = useGetAccounts();
 
 // Ids the URL's category filter is checked against. Built from the full categories list, not the offered options,
 // so a shared link's category is not pruned just because it has no matches in the current view. Undefined until the
@@ -40,29 +41,36 @@ const knownCategoryIds = () =>
         ? undefined
         : [UNCATEGORIZED_VALUE, ...(categoriesData.value as ICategoryResponse[]).map((category) => category.id)];
 
+// Ids the URL's account filter is checked against, the same way as the categories. Undefined until the accounts load.
+const knownAccountIds = () => accountsData.value?.map((account) => account.id);
+
 // Single source of filter state: everything but the search input text lives in the URL (see useTransactionFilters).
 const {
     searchQuery,
-    typeFilter,
+    selectedTypes,
     selectedCategoryIds,
     sortOption,
     period,
     showHidden,
     listParams,
     summaryParams,
-    facetParams,
-    activeFilterCount,
+    categoryFacetParams,
+    drawerFilterCount,
     activeChips,
     hasActiveFilters,
     clearAllFilters,
 } = useTransactionFilters({
-    totalCategoryCount: () => totalCategoryCount.value,
     knownCategoryIds,
+    knownAccountIds,
 });
 
 // Per-category counts for the current view (every filter except the category selection). They decide which categories
 // are offered. keepPreviousData keeps the previous counts on screen while a refetch is in flight.
-const { data: facetData, isPending: isFacetPending, isError: isFacetError } = useTransactionCategoryFacets(facetParams);
+const {
+    data: facetData,
+    isPending: isFacetPending,
+    isError: isFacetError,
+} = useTransactionCategoryFacets(categoryFacetParams);
 
 const facetFailed = computed(() => isFacetError.value && !facetData.value);
 
@@ -80,9 +88,6 @@ const categoryOptions = computed<CategoryFilterOption[]>(() => {
         selectedIds: selectedCategoryIds.value,
     });
 });
-
-// Offered categories (not every category), used for the "N of M categories" chip.
-const totalCategoryCount = computed(() => categoryOptions.value.length);
 
 // Below md the page switches to the compact mobile experience: compact header,
 // collapsible summary, bottom-sheet filters, and tap-to-navigate rows.
@@ -213,7 +218,6 @@ const handleCreateTransaction = () => {
 // "Record a cash payment" deep link: ?create=expense&accountId=…&categoryId=… opens the create dialog
 // prefilled, then drops those keys so a refresh or back doesn't reopen it.
 const route = useRoute();
-const { data: accountsData } = useGetAccounts();
 const queryString = (v: unknown) => (typeof v === "string" && v ? v : undefined);
 const applyCreateQuery = () => {
     if (route.query.create !== "expense") return;
@@ -258,7 +262,7 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
                     v-model:period="period"
                     v-model:filters-open="filtersOpen"
                     v-model:sort-option="sortOption"
-                    :active-filter-count="activeFilterCount"
+                    :active-filter-count="drawerFilterCount"
                 />
             </template>
             <template #actions>
@@ -312,14 +316,14 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
                 v-model:period="period"
                 v-model:filters-open="filtersOpen"
                 v-model:sort-option="sortOption"
-                :active-filter-count="activeFilterCount"
+                :active-filter-count="drawerFilterCount"
                 class="mb-3 shrink-0"
             />
 
             <!-- Inline filters panel (desktop only; mobile uses the bottom sheet) -->
             <TransactionsFiltersPanel
                 v-if="isDesktop && filtersOpen"
-                v-model:type-filter="typeFilter"
+                v-model:selected-types="selectedTypes"
                 v-model:selected-category-ids="selectedCategoryIds"
                 v-model:show-hidden="showHidden"
                 :category-options="categoryOptions"
@@ -331,7 +335,7 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
             <TransactionsFiltersSheet
                 v-if="!isDesktop"
                 v-model:visible="filtersOpen"
-                v-model:type-filter="typeFilter"
+                v-model:selected-types="selectedTypes"
                 v-model:selected-category-ids="selectedCategoryIds"
                 v-model:show-hidden="showHidden"
                 :category-options="categoryOptions"

@@ -1,18 +1,24 @@
 import type { ComputedRef, MaybeRefOrGetter, Ref, WritableComputedRef } from "vue";
-import type { ITransactionCategoryFacetParams, ITransactionListParams, ITransactionSummaryParams } from "@badger/types";
+import type {
+    ITransactionAccountFacetParams,
+    ITransactionCategoryFacetParams,
+    ITransactionListParams,
+    ITransactionSummaryParams,
+    ITransactionTypeFacetParams,
+} from "@badger/types";
+import { TRANSACTION_TYPE_LABELS, TRANSACTION_TYPES, type TransactionType } from "@badger/shared-data";
 import { useMonthRangeQuery } from "../useMonthRangeQuery";
-import { selectionToDateBounds } from "../../utils/monthRange";
+import { currentMonthSelection, isCurrentMonthSelection, selectionToDateBounds } from "../../utils/monthRange";
 import {
     parseTransactionFilters,
     sameTransactionFilters,
     withTransactionFilters,
     type TransactionFilterState,
     type TransactionSortOption,
-    type TransactionTypeFilter,
 } from "../../utils/transactionFilterQuery";
 import { latestQuery, writeQuery, type QueryWrite } from "../../utils/queryHistory";
 
-export type { TransactionSortOption, TransactionTypeFilter } from "../../utils/transactionFilterQuery";
+export type { TransactionSortOption } from "../../utils/transactionFilterQuery";
 
 export interface ActiveFilterChip {
     key: string;
@@ -23,24 +29,13 @@ export interface ActiveFilterChip {
 
 export interface UseTransactionFiltersOptions {
     /**
-     * Total number of categories available, used for the categories chip's
-     * "N of M categories" label. Supply a ref/getter (e.g. from the categories
-     * query) so the label stays accurate as categories load. When omitted or 0,
-     * the chip falls back to "N categories".
-     */
-    totalCategoryCount?: MaybeRefOrGetter<number | undefined>;
-    /**
      * Ids of the categories the user has, including the Uncategorized pseudo-id. Undefined while they load: no id is
      * dropped then, so the URL is not rewritten before the list is known.
      */
     knownCategoryIds?: MaybeRefOrGetter<string[] | undefined>;
+    /** Ids of the accounts the user has. Same semantics as `knownCategoryIds`. */
+    knownAccountIds?: MaybeRefOrGetter<string[] | undefined>;
 }
-
-const TYPE_CHIP_LABELS: Record<Exclude<TransactionTypeFilter, "all">, string> = {
-    income: "Income",
-    expense: "Expenses",
-    transfer: "Transfers",
-};
 
 const SORT_MAP: Record<
     TransactionSortOption,
@@ -54,11 +49,22 @@ const SORT_MAP: Record<
 };
 
 /**
- * Page-scoped filter state for the transactions page. The URL query is the single source: search, type, categories,
- * sort and show-hidden are read from `route.query` (see `utils/transactionFilterQuery.ts`), and every control writes
- * back to it. The period is in the URL too (`?from`/`?to`, via `useMonthRangeQuery`). The search input text is local
- * so typing stays responsive; the URL takes its trimmed value after the debounce. Exposes `listParams`/`summaryParams`
- * ready for `useInfiniteTransactions`/`useTransactionsSummary`, plus chip/count helpers.
+ * A requested id selection pruned to the known ids. Undefined `known` (still loading) keeps every requested id. A
+ * selection of every known id reads as none, the same collapse the toggle composables write.
+ */
+function prunedSelection(requested: string[], known: string[] | undefined): string[] {
+    if (!known) return requested;
+    const valid = known.filter((id) => requested.includes(id));
+    return valid.length === known.length ? [] : valid;
+}
+
+/**
+ * Page-scoped filter state for the transactions page. The URL query is the single source: search, types, accounts,
+ * categories, sort and show-hidden are read from `route.query` (see `utils/transactionFilterQuery.ts`), and every
+ * control writes back to it. The period is in the URL too (`?from`/`?to`, via `useMonthRangeQuery`). The search input
+ * text is local so typing stays responsive; the URL takes its trimmed value after the debounce. Exposes
+ * `listParams`/`summaryParams` ready for `useInfiniteTransactions`/`useTransactionsSummary`, the per-facet params, plus
+ * chip/count helpers.
  */
 export function useTransactionFilters(options: UseTransactionFiltersOptions = {}) {
     const route = useRoute();
@@ -105,9 +111,10 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
     watch(debouncedSearch, (text) => commitSearch(text, { kind: "edit", control: "search" }));
 
     // Filters ------------------------------------------------------------------
-    const typeFilter = computed<TransactionTypeFilter>({
-        get: () => urlFilters.value.type,
-        set: (type) => writeFilters({ type }, { kind: "push" }),
+    // Empty array === all types. A selection of every type reads as none, the same collapse as categories.
+    const selectedTypes: WritableComputedRef<TransactionType[]> = computed({
+        get: () => (urlFilters.value.types.length === TRANSACTION_TYPES.length ? [] : urlFilters.value.types),
+        set: (types) => writeFilters({ types }, { kind: "edit", control: "types" }),
     });
 
     const sortOption = computed<TransactionSortOption>({
@@ -120,18 +127,26 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
         set: (value) => writeFilters({ showHidden: value }, { kind: "push" }),
     });
 
+    // Empty array === all accounts (no filter param sent). Ids the user no longer has are ignored once the list has
+    // loaded, and a selection of every account reads as none.
+    const selectedAccountIds: WritableComputedRef<string[]> = computed({
+        get: () => prunedSelection(urlFilters.value.accountIds, toValue(options.knownAccountIds)),
+        set: (ids) => writeFilters({ accountIds: ids }, { kind: "edit", control: "accounts" }),
+    });
+
     // Empty array === all categories (no filter param sent). Ids the user no longer has are ignored once the list has
     // loaded, and a selection of every category reads as none (the same collapse useCategoryToggle writes).
     const selectedCategoryIds: WritableComputedRef<string[]> = computed({
-        get: () => {
-            const requested = urlFilters.value.categoryIds;
-            const known = toValue(options.knownCategoryIds);
-            if (!known) return requested;
-            const valid = known.filter((id) => requested.includes(id));
-            return valid.length === known.length ? [] : valid;
-        },
+        get: () => prunedSelection(urlFilters.value.categoryIds, toValue(options.knownCategoryIds)),
         set: (ids) => writeFilters({ categoryIds: ids }, { kind: "edit", control: "categories" }),
     });
+
+    const isDefaultPeriod = computed(() => isCurrentMonthSelection(period.value, new Date()));
+
+    // Resets the period to this month. It is a plain push, so Back returns to the previous period.
+    function resetPeriod() {
+        period.value = currentMonthSelection(new Date());
+    }
 
     // Params -------------------------------------------------------------------
     const listParams: ComputedRef<ITransactionListParams> = computed(() => {
@@ -148,7 +163,8 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
         if (startDate) params.startDate = startDate;
         if (endDate) params.endDate = endDate;
         if (urlFilters.value.search) params.search = urlFilters.value.search;
-        if (typeFilter.value !== "all") params.types = [typeFilter.value];
+        if (selectedTypes.value.length > 0) params.types = [...selectedTypes.value];
+        if (selectedAccountIds.value.length > 0) params.accountIds = [...selectedAccountIds.value];
         if (selectedCategoryIds.value.length > 0) params.categoryIds = [...selectedCategoryIds.value];
 
         return params;
@@ -162,56 +178,91 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
         if (startDate) params.startDate = startDate;
         if (endDate) params.endDate = endDate;
         if (urlFilters.value.search) params.search = urlFilters.value.search;
-        if (typeFilter.value !== "all") params.types = [typeFilter.value];
+        if (selectedTypes.value.length > 0) params.types = [...selectedTypes.value];
+        if (selectedAccountIds.value.length > 0) params.accountIds = [...selectedAccountIds.value];
         if (selectedCategoryIds.value.length > 0) params.categoryIds = [...selectedCategoryIds.value];
 
         return params;
     });
 
-    // Built without the category selection, so a chip click does not re-run it: the facet counts stay put while a
-    // category is picked (every category stays offered).
-    const facetParams: ComputedRef<ITransactionCategoryFacetParams> = computed(() => {
+    // The facet params share the period, search and show-hidden filters. Each facet omits only its own selection, so its
+    // counts stay put while it is edited: every option stays offered while one is picked.
+    function sharedFacetParams() {
         const { startDate, endDate } = selectionToDateBounds(period.value);
 
-        const params: ITransactionCategoryFacetParams = { includeHidden: showHidden.value };
+        const params: Pick<ITransactionListParams, "includeHidden" | "startDate" | "endDate" | "search"> = {
+            includeHidden: showHidden.value,
+        };
 
         if (startDate) params.startDate = startDate;
         if (endDate) params.endDate = endDate;
         if (urlFilters.value.search) params.search = urlFilters.value.search;
-        if (typeFilter.value !== "all") params.types = [typeFilter.value];
 
+        return params;
+    }
+
+    const categoryFacetParams: ComputedRef<ITransactionCategoryFacetParams> = computed(() => {
+        const params: ITransactionCategoryFacetParams = sharedFacetParams();
+        if (selectedTypes.value.length > 0) params.types = [...selectedTypes.value];
+        if (selectedAccountIds.value.length > 0) params.accountIds = [...selectedAccountIds.value];
+        return params;
+    });
+
+    const accountFacetParams: ComputedRef<ITransactionAccountFacetParams> = computed(() => {
+        const params: ITransactionAccountFacetParams = sharedFacetParams();
+        if (selectedTypes.value.length > 0) params.types = [...selectedTypes.value];
+        if (selectedCategoryIds.value.length > 0) params.categoryIds = [...selectedCategoryIds.value];
+        return params;
+    });
+
+    const typeFacetParams: ComputedRef<ITransactionTypeFacetParams> = computed(() => {
+        const params: ITransactionTypeFacetParams = sharedFacetParams();
+        if (selectedAccountIds.value.length > 0) params.accountIds = [...selectedAccountIds.value];
+        if (selectedCategoryIds.value.length > 0) params.categoryIds = [...selectedCategoryIds.value];
         return params;
     });
 
     // Chips & counts ---------------------------------------------------------
-    // Search is intentionally NOT counted in the filter badge (product decision).
-    const activeFilterCount = computed(
+    // The drawer count covers the selections and show-hidden. Search is intentionally NOT counted (product decision),
+    // and the period counts only when it is not this month.
+    const drawerFilterCount = computed(
         () =>
-            (typeFilter.value !== "all" ? 1 : 0) +
+            (selectedTypes.value.length > 0 ? 1 : 0) +
+            (selectedAccountIds.value.length > 0 ? 1 : 0) +
             (selectedCategoryIds.value.length > 0 ? 1 : 0) +
             (showHidden.value ? 1 : 0),
     );
 
+    const activeFilterCount = computed(() => drawerFilterCount.value + (isDefaultPeriod.value ? 0 : 1));
+
     const activeChips: ComputedRef<ActiveFilterChip[]> = computed(() => {
         const chips: ActiveFilterChip[] = [];
 
-        if (typeFilter.value !== "all") {
+        if (selectedTypes.value.length > 0) {
             chips.push({
                 key: "type",
                 icon: "pi-filter",
-                label: TYPE_CHIP_LABELS[typeFilter.value],
-                clear: () => writeFilters({ type: "all" }, { kind: "push" }),
+                label: selectedTypes.value.map((type) => TRANSACTION_TYPE_LABELS[type]).join(" + "),
+                clear: () => writeFilters({ types: [] }, { kind: "push" }),
+            });
+        }
+
+        if (selectedAccountIds.value.length > 0) {
+            const selected = selectedAccountIds.value.length;
+            chips.push({
+                key: "accounts",
+                icon: "pi-wallet",
+                label: selected === 1 ? "1 account" : `${selected} accounts`,
+                clear: () => writeFilters({ accountIds: [] }, { kind: "push" }),
             });
         }
 
         if (selectedCategoryIds.value.length > 0) {
             const selected = selectedCategoryIds.value.length;
-            const total = toValue(options.totalCategoryCount);
-            const label = total && total > 0 ? `${selected} of ${total} categories` : `${selected} categories`;
             chips.push({
                 key: "categories",
                 icon: "pi-tag",
-                label,
+                label: `${selected} categories`,
                 clear: () => writeFilters({ categoryIds: [] }, { kind: "push" }),
             });
         }
@@ -243,29 +294,44 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
     const hasActiveFilters = computed(() => activeChips.value.length > 0);
 
     // Actions ----------------------------------------------------------------
-    // Resets filters ONLY — not search, timeframe or sort (product decision).
+    // Resets the drawer filters and the period, as one history entry. Search and sort are kept (product decision).
     function clearAllFilters() {
-        writeFilters({ type: "all", categoryIds: [], showHidden: false }, { kind: "push" });
+        const state: TransactionFilterState = {
+            ...urlFilters.value,
+            types: [],
+            accountIds: [],
+            categoryIds: [],
+            showHidden: false,
+        };
+        writeQuery(router, withTransactionFilters(latestQuery(router, route.query), state, { resetPeriod: true }), {
+            kind: "push",
+        });
     }
 
     return {
         // Local state
         searchQuery,
         debouncedSearch: debouncedSearch as Readonly<Ref<string>>,
-        typeFilter,
+        selectedTypes,
+        selectedAccountIds,
         selectedCategoryIds,
         sortOption,
 
         // URL-backed period and show-hidden
         period,
+        isDefaultPeriod,
+        resetPeriod,
         showHidden,
 
         // Derived params
         listParams,
         summaryParams,
-        facetParams,
+        categoryFacetParams,
+        accountFacetParams,
+        typeFacetParams,
 
         // Chips & counts
+        drawerFilterCount,
         activeFilterCount,
         activeChips,
         hasActiveFilters,

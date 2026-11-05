@@ -10,7 +10,7 @@
 import { shallowRef, type ShallowRef } from "vue";
 import type { LocationQueryRaw, RouteLocationAsRelativeGeneric } from "vue-router";
 
-export type EditControl = "search" | "categories";
+export type EditControl = "search" | "categories" | "accounts" | "types";
 
 export type QueryWrite = { kind: "push" } | { kind: "replace" } | { kind: "edit"; control: EditControl };
 

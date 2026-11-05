@@ -18,7 +18,7 @@ const mountPanel = async (selectedCategoryIds: string[] = ["c2"]) => {
     const wrapper = await mountSuspended(FiltersPanel, {
         props: {
             categoryOptions: options,
-            typeFilter: "all",
+            selectedTypes: [],
             selectedCategoryIds,
             showHidden: false,
         },
@@ -96,5 +96,49 @@ describe("FiltersPanel category chips", () => {
         await chip(wrapper, "Travel, 0 transactions").trigger("click");
 
         expect(wrapper.emitted("update:selectedCategoryIds")?.at(-1)).toEqual([[]]);
+    });
+});
+
+describe("FiltersPanel type control", () => {
+    afterEach(() => {
+        mounted.splice(0).forEach((wrapper) => wrapper.unmount());
+    });
+
+    const typeButton = (wrapper: VueWrapper, label: string) => {
+        const button = wrapper.findAll("button").find((element) => element.text() === label);
+        if (!button) throw new Error(`no type option labelled ${label}`);
+        return button;
+    };
+
+    it("presses the one selected type", async () => {
+        const wrapper = await mountSuspended(FiltersPanel, {
+            props: { categoryOptions: options, selectedTypes: ["expense"], selectedCategoryIds: [], showHidden: false },
+        });
+        mounted.push(wrapper);
+
+        expect(typeButton(wrapper, "Expenses").attributes("aria-pressed")).toBe("true");
+        expect(typeButton(wrapper, "All").attributes("aria-pressed")).toBe("false");
+    });
+
+    it("presses All when no type is selected", async () => {
+        const wrapper = await mountSuspended(FiltersPanel, {
+            props: { categoryOptions: options, selectedTypes: [], selectedCategoryIds: [], showHidden: false },
+        });
+        mounted.push(wrapper);
+
+        expect(typeButton(wrapper, "All").attributes("aria-pressed")).toBe("true");
+    });
+
+    it("emits the chosen type as a single-item selection, and All as an empty one", async () => {
+        const wrapper = await mountSuspended(FiltersPanel, {
+            props: { categoryOptions: options, selectedTypes: [], selectedCategoryIds: [], showHidden: false },
+        });
+        mounted.push(wrapper);
+
+        await typeButton(wrapper, "Income").trigger("click");
+        expect(wrapper.emitted("update:selectedTypes")?.at(-1)).toEqual([["income"]]);
+
+        await typeButton(wrapper, "All").trigger("click");
+        expect(wrapper.emitted("update:selectedTypes")?.at(-1)).toEqual([[]]);
     });
 });

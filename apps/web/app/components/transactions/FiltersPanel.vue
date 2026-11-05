@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TransactionTypeFilter } from "../../composables/transactions/useTransactionFilters";
+import type { TransactionType } from "@badger/shared-data";
 import { useCategoryToggle } from "../../composables/transactions/useCategoryToggle";
 import { transactionCountLabel, type CategoryFilterOption } from "~/utils/categoryFilterOptions";
 import { hexToRgba } from "~/utils/color";
@@ -11,12 +11,19 @@ const props = defineProps<{
 
 const emit = defineEmits<{ (event: "clear-all"): void }>();
 
-const typeFilter = defineModel<TransactionTypeFilter>("typeFilter", { required: true });
+const selectedTypes = defineModel<TransactionType[]>("selectedTypes", { required: true });
+// SelectButton is single-select: "All" is the empty selection, and a single type is the one selected.
+const typeChoice = computed<TransactionType | "all">({
+    get: () => (selectedTypes.value.length === 1 ? (selectedTypes.value[0] ?? "all") : "all"),
+    set: (choice) => {
+        selectedTypes.value = choice === "all" ? [] : [choice];
+    },
+});
 // Empty array === all categories included (no filter param sent).
 const selectedCategoryIds = defineModel<string[]>("selectedCategoryIds", { required: true });
 const showHidden = defineModel<boolean>("showHidden", { required: true });
 
-const typeOptions: Array<{ label: string; value: TransactionTypeFilter }> = [
+const typeOptions: Array<{ label: string; value: TransactionType | "all" }> = [
     { label: "All", value: "all" },
     { label: "Income", value: "income" },
     { label: "Expenses", value: "expense" },
@@ -72,7 +79,7 @@ function chipStyle(color: string) {
                     Type
                 </span>
                 <SelectButton
-                    v-model="typeFilter"
+                    v-model="typeChoice"
                     :options="typeOptions"
                     option-label="label"
                     option-value="value"

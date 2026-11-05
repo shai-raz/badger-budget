@@ -19,7 +19,7 @@ const mountSheet = async (selectedCategoryIds: string[] = ["c2"]) => {
         props: {
             visible: true,
             categoryOptions: options,
-            typeFilter: "all",
+            selectedTypes: [],
             selectedCategoryIds,
             showHidden: false,
         },
