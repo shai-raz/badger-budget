@@ -1,3 +1,5 @@
+import type { TransactionType } from "@badger/shared-data";
+
 /**
  * Client-side params for the paginated `GET /transactions` list and its
  * `GET /transactions/summary` aggregate.
@@ -14,8 +16,18 @@ export interface ITransactionListParams {
     limit?: number;
     /** Case-insensitive search across description, additionalDescription and category name. */
     search?: string;
-    /** Filter by transaction type. */
-    type?: "income" | "expense" | "transfer";
+    /**
+     * Transaction types to include. Client-side array — the api-client serializes
+     * it to a comma-joined CSV. Omit the field entirely (or pass an empty array)
+     * to include all types.
+     */
+    types?: TransactionType[];
+    /**
+     * Account ids to include. Client-side array — the api-client serializes it to
+     * a comma-joined CSV. Omit the field entirely (or pass an empty array) to
+     * include all accounts.
+     */
+    accountIds?: string[];
     /**
      * Category ids to filter by. Client-side array — the api-client serializes
      * it to a comma-joined CSV (`id1,id2`) for the wire.
@@ -38,8 +50,6 @@ export interface ITransactionListParams {
     sortBy?: "transactionDate" | "amount" | "description" | "createdAt";
     /** Sort direction (API default `desc`). */
     sortOrder?: "asc" | "desc";
-    /** Legacy filter — filter by account id. */
-    accountId?: string;
     /** Legacy filter — filter by a single category id. */
     categoryId?: string;
     /** Legacy filter — filter by budget id. */

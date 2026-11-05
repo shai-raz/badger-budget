@@ -452,7 +452,7 @@ describe("useTransactionFilters facetParams", () => {
         expect(filters.facetParams.value.search).toBe("rent");
 
         route.query = { ...route.query, type: "expense" };
-        expect(filters.facetParams.value.type).toBe("expense");
+        expect(filters.facetParams.value.types).toEqual(["expense"]);
 
         route.query = { ...route.query, from: "2026-08", to: "2026-08" };
         expect(filters.facetParams.value).toMatchObject({ startDate: "2026-08-01", endDate: "2026-08-31" });

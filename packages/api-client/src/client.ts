@@ -408,8 +408,8 @@ export class ApiClient {
 
     /**
      * Serializes client-side list/summary params into the wire query object:
-     * joins `categoryIds` into a CSV and omits every empty/undefined param so
-     * the API never receives e.g. an empty `categoryIds=` string.
+     * joins `types`, `accountIds` and `categoryIds` into CSVs and omits every
+     * empty/undefined param so the API never receives e.g. an empty `categoryIds=` string.
      */
     private serializeTransactionParams(params: ITransactionListParams): Record<string, string | number | boolean> {
         const query: Record<string, string | number | boolean> = {};
@@ -417,7 +417,12 @@ export class ApiClient {
         if (params.limit !== undefined) query.limit = params.limit;
         const search = params.search?.trim();
         if (search) query.search = search;
-        if (params.type) query.type = params.type;
+        if (params.types && params.types.length > 0) {
+            query.types = params.types.join(",");
+        }
+        if (params.accountIds && params.accountIds.length > 0) {
+            query.accountIds = params.accountIds.join(",");
+        }
         if (params.categoryIds && params.categoryIds.length > 0) {
             query.categoryIds = params.categoryIds.join(",");
         }
@@ -426,7 +431,6 @@ export class ApiClient {
         if (params.includeHidden !== undefined) query.includeHidden = params.includeHidden;
         if (params.sortBy) query.sortBy = params.sortBy;
         if (params.sortOrder) query.sortOrder = params.sortOrder;
-        if (params.accountId) query.accountId = params.accountId;
         if (params.categoryId) query.categoryId = params.categoryId;
         if (params.budgetId) query.budgetId = params.budgetId;
         return query;
@@ -437,13 +441,7 @@ export class ApiClient {
      * compatible array shape (no hidden filtering). Prefer
      * {@link getTransactionsPaginated} for the redesigned list.
      */
-    async getTransactions(params?: {
-        accountId?: string;
-        categoryId?: string;
-        type?: "income" | "expense" | "transfer";
-        startDate?: string;
-        endDate?: string;
-    }) {
+    async getTransactions(params?: { categoryId?: string; startDate?: string; endDate?: string }) {
         const response = await this.client.get<ITransactionResponse[]>("/transactions", { params });
         return response.data;
     }
@@ -483,11 +481,11 @@ export class ApiClient {
     ): Promise<ITransactionCategoryFacetsResponse> {
         const query = this.serializeTransactionParams({
             search: params.search,
-            type: params.type,
+            types: params.types,
+            accountIds: params.accountIds,
             startDate: params.startDate,
             endDate: params.endDate,
             includeHidden: params.includeHidden,
-            accountId: params.accountId,
             budgetId: params.budgetId,
         });
         const response = await this.client.get<ITransactionCategoryFacetsResponse>("/transactions/category-facets", {

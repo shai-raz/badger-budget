@@ -148,7 +148,7 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
         if (startDate) params.startDate = startDate;
         if (endDate) params.endDate = endDate;
         if (urlFilters.value.search) params.search = urlFilters.value.search;
-        if (typeFilter.value !== "all") params.type = typeFilter.value;
+        if (typeFilter.value !== "all") params.types = [typeFilter.value];
         if (selectedCategoryIds.value.length > 0) params.categoryIds = [...selectedCategoryIds.value];
 
         return params;
@@ -162,7 +162,7 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
         if (startDate) params.startDate = startDate;
         if (endDate) params.endDate = endDate;
         if (urlFilters.value.search) params.search = urlFilters.value.search;
-        if (typeFilter.value !== "all") params.type = typeFilter.value;
+        if (typeFilter.value !== "all") params.types = [typeFilter.value];
         if (selectedCategoryIds.value.length > 0) params.categoryIds = [...selectedCategoryIds.value];
 
         return params;
@@ -178,7 +178,7 @@ export function useTransactionFilters(options: UseTransactionFiltersOptions = {}
         if (startDate) params.startDate = startDate;
         if (endDate) params.endDate = endDate;
         if (urlFilters.value.search) params.search = urlFilters.value.search;
-        if (typeFilter.value !== "all") params.type = typeFilter.value;
+        if (typeFilter.value !== "all") params.types = [typeFilter.value];
 
         return params;
     });
