@@ -257,7 +257,6 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
                     v-model:search-query="searchQuery"
                     v-model:period="period"
                     v-model:filters-open="filtersOpen"
-                    v-model:sort-option="sortOption"
                     :active-filter-count="drawerFilterCount"
                 />
             </template>
@@ -311,7 +310,6 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
                 v-model:search-query="searchQuery"
                 v-model:period="period"
                 v-model:filters-open="filtersOpen"
-                v-model:sort-option="sortOption"
                 :active-filter-count="drawerFilterCount"
                 class="mb-3 shrink-0"
             />
@@ -361,7 +359,14 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
                 class="min-h-0 flex-1"
                 @load-more="fetchNextPage"
                 @transaction-click="handleTransactionClick"
-            />
+            >
+                <template #header-actions>
+                    <TransactionsSortMenu
+                        v-model="sortOption"
+                        :compact="!isDesktop"
+                    />
+                </template>
+            </TransactionsListRows>
         </div>
 
         <!-- Mobile-only create shortcut; desktop uses the header "New" button. -->

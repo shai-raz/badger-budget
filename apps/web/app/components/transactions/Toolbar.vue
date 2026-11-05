@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { TransactionSortOption } from "../../composables/transactions/useTransactionFilters";
 import { TRANSACTIONS_PRESETS, type PeriodSelection } from "~/utils/monthRange";
 
 const props = defineProps<{
@@ -10,7 +9,6 @@ const props = defineProps<{
 const searchQuery = defineModel<string>("searchQuery", { default: "" });
 const period = defineModel<PeriodSelection>("period", { required: true });
 const filtersOpen = defineModel<boolean>("filtersOpen", { default: false });
-const sortOption = defineModel<TransactionSortOption>("sortOption", { default: "newest" });
 
 // Desktop shows the full toolbar in the body; below md the same controls render
 // in the page header's second row (LayoutPageHeader's toolbar slot).
@@ -47,10 +45,8 @@ const filtersBadgePt = computed(() => ({
                 :presets="TRANSACTIONS_PRESETS"
             />
 
-            <!-- Sort menu + Filters toggle -->
+            <!-- Filters toggle -->
             <div class="ml-auto flex items-center gap-2.5">
-                <TransactionsSortMenu v-model="sortOption" />
-
                 <Button
                     size="small"
                     :outlined="!filtersOpen"
@@ -118,21 +114,13 @@ const filtersBadgePt = computed(() => ({
                 </OverlayBadge>
             </div>
 
-            <!-- Row 2: period picker left, sort right. A wide custom range label
-                 can run out of room on a narrow phone: the picker shrinks and
-                 truncates its label, while the sort trigger is compact and
-                 holds its size (shrink-0) so the row never wraps to two lines. -->
-            <div class="flex items-center justify-between gap-2">
+            <!-- Row 2: period picker. A wide custom range label can run out of
+                 room on a narrow phone: the picker shrinks and truncates its label. -->
+            <div class="flex min-w-0 items-center">
                 <SharedPeriodPicker
                     v-model="period"
                     class="min-w-0"
                     :presets="TRANSACTIONS_PRESETS"
-                />
-
-                <TransactionsSortMenu
-                    v-model="sortOption"
-                    compact
-                    class="shrink-0"
                 />
             </div>
         </div>
