@@ -9,11 +9,7 @@ import {
 } from "../../composables/transactions/useTransactions";
 import { useTransactionFilters } from "../../composables/transactions/useTransactionFilters";
 import { listScrollKey, saveListScroll, takeListScroll } from "../../utils/listScroll";
-import {
-    buildCategoryFilterOptions,
-    type CategoryFilterOption,
-    UNCATEGORIZED_VALUE,
-} from "../../utils/categoryFilterOptions";
+import { buildCategoryFilterOptions, type FilterOption, UNCATEGORIZED_VALUE } from "../../utils/filterOptions";
 // Imported explicitly (Nuxt would otherwise auto-import it) so its instance
 // type is in scope for the template ref below.
 import TransactionsListRows from "../../components/transactions/ListRows.vue";
@@ -78,7 +74,7 @@ const facetFailed = computed(() => isFacetError.value && !facetData.value);
 // still be cleared). If the counts fail, every category is offered instead. Empty until both queries have data: a lone
 // "Uncategorized" entry would look like a full selection to the filter's collapse-to-"all" rule, so the first tap
 // would be silently swallowed. An empty chip row also reads as "loading".
-const categoryOptions = computed<CategoryFilterOption[]>(() => {
+const categoryOptions = computed<FilterOption[]>(() => {
     if (isCategoriesPending.value || (isFacetPending.value && !facetFailed.value)) return [];
 
     return buildCategoryFilterOptions({

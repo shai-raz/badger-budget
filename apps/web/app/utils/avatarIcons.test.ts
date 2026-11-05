@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { AVATAR_ICON_NAMES, type AvatarIconName } from "@badger/shared-data";
-import { AVATAR_ICONS, AVATAR_SIZES, accountFallbackIcon, resolveAvatarIcon } from "./avatarIcons";
+import {
+    AVATAR_ICONS,
+    AVATAR_SIZES,
+    TRANSACTION_TYPE_AVATARS,
+    accountFallbackIcon,
+    resolveAvatarIcon,
+} from "./avatarIcons";
 
 describe("AVATAR_ICONS", () => {
     it("maps every registry name to a defined component", () => {
@@ -65,5 +71,19 @@ describe("AVATAR_SIZES", () => {
     it("keeps md and lg unchanged", () => {
         expect(AVATAR_SIZES.md.box).toBe("h-9 w-9 md:h-10 md:w-10");
         expect(AVATAR_SIZES.lg).toEqual({ box: "h-14 w-14", icon: 28 });
+    });
+});
+
+describe("TRANSACTION_TYPE_AVATARS", () => {
+    it("gives income and expense their amount tokens and transfer the neutral text colour", () => {
+        expect(TRANSACTION_TYPE_AVATARS.income.color).toBe("var(--p-amount-income)");
+        expect(TRANSACTION_TYPE_AVATARS.expense.color).toBe("var(--p-amount-expense)");
+        expect(TRANSACTION_TYPE_AVATARS.transfer.color).toBe("var(--p-text-muted-color)");
+    });
+
+    it("gives each type a distinct glyph", () => {
+        const icons = new Set(Object.values(TRANSACTION_TYPE_AVATARS).map((avatar) => avatar.icon));
+
+        expect(icons.size).toBe(3);
     });
 });

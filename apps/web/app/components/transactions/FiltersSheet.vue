@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { TransactionType } from "@badger/shared-data";
 import { useFilterToggle } from "../../composables/transactions/useFilterToggle";
-import { transactionCountLabel, type CategoryFilterOption } from "~/utils/categoryFilterOptions";
+import { transactionCountLabel, type FilterOption, UNCATEGORIZED_COLOR } from "~/utils/filterOptions";
 
 const props = defineProps<{
     /** Categories in the current view (plus stale selections) to offer. */
-    categoryOptions: CategoryFilterOption[];
+    categoryOptions: FilterOption[];
 }>();
 
 const emit = defineEmits<{ (event: "clear-all"): void }>();
@@ -54,6 +54,11 @@ useDragToDismiss(handleEl, () => (handleEl.value?.closest("[data-filters-sheet]"
         visible.value = false;
     },
 });
+// Interim: the dot still reads a colour. An entity option carries it on its avatar; a type option has none and falls back
+// to the neutral grey.
+function dotColor(option: FilterOption): string {
+    return option.avatar.kind === "entity" ? (option.avatar.color ?? UNCATEGORIZED_COLOR) : UNCATEGORIZED_COLOR;
+}
 </script>
 
 <template>
@@ -165,7 +170,7 @@ useDragToDismiss(handleEl, () => (handleEl.value?.closest("[data-filters-sheet]"
                     <span
                         class="h-2.5 w-2.5 shrink-0 rounded-full"
                         :class="isSelected(option.value) ? 'opacity-100' : 'opacity-45'"
-                        :style="{ backgroundColor: option.color }"
+                        :style="{ backgroundColor: dotColor(option) }"
                     ></span>
                     <span
                         class="flex-1 text-sm"

@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import type { TransactionType } from "@badger/shared-data";
 import { useFilterToggle } from "../../composables/transactions/useFilterToggle";
-import { transactionCountLabel, type CategoryFilterOption } from "~/utils/categoryFilterOptions";
+import { transactionCountLabel, type FilterOption, UNCATEGORIZED_COLOR } from "~/utils/filterOptions";
 import { hexToRgba } from "~/utils/color";
 
 const props = defineProps<{
     /** Categories in the current view (plus stale selections) to offer. */
-    categoryOptions: CategoryFilterOption[];
+    categoryOptions: FilterOption[];
 }>();
 
 const emit = defineEmits<{ (event: "clear-all"): void }>();
@@ -58,6 +58,12 @@ const CHIP_ALL_ACTIVE =
 // pair has to be inline — it comes from user data, not from a theme token.
 function chipStyle(color: string) {
     return { backgroundColor: hexToRgba(color, 0.13), borderColor: color };
+}
+
+// Interim: the dot and chip tint still read a colour. An entity option carries it on its avatar; a type option has none
+// and falls back to the neutral grey.
+function dotColor(option: FilterOption): string {
+    return option.avatar.kind === "entity" ? (option.avatar.color ?? UNCATEGORIZED_COLOR) : UNCATEGORIZED_COLOR;
 }
 </script>
 
@@ -165,7 +171,7 @@ function chipStyle(color: string) {
                             isSelected(option.value) ? 'text-surface-900 dark:text-surface-0' : CHIP_IDLE,
                             option.stale && 'opacity-60',
                         ]"
-                        :style="isSelected(option.value) ? chipStyle(option.color) : undefined"
+                        :style="isSelected(option.value) ? chipStyle(dotColor(option)) : undefined"
                         role="button"
                         tabindex="0"
                         :aria-pressed="isSelected(option.value)"
@@ -177,7 +183,7 @@ function chipStyle(color: string) {
                         <span
                             class="h-2 w-2 shrink-0 rounded-full"
                             :class="isSelected(option.value) ? 'opacity-100' : 'opacity-45'"
-                            :style="{ backgroundColor: option.color }"
+                            :style="{ backgroundColor: dotColor(option) }"
                         ></span>
                         <span class="text-[12.5px]">{{ option.label }}</span>
                         <!-- Mounted in every state with a constant weight, so only its colour changes on toggle. -->

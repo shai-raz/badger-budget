@@ -2,14 +2,43 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import type { VueWrapper } from "@vue/test-utils";
 import FiltersSheet from "./FiltersSheet.vue";
-import type { CategoryFilterOption } from "~/utils/categoryFilterOptions";
+import type { FilterOption } from "~/utils/filterOptions";
 
-const options: CategoryFilterOption[] = [
-    { value: "uncategorized", label: "Uncategorized", color: "#9CA3AF", count: 2, stale: false },
-    { value: "c1", label: "Groceries", color: "#22c55e", count: 14, stale: false },
-    { value: "c2", label: "Travel", color: "#3b82f6", count: 0, stale: true },
-    { value: "c3", label: "Rent", color: "#f97316", count: 1, stale: false },
-    { value: "c4", label: "Misc", color: "#a855f7", stale: false },
+const options: FilterOption[] = [
+    {
+        value: "uncategorized",
+        label: "Uncategorized",
+        avatar: { kind: "entity", icon: null, color: "#9CA3AF", fallback: "tag" },
+        count: 2,
+        stale: false,
+    },
+    {
+        value: "c1",
+        label: "Groceries",
+        avatar: { kind: "entity", icon: null, color: "#22c55e", fallback: "tag" },
+        count: 14,
+        stale: false,
+    },
+    {
+        value: "c2",
+        label: "Travel",
+        avatar: { kind: "entity", icon: null, color: "#3b82f6", fallback: "tag" },
+        count: 0,
+        stale: true,
+    },
+    {
+        value: "c3",
+        label: "Rent",
+        avatar: { kind: "entity", icon: null, color: "#f97316", fallback: "tag" },
+        count: 1,
+        stale: false,
+    },
+    {
+        value: "c4",
+        label: "Misc",
+        avatar: { kind: "entity", icon: null, color: "#a855f7", fallback: "tag" },
+        stale: false,
+    },
 ];
 
 const mounted: VueWrapper[] = [];
