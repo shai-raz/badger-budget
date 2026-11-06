@@ -42,6 +42,9 @@ const isDesktop = useIsDesktop();
 // scroll sideways beside it. The drawer belongs to this toolbar, so it closes when the layout changes.
 const fullToolbar = useMediaQuery(TRANSACTIONS_TOOLBAR_FULL);
 const drawerOpen = ref(false);
+watch(fullToolbar, () => {
+    drawerOpen.value = false;
+});
 
 // OverlayBadge always renders its Badge, and a Badge with no value degrades to
 // a bare dot — so with no active filters the badge is hidden outright through
@@ -143,9 +146,11 @@ const filtersBadgePt = computed(() => ({
                 @click="drawerOpen = true"
             />
 
+            <!-- The toolbar sits on the page scroller, not a card, so the arrows back onto the page colour. -->
             <SharedScrollRow
                 class="min-w-0 flex-1"
                 label="Quick filters"
+                backdrop-class="bg-surface-50 dark:bg-surface-950"
             >
                 <SharedPeriodPicker
                     v-model="period"

@@ -12,8 +12,10 @@ withDefaults(
         arrows?: boolean;
         /** Accessible name of the row. */
         label?: string;
+        /** Background behind each edge arrow. Match the surface the row sits on. */
+        backdropClass?: string;
     }>(),
-    { arrows: true, label: undefined },
+    { arrows: true, label: undefined, backdropClass: "bg-surface-0 dark:bg-surface-900" },
 );
 
 const track = ref<HTMLElement | null>(null);
@@ -95,7 +97,8 @@ function scrollTrack(direction: -1 | 1) {
 
         <div
             v-if="arrows && canScrollStart"
-            class="absolute inset-y-0 left-0 flex items-center bg-surface-0 dark:bg-surface-900"
+            class="absolute inset-y-0 left-0 flex items-center"
+            :class="backdropClass"
         >
             <Button
                 icon="pi pi-chevron-left"
@@ -103,14 +106,15 @@ function scrollTrack(direction: -1 | 1) {
                 rounded
                 size="small"
                 severity="secondary"
-                aria-label="Scroll filters left"
+                aria-label="Scroll left"
                 @click="scrollTrack(-1)"
             />
         </div>
 
         <div
             v-if="arrows && canScrollEnd"
-            class="absolute inset-y-0 right-0 flex items-center bg-surface-0 dark:bg-surface-900"
+            class="absolute inset-y-0 right-0 flex items-center"
+            :class="backdropClass"
         >
             <Button
                 icon="pi pi-chevron-right"
@@ -118,7 +122,7 @@ function scrollTrack(direction: -1 | 1) {
                 rounded
                 size="small"
                 severity="secondary"
-                aria-label="Scroll filters right"
+                aria-label="Scroll right"
                 @click="scrollTrack(1)"
             />
         </div>

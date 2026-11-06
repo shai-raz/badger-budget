@@ -7,10 +7,13 @@ import { currentMonthSelection } from "~/utils/monthRange";
 import type { FilterOption } from "~/utils/filterOptions";
 
 // Toggled per test to cover the md+ and below-md layouts.
-const layout = vi.hoisted(() => ({ desktop: true, full: true }));
+const layout = vi.hoisted(() => ({ desktop: true }));
+
+// The full-toolbar media query. A shared ref, so a test can flip it while the toolbar is mounted.
+const fullToolbar = ref(true);
 
 mockNuxtImport("useIsDesktop", () => () => ref(layout.desktop));
-mockNuxtImport("useMediaQuery", () => () => ref(layout.full));
+mockNuxtImport("useMediaQuery", () => () => fullToolbar);
 
 const mounted: VueWrapper[] = [];
 
@@ -32,6 +35,13 @@ const accountOptions: FilterOption[] = [
         count: 9,
         stale: false,
     },
+    {
+        value: "a2",
+        label: "Savings",
+        avatar: { kind: "entity", icon: null, color: "#22c55e", fallback: "wallet" },
+        count: 2,
+        stale: false,
+    },
 ];
 
 const typeOptions: FilterOption<"income" | "expense" | "transfer">[] = [
@@ -40,7 +50,7 @@ const typeOptions: FilterOption<"income" | "expense" | "transfer">[] = [
 
 afterEach(() => {
     mounted.splice(0).forEach((wrapper) => wrapper.unmount());
-    layout.full = true;
+    fullToolbar.value = true;
 });
 
 const mountToolbar = async (props: { activeFilterCount?: number; drawerFilterCount?: number } = {}) => {
@@ -59,6 +69,13 @@ const mountToolbar = async (props: { activeFilterCount?: number; drawerFilterCou
 };
 
 const buttonByText = (wrapper: VueWrapper, text: string) => wrapper.findAll("button").find((b) => b.text() === text);
+
+// The drawer teleports to the body, so its controls are read from the document. Matches an option by its aria-label
+// and a plain button by its text.
+const drawerButton = (text: string) =>
+    Array.from(document.body.querySelectorAll<HTMLButtonElement>(".p-drawer button")).find(
+        (button) => button.getAttribute("aria-label") === text || button.textContent?.trim() === text,
+    );
 
 describe("Toolbar desktop", () => {
     it("has no Filters button, and one picker per filter beside the period", async () => {
@@ -117,7 +134,7 @@ describe("Toolbar below md", () => {
 describe("Toolbar narrow desktop", () => {
     beforeEach(() => {
         layout.desktop = true;
-        layout.full = false;
+        fullToolbar.value = false;
     });
 
     it("shows a Filters button whose badge counts the drawer filters, not the period", async () => {
@@ -155,5 +172,43 @@ describe("Toolbar narrow desktop", () => {
         // The drawer teleports to the body, so its section headers are read from the document.
         const headers = Array.from(document.body.querySelectorAll(".p-drawer button[aria-expanded]"));
         expect(headers.map((button) => button.getAttribute("aria-expanded"))).toEqual(["true", "true", "true"]);
+    });
+
+    it("sends an account picked in the drawer up as the account filter", async () => {
+        const wrapper = await mountToolbar({ drawerFilterCount: 1 });
+        await wrapper.find('[aria-label="Filters, 1 active"]').trigger("click");
+        await flushPromises();
+
+        drawerButton("Chequing, 9 transactions")!.click();
+        await flushPromises();
+
+        expect(wrapper.emitted("update:selectedAccountIds")).toEqual([[["a1"]]]);
+    });
+
+    it("emits clear-all when Clear all is clicked in the drawer", async () => {
+        const wrapper = await mountToolbar({ drawerFilterCount: 1, activeFilterCount: 2 });
+        await wrapper.find('[aria-label="Filters, 1 active"]').trigger("click");
+        await flushPromises();
+
+        drawerButton("Clear all")!.click();
+        await flushPromises();
+
+        expect(wrapper.emitted("clear-all")).toHaveLength(1);
+    });
+
+    it("closes the drawer when the layout crosses the full-toolbar width", async () => {
+        const wrapper = await mountToolbar({ drawerFilterCount: 1 });
+        await wrapper.find('[aria-label="Filters, 1 active"]').trigger("click");
+        await flushPromises();
+        expect(wrapper.find('[aria-label="Filters, 1 active"]').attributes("aria-expanded")).toBe("true");
+
+        // Widening past the full-toolbar width unmounts the narrow branch, and narrowing again remounts it.
+        fullToolbar.value = true;
+        await flushPromises();
+        fullToolbar.value = false;
+        await flushPromises();
+
+        expect(wrapper.find('[aria-label="Filters, 1 active"]').attributes("aria-expanded")).toBe("false");
+        expect(document.body.querySelectorAll(".p-drawer button[aria-expanded]")).toHaveLength(0);
     });
 });

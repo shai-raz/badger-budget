@@ -3,9 +3,12 @@ import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { h } from "vue";
 import ScrollRow from "./ScrollRow.vue";
 
-const mountRow = async (metrics: { scrollWidth: number; clientWidth: number }) => {
+const mountRow = async (
+    metrics: { scrollWidth: number; clientWidth: number },
+    extraProps: { backdropClass?: string } = {},
+) => {
     const wrapper = await mountSuspended(ScrollRow, {
-        props: { label: "Transaction filters" },
+        props: { label: "Transaction filters", ...extraProps },
         slots: { default: () => [h("button", "Account"), h("button", "Category")] },
         attachTo: document.body,
     });
@@ -22,16 +25,29 @@ describe("ScrollRow", () => {
     it("shows no arrows when the content fits", async () => {
         const { wrapper } = await mountRow({ scrollWidth: 400, clientWidth: 400 });
 
-        expect(wrapper.find('[aria-label="Scroll filters right"]').exists()).toBe(false);
-        expect(wrapper.find('[aria-label="Scroll filters left"]').exists()).toBe(false);
+        expect(wrapper.find('[aria-label="Scroll right"]').exists()).toBe(false);
+        expect(wrapper.find('[aria-label="Scroll left"]').exists()).toBe(false);
         wrapper.unmount();
     });
 
     it("shows only the end arrow at the start of an overflowing row", async () => {
         const { wrapper } = await mountRow({ scrollWidth: 900, clientWidth: 400 });
 
-        expect(wrapper.find('[aria-label="Scroll filters right"]').exists()).toBe(true);
-        expect(wrapper.find('[aria-label="Scroll filters left"]').exists()).toBe(false);
+        expect(wrapper.find('[aria-label="Scroll right"]').exists()).toBe(true);
+        expect(wrapper.find('[aria-label="Scroll left"]').exists()).toBe(false);
+        wrapper.unmount();
+    });
+
+    it("backs each arrow with the surface the caller passes", async () => {
+        const { wrapper } = await mountRow(
+            { scrollWidth: 900, clientWidth: 400 },
+            { backdropClass: "bg-surface-50 dark:bg-surface-950" },
+        );
+
+        const backing = wrapper.find('[aria-label="Scroll right"]').element.parentElement!;
+        expect(backing.classList.contains("bg-surface-50")).toBe(true);
+        expect(backing.classList.contains("dark:bg-surface-950")).toBe(true);
+        expect(backing.classList.contains("bg-surface-0")).toBe(false);
         wrapper.unmount();
     });
 
@@ -40,7 +56,7 @@ describe("ScrollRow", () => {
         const scrollBy = vi.fn();
         Object.defineProperty(track, "scrollBy", { value: scrollBy, configurable: true });
 
-        await wrapper.find('[aria-label="Scroll filters right"]').trigger("click");
+        await wrapper.find('[aria-label="Scroll right"]').trigger("click");
 
         expect(scrollBy).toHaveBeenCalledWith({ left: 320, behavior: "smooth" });
         wrapper.unmount();
