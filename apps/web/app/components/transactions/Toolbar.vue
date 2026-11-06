@@ -39,10 +39,11 @@ const filtersOpen = defineModel<boolean>("filtersOpen", { default: false });
 const isDesktop = useIsDesktop();
 
 // Between md and the full-toolbar width the drawer filters move behind a Filters button, and the quick pickers
-// scroll sideways beside it. The drawer belongs to this toolbar, so it closes when the layout changes.
+// scroll sideways beside it. The drawer belongs to this toolbar, so it closes when the layout changes, including
+// crossing md, which unmounts the narrow branch that holds it.
 const fullToolbar = useMediaQuery(TRANSACTIONS_TOOLBAR_FULL);
 const drawerOpen = ref(false);
-watch(fullToolbar, () => {
+watch([isDesktop, fullToolbar], () => {
     drawerOpen.value = false;
 });
 
