@@ -123,14 +123,15 @@ describe("Toolbar desktop", () => {
 });
 
 describe("Toolbar below md", () => {
-    it("shows the Filters button with the drawer count as its text", async () => {
+    it("shows the Filters button with the drawer count as an info badge", async () => {
         desktop.value = false;
         const wrapper = await mountToolbar({ drawerFilterCount: 3, activeFilterCount: 4 });
 
         const filters = wrapper.find('[aria-label="Filters, 3 active"]');
         expect(filters.exists()).toBe(true);
-        expect(filters.text()).toBe("3");
-        expect(wrapper.find(".p-badge").exists()).toBe(false);
+        const badge = filters.find(".p-badge-info");
+        expect(badge.exists()).toBe(true);
+        expect(badge.text()).toBe("3");
     });
 
     it("shows a plain Filters button with no count when no drawer filter is active", async () => {
@@ -140,6 +141,7 @@ describe("Toolbar below md", () => {
         const filters = wrapper.find('[aria-label="Filters"]');
         expect(filters.exists()).toBe(true);
         expect(filters.text()).toBe("");
+        expect(wrapper.find(".p-badge").exists()).toBe(false);
     });
 
     it("puts the period, one pill per filter and show hidden in the scrolling row", async () => {
@@ -212,7 +214,9 @@ describe("Toolbar narrow desktop", () => {
     it("shows a plain Filters button with no badge when no drawer filter is active", async () => {
         const wrapper = await mountToolbar({ drawerFilterCount: 0, activeFilterCount: 1 });
 
-        expect(wrapper.find('[aria-label="Filters"]').exists()).toBe(true);
+        const filters = wrapper.find('[aria-label="Filters"]');
+        expect(filters.exists()).toBe(true);
+        expect(filters.text()).toBe("");
         expect(wrapper.find(".p-badge").exists()).toBe(false);
     });
 

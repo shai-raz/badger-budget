@@ -125,18 +125,9 @@ watch([isDesktop, fullToolbar], () => {
             </IconField>
 
             <!-- The badge counts the drawer filters only. The period has its own picker in the row. -->
-            <Button
-                label="Filters"
-                icon="pi pi-sliders-h"
-                size="small"
-                severity="secondary"
-                outlined
-                class="shrink-0"
-                :badge="drawerFilterCount > 0 ? String(drawerFilterCount) : undefined"
-                badge-severity="info"
-                :aria-label="drawerFilterCount > 0 ? `Filters, ${drawerFilterCount} active` : 'Filters'"
-                aria-haspopup="dialog"
-                :aria-expanded="drawerOpen"
+            <TransactionsFiltersButton
+                :count="drawerFilterCount"
+                :expanded="drawerOpen"
                 @click="drawerOpen = true"
             />
 
@@ -228,26 +219,11 @@ watch([isDesktop, fullToolbar], () => {
                  that scrolls sideways. The row bleeds into the right gutter, and its trailing spacer keeps the last pill
                  clear of the screen edge. -->
             <div class="flex items-center gap-2">
-                <Button
-                    size="small"
-                    severity="secondary"
-                    outlined
-                    class="shrink-0"
-                    :aria-label="drawerFilterCount > 0 ? `Filters, ${drawerFilterCount} active` : 'Filters'"
-                    aria-haspopup="dialog"
-                    :aria-expanded="filtersOpen"
+                <TransactionsFiltersButton
+                    :count="drawerFilterCount"
+                    :expanded="filtersOpen"
                     @click="filtersOpen = !filtersOpen"
-                >
-                    <i
-                        class="pi pi-sliders-h"
-                        aria-hidden="true"
-                    ></i>
-                    <span
-                        v-if="drawerFilterCount > 0"
-                        class="font-bold tabular-nums"
-                        >{{ drawerFilterCount }}</span
-                    >
-                </Button>
+                />
 
                 <div
                     class="h-5 w-px shrink-0 bg-surface-200 dark:bg-surface-700"
