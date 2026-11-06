@@ -81,6 +81,7 @@ watch(isDesktop, () => {
                     class="shrink-0"
                     :presets="TRANSACTIONS_PRESETS"
                     resettable
+                    tall
                 />
 
                 <TransactionsFilterPicker
@@ -181,6 +182,7 @@ watch(isDesktop, () => {
                         class="shrink-0"
                         :presets="TRANSACTIONS_PRESETS"
                         resettable
+                        tall
                     />
 
                     <TransactionsFilterPicker

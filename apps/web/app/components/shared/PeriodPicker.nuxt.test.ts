@@ -17,9 +17,9 @@ const mounted: { unmount: () => void }[] = [];
 
 // The real Transition runs here: the Popover emits show and hide from its enter and leave hooks.
 // Focus only moves to elements in the document, so a test about focus mounts the picker attached to it.
-const mountPicker = async (modelValue: PeriodSelection, resettable = false, attach = false) => {
+const mountPicker = async (modelValue: PeriodSelection, resettable = false, attach = false, tall = false) => {
     const wrapper = await mountSuspended(PeriodPicker, {
-        props: { modelValue, presets: TRANSACTIONS_PRESETS, resettable },
+        props: { modelValue, presets: TRANSACTIONS_PRESETS, resettable, tall },
         attachTo: attach ? document.body : undefined,
         global: { stubs: { transition: false } },
     });
@@ -316,14 +316,24 @@ describe("PeriodPicker", () => {
         expect(document.activeElement).toBe(labelEl);
     });
 
-    it("keeps the × and the arrows at the 36px height below md when resettable", async () => {
+    it("keeps the × and the arrows at the 36px height below md when tall", async () => {
         layout.desktop = false;
-        const wrapper = await mountPicker({ kind: "range", from: "2026-09", to: "2026-09" }, true);
+        const wrapper = await mountPicker({ kind: "range", from: "2026-09", to: "2026-09" }, true, false, true);
 
         expect(resetButton(wrapper).classes()).toContain("h-9");
         expect(labelButton(wrapper).classes()).toContain("h-9");
         expect(prevButton(wrapper).classes()).toContain("h-9");
         expect(nextButton(wrapper).classes()).toContain("h-9");
+    });
+
+    it("keeps the 32px picker below md when resettable but not tall", async () => {
+        layout.desktop = false;
+        const wrapper = await mountPicker({ kind: "range", from: "2026-09", to: "2026-09" }, true);
+
+        expect(resetButton(wrapper).classes()).toContain("h-8");
+        expect(labelButton(wrapper).classes()).toContain("h-8");
+        expect(prevButton(wrapper).classes()).toContain("h-8");
+        expect(nextButton(wrapper).classes()).toContain("h-8");
     });
 
     it("keeps the 32px picker below md when not resettable", async () => {
@@ -349,6 +359,15 @@ describe("PeriodPicker", () => {
             expect(button.classes()).toContain("disabled:opacity-100");
             expect(button.find(".p-button-icon").classes()).toContain("opacity-40");
         }
+    });
+
+    it("dims only the disabled next arrow on a range ending this month when resettable", async () => {
+        const wrapper = await mountPicker({ kind: "range", from: "2026-08", to: "2026-10" }, true);
+
+        expect(nextButton(wrapper).attributes("disabled")).toBeDefined();
+        expect(nextButton(wrapper).classes()).toContain("disabled:opacity-100");
+        expect(nextButton(wrapper).find(".p-button-icon").classes()).toContain("opacity-40");
+        expect(prevButton(wrapper).find(".p-button-icon").classes()).not.toContain("opacity-40");
     });
 
     it("leaves an enabled arrow on a past single month at full opacity", async () => {
