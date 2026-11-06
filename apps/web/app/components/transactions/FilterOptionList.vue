@@ -1,8 +1,8 @@
 <script setup lang="ts" generic="T extends string">
 /**
  * The option list behind every transaction filter picker: an All row, a divider, one checkbox row per option, and the
- * Invert and Clear actions. The desktop popovers and the mobile sheets both use it. Selection math lives in
- * `useFilterToggle`; this component only draws it.
+ * Invert and Clear actions. Each row is a PrimeVue Checkbox inside a label. The desktop popovers and the mobile sheets
+ * both use it. Selection math lives in `useFilterToggle`; this component only draws it.
  */
 import { useFilterToggle } from "~/composables/transactions/useFilterToggle";
 import { transactionCountLabel, type FilterOption } from "~/utils/filterOptions";
@@ -35,10 +35,10 @@ const { canInvert, isAllActive, isSelected, toggle, selectAll, invert } = useFil
 );
 
 const ROW_BASE =
-    "flex w-full items-center gap-2.5 rounded-md px-2 text-left text-sm text-surface-900 hover:bg-surface-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-surface-0 dark:hover:bg-surface-800";
+    "flex w-full cursor-pointer select-none items-center gap-2.5 rounded-md px-2 text-left text-sm text-surface-900 hover:bg-surface-100 dark:text-surface-0 dark:hover:bg-surface-800";
 const ROW_HEIGHT = computed(() => (props.dense ? "min-h-11" : "min-h-9"));
 // Set only when asked, so the default markup carries no autofocus attribute at all.
-const ALL_ROW_ATTRS = computed(() => (props.autofocusFirst ? { autofocus: true } : {}));
+const allInputPt = computed(() => (props.autofocusFirst ? { input: { autofocus: true } } : undefined));
 </script>
 
 <template>
@@ -72,56 +72,56 @@ const ALL_ROW_ATTRS = computed(() => (props.autofocusFirst ? { autofocus: true }
         </div>
 
         <div class="max-h-[300px] overflow-y-auto p-0.5">
-            <button
-                type="button"
-                v-bind="ALL_ROW_ATTRS"
+            <!--
+                Every row is a label around a PrimeVue Checkbox, and the toggle runs in the label's click handler with
+                .prevent. Checkbox keeps an internal copy of its value and resyncs it only when modelValue changes, so a
+                toggle the selection absorbs (picking the last offered value collapses to All; clicking a checked All)
+                leaves the prop unchanged and the box would stay wrong if the native toggle ran. Every click (on the
+                box's overlaid input, on the text, or the click the browser dispatches for Space) bubbles to the label,
+                and preventDefault cancels both label activation and the native toggle, so exactly one toggle runs and
+                the box always mirrors the prop. Do not add @update:model-value to these Checkboxes.
+            -->
+            <!--
+                The All row is a checkbox for one aligned control column. Clicking it while checked is a no-op, because
+                All means no filter.
+            -->
+            <label
                 :class="[ROW_BASE, ROW_HEIGHT, isAllActive && 'font-semibold']"
-                :aria-pressed="isAllActive"
-                @click="selectAll()"
+                @click.prevent="selectAll()"
             >
-                <i
-                    class="pi pi-check w-4 shrink-0 text-xs"
-                    :class="{ invisible: !isAllActive }"
-                    aria-hidden="true"
-                ></i>
+                <Checkbox
+                    binary
+                    size="small"
+                    class="shrink-0"
+                    :model-value="isAllActive"
+                    :pt="allInputPt"
+                />
                 <span class="min-w-0 flex-1 truncate">{{ allLabel }}</span>
-            </button>
+            </label>
 
             <div
                 class="my-1 h-px bg-surface-200 dark:bg-surface-700"
                 role="separator"
             ></div>
 
-            <button
+            <label
                 v-for="option in options"
                 :key="option.value"
-                type="button"
                 :class="[
                     ROW_BASE,
                     ROW_HEIGHT,
                     isSelected(option.value) && 'font-semibold',
                     option.stale && 'opacity-60',
                 ]"
-                :aria-pressed="isSelected(option.value)"
-                :aria-label="transactionCountLabel(option.label, option.count)"
-                @click="toggle(option.value)"
+                @click.prevent="toggle(option.value)"
             >
-                <!-- Purely visual: the button's aria-label carries the state and count. A span rather than a
-                     Checkbox, because an input cannot sit inside a button. -->
-                <span
-                    class="flex h-4 w-4 shrink-0 items-center justify-center rounded border text-xs"
-                    :class="
-                        isSelected(option.value)
-                            ? 'border-primary bg-primary text-primary-contrast'
-                            : 'border-surface-300 dark:border-surface-600'
-                    "
-                    aria-hidden="true"
-                >
-                    <i
-                        v-if="isSelected(option.value)"
-                        class="pi pi-check"
-                    ></i>
-                </span>
+                <Checkbox
+                    binary
+                    size="small"
+                    class="shrink-0"
+                    :model-value="isSelected(option.value)"
+                    :aria-label="transactionCountLabel(option.label, option.count)"
+                />
                 <TransactionsFilterOptionAvatar
                     :avatar="option.avatar"
                     size="xs"
@@ -133,7 +133,7 @@ const ALL_ROW_ATTRS = computed(() => (props.autofocusFirst ? { autofocus: true }
                     aria-hidden="true"
                     >{{ option.count }}</span
                 >
-            </button>
+            </label>
         </div>
 
         <div

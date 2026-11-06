@@ -74,11 +74,11 @@ const mountToolbar = async (
 
 const buttonByText = (wrapper: VueWrapper, text: string) => wrapper.findAll("button").find((b) => b.text() === text);
 
-// The drawer teleports to the body, so its controls are read from the document. Matches an option by its aria-label
-// and a plain button by its text.
+// The drawer teleports to the body, so its controls are read from the document. Matches an option by its checkbox's
+// aria-label and a plain button by its text.
 const drawerButton = (text: string) =>
-    Array.from(document.body.querySelectorAll<HTMLButtonElement>(".p-drawer button")).find(
-        (button) => button.getAttribute("aria-label") === text || button.textContent?.trim() === text,
+    Array.from(document.body.querySelectorAll<HTMLElement>(".p-drawer button, .p-drawer input")).find(
+        (element) => element.getAttribute("aria-label") === text || element.textContent?.trim() === text,
     );
 
 describe("Toolbar desktop", () => {
