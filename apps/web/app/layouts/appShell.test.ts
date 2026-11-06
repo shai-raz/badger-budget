@@ -13,7 +13,7 @@ const bottomBar = read("../components/layout/AppBottomBar.vue");
 const sidebar = read("../components/layout/AppSidebar.vue");
 const transactionsPage = read("../pages/transactions/index.vue");
 const transactionsToolbar = read("../components/transactions/Toolbar.vue");
-const filtersSheet = read("../components/transactions/FiltersSheet.vue");
+const bottomSheet = read("../components/shared/BottomSheet.vue");
 const nuxtConfig = read("../../nuxt.config.ts");
 const themePreset = read("../theme/preset.ts");
 const transactionForm = read("../components/transactions/TransactionForm.vue");
@@ -95,8 +95,8 @@ describe("app shell viewport contract", () => {
         expect(transactionsToolbar).not.toContain("<SyncButton");
     });
 
-    it("keeps the FiltersSheet footer clear of the bottom inset", () => {
-        expect(filtersSheet).toContain("pb-[calc(1rem+env(safe-area-inset-bottom))]");
+    it("keeps the bottom sheet footer clear of the bottom inset", () => {
+        expect(bottomSheet).toContain("pb-[calc(1rem+env(safe-area-inset-bottom))]");
     });
 
     it("pads auth and consent pages by the safe-area insets", () => {

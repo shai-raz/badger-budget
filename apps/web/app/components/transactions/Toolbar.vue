@@ -4,16 +4,16 @@ import { TRANSACTIONS_PRESETS, type PeriodSelection } from "~/utils/monthRange";
 import { TRANSACTIONS_TOOLBAR_FULL } from "~/utils/breakpoints";
 import type { FilterOption } from "~/utils/filterOptions";
 
-// Desktop-only inputs default to empty, so the mobile instance (which renders only search, period and the Filters
-// button) can omit them.
-const props = withDefaults(
+// Desktop-only inputs default to empty. The mobile instance renders the same option lists for its pills, so it passes
+// them as well; the defaults only cover callers that render no pickers at all.
+withDefaults(
     defineProps<{
         categoryOptions?: FilterOption[];
         accountOptions?: FilterOption[];
         typeOptions?: FilterOption<TransactionType>[];
         /** Every active filter, the period included. Clear all shows at two or more. */
         activeFilterCount?: number;
-        /** Drawer filters only (types, accounts, categories, hidden), shown in the Filters button badge. */
+        /** Drawer filters only (types, accounts, categories, hidden), shown as the count on the Filters button. */
         drawerFilterCount: number;
     }>(),
     {
@@ -46,13 +46,6 @@ const drawerOpen = ref(false);
 watch([isDesktop, fullToolbar], () => {
     drawerOpen.value = false;
 });
-
-// OverlayBadge always renders its Badge, and a Badge with no value degrades to
-// a bare dot — so with no active filters the badge is hidden outright through
-// the Badge passthrough rather than by dropping the wrapper.
-const filtersBadgePt = computed(() => ({
-    pcBadge: { root: { class: props.drawerFilterCount > 0 ? undefined : "hidden" } },
-}));
 </script>
 
 <template>
@@ -215,53 +208,98 @@ const filtersBadgePt = computed(() => ({
             v-else
             class="flex flex-col gap-3"
         >
-            <!-- Row 1: search + filter icon-button with count badge -->
-            <div class="flex items-center gap-2">
-                <IconField class="flex-1">
-                    <InputIcon class="pi pi-search" />
-                    <!-- Recessed against the toolbar chrome in both schemes, same
-                         as the summary bar below. Only light needs the override:
-                         the field would otherwise be surface-0, matching the
-                         toolbar. Dark restores the theme's own inputtext
-                         background (surface-950), which surface-800 overrode to
-                         a tone lighter than the surface-900 toolbar. -->
-                    <InputText
-                        v-model="searchQuery"
-                        placeholder="Search"
-                        class="w-full bg-surface-50 dark:bg-surface-950"
-                    />
-                </IconField>
-                <!-- Filters toggle. A real Button so the theme supplies the hover
-                     and focus-visible states, styled like the desktop toggle
-                     above, with the count as an OverlayBadge — same `info` token
-                     as the desktop <Badge>, so both render the same colour. The
-                     40x40 box matches the adjacent search field's height. -->
-                <OverlayBadge
-                    :value="drawerFilterCount"
-                    severity="info"
-                    class="shrink-0"
-                    :pt="filtersBadgePt"
-                >
-                    <Button
-                        icon="pi pi-sliders-h"
-                        aria-label="Filters"
-                        class="h-10 w-10"
-                        :outlined="!filtersOpen"
-                        :severity="filtersOpen ? undefined : 'secondary'"
-                        :aria-expanded="filtersOpen"
-                        @click="filtersOpen = !filtersOpen"
-                    />
-                </OverlayBadge>
-            </div>
-
-            <!-- Row 2: period picker. A wide custom range label can run out of
-                 room on a narrow phone: the picker shrinks and truncates its label. -->
-            <div class="flex min-w-0 items-center">
-                <SharedPeriodPicker
-                    v-model="period"
-                    class="min-w-0"
-                    :presets="TRANSACTIONS_PRESETS"
+            <!-- Row 1: search, full width. -->
+            <IconField>
+                <InputIcon class="pi pi-search" />
+                <!-- Recessed against the toolbar chrome in both schemes, same
+                     as the summary bar below. Only light needs the override:
+                     the field would otherwise be surface-0, matching the
+                     toolbar. Dark restores the theme's own inputtext
+                     background (surface-950), which surface-800 overrode to
+                     a tone lighter than the surface-900 toolbar. -->
+                <InputText
+                    v-model="searchQuery"
+                    placeholder="Search"
+                    class="w-full bg-surface-50 dark:bg-surface-950"
                 />
+            </IconField>
+
+            <!-- Row 2: a fixed Filters button with the drawer count, then the period and one pill per filter in a row
+                 that scrolls sideways. The row bleeds into the right gutter, and its trailing spacer keeps the last pill
+                 clear of the screen edge. -->
+            <div class="flex items-center gap-2">
+                <Button
+                    size="small"
+                    severity="secondary"
+                    outlined
+                    class="shrink-0"
+                    :aria-label="drawerFilterCount > 0 ? `Filters, ${drawerFilterCount} active` : 'Filters'"
+                    aria-haspopup="dialog"
+                    :aria-expanded="filtersOpen"
+                    @click="filtersOpen = !filtersOpen"
+                >
+                    <i
+                        class="pi pi-sliders-h"
+                        aria-hidden="true"
+                    ></i>
+                    <span
+                        v-if="drawerFilterCount > 0"
+                        class="font-bold tabular-nums"
+                        >{{ drawerFilterCount }}</span
+                    >
+                </Button>
+
+                <div
+                    class="h-5 w-px shrink-0 bg-surface-200 dark:bg-surface-700"
+                    aria-hidden="true"
+                ></div>
+
+                <SharedScrollRow
+                    :arrows="false"
+                    class="-mr-4 min-w-0 flex-1"
+                    label="Quick filters"
+                >
+                    <!-- The picker never shrinks in this scrolling row, so a wide custom range label truncates at its own max width. -->
+                    <SharedPeriodPicker
+                        v-model="period"
+                        class="shrink-0"
+                        :presets="TRANSACTIONS_PRESETS"
+                        resettable
+                    />
+
+                    <TransactionsFilterPicker
+                        v-model:selected="selectedCategoryIds"
+                        class="shrink-0"
+                        noun="categories"
+                        variant="pill"
+                        :options="categoryOptions"
+                    />
+                    <TransactionsFilterPicker
+                        v-model:selected="selectedAccountIds"
+                        class="shrink-0"
+                        noun="accounts"
+                        variant="pill"
+                        :options="accountOptions"
+                    />
+                    <TransactionsFilterPicker
+                        v-model:selected="selectedTypes"
+                        class="shrink-0"
+                        noun="types"
+                        variant="pill"
+                        :options="typeOptions"
+                    />
+
+                    <TransactionsShowHiddenToggle
+                        v-model="showHidden"
+                        class="shrink-0"
+                        variant="pill"
+                    />
+
+                    <div
+                        class="w-3 shrink-0"
+                        aria-hidden="true"
+                    ></div>
+                </SharedScrollRow>
             </div>
         </div>
     </div>

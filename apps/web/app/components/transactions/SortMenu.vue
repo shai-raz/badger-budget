@@ -77,12 +77,35 @@ const itemPt = computed(() => ({
         isSelected(options.context.item) ? { "aria-current": "true" } : {},
 }));
 
+// Below md the options open in a bottom sheet rather than the popup Menu: a popup is too small a target on a phone.
+const isDesktop = useIsDesktop();
+
 const menu = ref<{ toggle: (event: Event) => void } | null>(null);
 const open = ref(false);
+const sheetOpen = ref(false);
+const triggerEl = ref<{ $el: HTMLElement } | null>(null);
+const expanded = computed(() => (isDesktop.value ? open.value : sheetOpen.value));
 
 function toggle(event: Event) {
-    menu.value?.toggle(event);
+    if (isDesktop.value) menu.value?.toggle(event);
+    else sheetOpen.value = true;
 }
+
+// Picking an option sets the sort and closes the sheet, as the popup Menu closes on a pick.
+function pick(value: TransactionSortOption) {
+    sortOption.value = value;
+    sheetOpen.value = false;
+}
+
+// The sheet has no focus return of its own, so hand focus back to the trigger however it closed.
+watch(sheetOpen, (isOpen, wasOpen) => {
+    if (wasOpen && !isOpen) nextTick(() => triggerEl.value?.$el.focus());
+});
+
+// Crossing md with the sheet open would leave its modal mask over the desktop layout, so close it.
+watch(isDesktop, () => {
+    sheetOpen.value = false;
+});
 </script>
 
 <template>
@@ -94,20 +117,21 @@ function toggle(event: Event) {
              and hide the current sort value from screen readers. Compact
              drops the prefix, so it sets an aria-label that restores it. -->
         <Button
+            ref="triggerEl"
             type="button"
             text
             severity="secondary"
             size="small"
-            aria-haspopup="menu"
+            :aria-haspopup="isDesktop ? 'menu' : 'dialog'"
             :aria-label="triggerAriaLabel"
-            :aria-expanded="open"
+            :aria-expanded="expanded"
             @click="toggle"
         >
             <i class="pi pi-sort-alt text-xs"></i>
             <span class="text-sm">{{ triggerText }}</span>
             <i
                 class="pi text-xs"
-                :class="open ? 'pi-chevron-up' : 'pi-chevron-down'"
+                :class="expanded ? 'pi-chevron-up' : 'pi-chevron-down'"
             ></i>
         </Button>
 
@@ -145,5 +169,43 @@ function toggle(event: Event) {
                 </a>
             </template>
         </Menu>
+
+        <!-- Below md: the same options as radio rows. Mounted at every width, shown only below md. -->
+        <SharedBottomSheet
+            v-model:visible="sheetOpen"
+            title="Sort by"
+        >
+            <div
+                role="radiogroup"
+                aria-label="Sort by"
+                class="flex flex-col"
+            >
+                <button
+                    v-for="option in SORT_OPTIONS"
+                    :key="option.value"
+                    type="button"
+                    role="radio"
+                    :aria-checked="option.value === sortOption"
+                    class="flex min-h-11 w-full items-center justify-between px-4 text-left text-sm text-surface-900 hover:bg-surface-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-surface-0 dark:hover:bg-surface-800"
+                    :class="option.value === sortOption ? 'font-bold' : 'font-normal'"
+                    @click="pick(option.value)"
+                >
+                    <span>{{ option.label }}</span>
+                    <i
+                        v-if="option.value === sortOption"
+                        class="pi pi-check text-primary"
+                        aria-hidden="true"
+                    ></i>
+                </button>
+            </div>
+
+            <template #footer>
+                <Button
+                    label="Done"
+                    class="w-full"
+                    @click="sheetOpen = false"
+                />
+            </template>
+        </SharedBottomSheet>
     </div>
 </template>

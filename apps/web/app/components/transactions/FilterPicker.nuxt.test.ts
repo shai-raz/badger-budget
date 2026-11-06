@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import FilterPicker from "./FilterPicker.vue";
@@ -146,5 +146,99 @@ describe("TransactionsFilterPicker focus", () => {
         await flushPromises();
 
         expect(document.activeElement).toBe(triggerButton);
+    });
+});
+
+// The pill's sheet teleports to <body>, so it is read from the document.
+const sheet = () => document.body.querySelector<HTMLElement>("[data-bottom-sheet]");
+
+const mountPill = async (noun: "accounts" | "types", options: FilterOption[], selected: string[], attach = false) => {
+    const wrapper = await mountSuspended(FilterPicker, {
+        props: { noun, options, selected, variant: "pill" },
+        attachTo: attach ? document.body : undefined,
+        global: { stubs: { transition: false } },
+    });
+    mounted.push(wrapper);
+    return wrapper;
+};
+
+const sheetButton = (text: string) =>
+    Array.from(sheet()?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
+        (button) => button.textContent?.trim() === text,
+    );
+
+describe("TransactionsFilterPicker pill", () => {
+    it("shows the selected option's label with no clear button", async () => {
+        const wrapper = await mountPill("accounts", accounts, ["b"]);
+
+        expect(trigger(wrapper).text()).toBe("Savings");
+        expect(clearButton(wrapper).exists()).toBe(false);
+    });
+
+    it("opens a sheet named for the filter when tapped", async () => {
+        const wrapper = await mountPill("accounts", accounts, []);
+        expect(trigger(wrapper).attributes("aria-expanded")).toBe("false");
+        expect(sheet()).toBeNull();
+
+        await trigger(wrapper).trigger("click");
+
+        await vi.waitFor(() => expect(sheet()).not.toBeNull());
+        expect(sheet()!.getAttribute("aria-label")).toBe("Accounts");
+        expect(trigger(wrapper).attributes("aria-expanded")).toBe("true");
+    });
+
+    it("puts the title with Invert and Clear in the list header, once, with 44px rows", async () => {
+        const wrapper = await mountPill("accounts", accounts, []);
+        await trigger(wrapper).trigger("click");
+        await vi.waitFor(() => expect(sheet()).not.toBeNull());
+
+        // The sheet's own title row is hidden, so the title appears once: in the list header.
+        const titles = Array.from(sheet()!.querySelectorAll("span")).filter(
+            (span) => span.textContent?.trim() === "Accounts",
+        );
+        expect(titles).toHaveLength(1);
+        expect(sheetButton("Invert")).toBeDefined();
+        expect(sheetButton("Clear")).toBeDefined();
+
+        // The All row plus one row per account, each a 44px touch target.
+        const rows = Array.from(sheet()!.querySelectorAll<HTMLButtonElement>("button[aria-pressed]"));
+        expect(rows).toHaveLength(4);
+        rows.forEach((row) => expect(row.classList).toContain("min-h-11"));
+    });
+
+    it("applies a picked row live", async () => {
+        const wrapper = await mountPill("accounts", accounts, []);
+        await trigger(wrapper).trigger("click");
+        await vi.waitFor(() => expect(sheet()).not.toBeNull());
+
+        sheet()!.querySelector<HTMLButtonElement>('button[aria-label="Savings, 2 transactions"]')!.click();
+        await flushPromises();
+
+        expect(wrapper.emitted("update:selected")?.at(-1)).toEqual([["b"]]);
+        // The sheet stays open until its own Show results is pressed.
+        expect(sheet()).not.toBeNull();
+    });
+
+    it("closes the sheet on Show results", async () => {
+        const wrapper = await mountPill("accounts", accounts, []);
+        await trigger(wrapper).trigger("click");
+        await vi.waitFor(() => expect(sheet()).not.toBeNull());
+
+        sheetButton("Show results")!.click();
+
+        await vi.waitFor(() => expect(sheet()).toBeNull());
+        expect(trigger(wrapper).attributes("aria-expanded")).toBe("false");
+    });
+
+    it("returns focus to the pill when the sheet closes", async () => {
+        const wrapper = await mountPill("types", types, [], true);
+        const triggerButton = trigger(wrapper).element;
+        await trigger(wrapper).trigger("click");
+        await vi.waitFor(() => expect(sheet()).not.toBeNull());
+
+        sheetButton("Show results")!.click();
+
+        await vi.waitFor(() => expect(sheet()).toBeNull());
+        await vi.waitFor(() => expect(document.activeElement).toBe(triggerButton));
     });
 });

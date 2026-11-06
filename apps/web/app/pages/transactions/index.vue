@@ -279,12 +279,25 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
                 v-if="!isDesktop"
                 #toolbar
             >
-                <TransactionsToolbar
-                    v-model:search-query="searchQuery"
-                    v-model:period="period"
-                    v-model:filters-open="mobileFiltersOpen"
-                    :drawer-filter-count="drawerFilterCount"
-                />
+                <div class="flex flex-col gap-3">
+                    <TransactionsTotalsCard
+                        :summary="summary"
+                        :loading="isSummaryLoading"
+                    />
+                    <TransactionsToolbar
+                        v-model:search-query="searchQuery"
+                        v-model:period="period"
+                        v-model:selected-category-ids="selectedCategoryIds"
+                        v-model:selected-account-ids="selectedAccountIds"
+                        v-model:selected-types="selectedTypes"
+                        v-model:show-hidden="showHidden"
+                        v-model:filters-open="mobileFiltersOpen"
+                        :category-options="categoryOptions"
+                        :account-options="accountOptions"
+                        :type-options="typeOptions"
+                        :drawer-filter-count="drawerFilterCount"
+                    />
+                </div>
             </template>
             <template #actions>
                 <LayoutHeaderSync />
@@ -320,10 +333,10 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
             class="flex min-h-0 flex-1 flex-col"
         >
             <!-- Metrics strip fed by the summary endpoint (reacts to filters, never
-                 to the show-hidden toggle). The bottom margins below are md-only:
-                 on mobile these sections are full-bleed and sit flush, separated
-                 by their own border-b rather than by a gap. -->
+                 to the show-hidden toggle). Desktop only: below md the same totals
+                 sit in the header's TotalsCard. -->
             <TransactionsMetricsStrip
+                v-if="isDesktop"
                 :summary="summary"
                 :loading="isSummaryLoading"
                 class="shrink-0 md:mb-4"
@@ -352,9 +365,13 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
                 v-if="!isDesktop"
                 v-model:visible="mobileFiltersOpen"
                 v-model:selected-types="selectedTypes"
+                v-model:selected-account-ids="selectedAccountIds"
                 v-model:selected-category-ids="selectedCategoryIds"
                 v-model:show-hidden="showHidden"
+                :type-options="typeOptions"
+                :account-options="accountOptions"
                 :category-options="categoryOptions"
+                :active-filter-count="activeFilterCount"
                 @clear-all="clearAllFilters"
             />
 
