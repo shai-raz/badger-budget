@@ -33,6 +33,24 @@ const sheetButton = (text: string) => {
     return element;
 };
 
+const radioInputs = () => [
+    ...(sheet()?.querySelectorAll<HTMLInputElement>('.p-radiobutton input[type="radio"]') ?? []),
+];
+
+const sheetRow = (text: string) => {
+    const element = [...(sheet()?.querySelectorAll("label") ?? [])].find(
+        (candidate) => candidate.textContent?.trim() === text,
+    );
+    if (!element) throw new Error(`no sheet row labelled ${text}`);
+    return element;
+};
+
+const sheetRadio = (text: string) => {
+    const input = sheetRow(text).querySelector<HTMLInputElement>('input[type="radio"]');
+    if (!input) throw new Error(`no radio in sheet row ${text}`);
+    return input;
+};
+
 describe("SortMenu", () => {
     beforeEach(() => {
         desktop.value = true;
@@ -102,33 +120,56 @@ describe("SortMenu below md", () => {
         expect(document.body.querySelector('[role="menu"]')).toBeNull();
     });
 
-    it("lists every option as a radio and marks the current one checked", async () => {
+    it("lists every option as a PrimeVue radio in one named group and checks the current one", async () => {
         const wrapper = await mountSortMenu({ modelValue: "oldest" });
         await trigger(wrapper).trigger("click");
         await flushPromises();
 
-        const radios = [...(sheet()?.querySelectorAll('[role="radio"]') ?? [])];
-        expect(radios.map((radio) => radio.textContent?.trim())).toEqual([
+        const radios = radioInputs();
+        expect(radios).toHaveLength(5);
+        expect(radios.every((radio) => radio.name !== "")).toBe(true);
+        expect(new Set(radios.map((radio) => radio.name)).size).toBe(1);
+        expect(radios.map((radio) => radio.closest("label")?.textContent?.trim())).toEqual([
             "Newest first",
             "Oldest first",
             "Highest amount",
             "Lowest amount",
             "Name (A–Z)",
         ]);
-        expect(sheetButton("Oldest first").getAttribute("aria-checked")).toBe("true");
-        expect(sheetButton("Newest first").getAttribute("aria-checked")).toBe("false");
+        expect(sheetRadio("Oldest first").checked).toBe(true);
+        expect(sheetRadio("Newest first").checked).toBe(false);
     });
 
-    it("picking Oldest first emits oldest and closes the sheet", async () => {
+    it("gives every option row the 44px touch height", async () => {
         const wrapper = await mountSortMenu({ modelValue: "newest" });
         await trigger(wrapper).trigger("click");
         await flushPromises();
 
-        sheetButton("Oldest first").click();
+        radioInputs().forEach((radio) => expect(radio.closest("label")?.classList.contains("min-h-11")).toBe(true));
+    });
+
+    it("a pointer pick of Oldest first emits oldest and closes the sheet", async () => {
+        const wrapper = await mountSortMenu({ modelValue: "newest" });
+        await trigger(wrapper).trigger("click");
         await flushPromises();
 
-        expect(wrapper.emitted("update:modelValue")).toEqual([["oldest"]]);
+        sheetRow("Oldest first").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+        await flushPromises();
+
+        expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual(["oldest"]);
         await vi.waitFor(() => expect(sheet()).toBeNull());
+    });
+
+    it("a keyboard change applies the sort live and leaves the sheet open", async () => {
+        const wrapper = await mountSortMenu({ modelValue: "newest" });
+        await trigger(wrapper).trigger("click");
+        await flushPromises();
+
+        sheetRadio("Highest amount").dispatchEvent(new Event("change", { bubbles: true }));
+        await flushPromises();
+
+        expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual(["amount-desc"]);
+        expect(sheet()).not.toBeNull();
     });
 
     it("closes the sheet when the layout crosses md, so its mask does not cover the desktop layout", async () => {
