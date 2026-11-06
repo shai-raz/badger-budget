@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * The three drawer filters as collapsible sections (Type, Accounts, Categories), with the Show hidden switch and Clear
- * all below. The narrow-desktop drawer opens it expanded; the mobile sheet opens it collapsed. Each section's header
+ * all below. The desktop drawer opens it expanded; the mobile sheet opens it collapsed. Each section's header
  * summarises its selection, and its body is the shared option list. Selection math lives in the option list.
  */
 import type { TransactionType } from "@badger/shared-data";
@@ -116,8 +116,7 @@ const categorySummary = computed(() => summaryOf("categories", props.categoryOpt
             </div>
             <Button
                 label="Clear all"
-                severity="secondary"
-                outlined
+                link
                 size="small"
                 :disabled="activeFilterCount === 0"
                 @click="emit('clear-all')"

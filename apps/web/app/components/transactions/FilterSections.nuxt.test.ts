@@ -129,6 +129,13 @@ describe("TransactionsFilterSections", () => {
         expect(clearAll(wrapper).attributes("disabled")).toBeDefined();
     });
 
+    it("renders Clear all as a text action, not an outlined button", async () => {
+        const wrapper = await mountSections({ activeFilterCount: 2 });
+
+        expect(clearAll(wrapper).classes()).toContain("p-button-link");
+        expect(clearAll(wrapper).classes()).not.toContain("p-button-outlined");
+    });
+
     it("emits clear-all when Clear all is enabled and pressed", async () => {
         const wrapper = await mountSections({ activeFilterCount: 2 });
 
@@ -141,7 +148,9 @@ describe("TransactionsFilterSections", () => {
     it("labels the Show hidden switch and writes showHidden when it is switched on", async () => {
         const wrapper = await mountSections({ showHidden: false });
         const toggle = wrapper.find('[role="switch"]');
-        const label = wrapper.find("label");
+        // The option rows are labels too, so the Show hidden label is the one that reads that text.
+        const label = wrapper.findAll("label").find((candidate) => candidate.text() === "Show hidden transactions");
+        if (!label) throw new Error("no Show hidden label");
 
         expect(label.text()).toBe("Show hidden transactions");
         expect(label.attributes("for")).toBe(toggle.attributes("id"));

@@ -78,7 +78,7 @@ const sheetButton = (text: string) => {
     return match;
 };
 const row = (label: string) => {
-    const match = sheet()?.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+    const match = sheet()?.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
     if (!match) throw new Error(`no row labelled ${label}`);
     return match;
 };

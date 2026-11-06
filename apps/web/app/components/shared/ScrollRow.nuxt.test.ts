@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { h } from "vue";
 import ScrollRow from "./ScrollRow.vue";
@@ -22,6 +22,10 @@ const mountRow = async (
 };
 
 describe("ScrollRow", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
     it("shows no arrows when the content fits", async () => {
         const { wrapper } = await mountRow({ scrollWidth: 400, clientWidth: 400 });
 
@@ -35,6 +39,32 @@ describe("ScrollRow", () => {
 
         expect(wrapper.find('[aria-label="Scroll right"]').exists()).toBe(true);
         expect(wrapper.find('[aria-label="Scroll left"]').exists()).toBe(false);
+        wrapper.unmount();
+    });
+
+    it("shows the end arrow when content grows without a scroll", async () => {
+        // The row re-reads its edges from its ResizeObserver, so capture the callback before it mounts.
+        let resized: () => void = () => {};
+        vi.stubGlobal(
+            "ResizeObserver",
+            class {
+                constructor(callback: () => void) {
+                    resized = callback;
+                }
+                observe() {}
+                disconnect() {}
+            },
+        );
+
+        const { wrapper, track } = await mountRow({ scrollWidth: 400, clientWidth: 400 });
+        expect(wrapper.find('[aria-label="Scroll right"]').exists()).toBe(false);
+
+        // Content widens with no scroll event, the way a picker label does.
+        Object.defineProperty(track, "scrollWidth", { value: 900, configurable: true });
+        resized();
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.find('[aria-label="Scroll right"]').exists()).toBe(true);
         wrapper.unmount();
     });
 

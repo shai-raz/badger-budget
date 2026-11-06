@@ -108,6 +108,14 @@ describe("TransactionsFilterPicker trigger", () => {
 
         expect(trigger(wrapper).attributes("aria-expanded")).toBe("false");
     });
+
+    it("is 36px tall in the button variant, with a 36px clear button", async () => {
+        const wrapper = await mountPicker("accounts", accounts, ["a"]);
+
+        expect(trigger(wrapper).classes()).toContain("h-9");
+        expect(clearButton(wrapper).classes()).toContain("h-9");
+        expect(clearButton(wrapper).classes()).toContain("w-9");
+    });
 });
 
 describe("TransactionsFilterPicker focus", () => {
@@ -117,7 +125,7 @@ describe("TransactionsFilterPicker focus", () => {
         await trigger(wrapper).trigger("click");
         await flushPromises();
 
-        const allRow = document.body.querySelector("button[autofocus]");
+        const allRow = document.body.querySelector("input[autofocus]");
         expect(allRow).not.toBeNull();
         expect(document.activeElement).toBe(allRow);
     });
@@ -175,6 +183,13 @@ describe("TransactionsFilterPicker pill", () => {
         expect(clearButton(wrapper).exists()).toBe(false);
     });
 
+    it("is 36px tall with the button radius, not a chip", async () => {
+        const wrapper = await mountPill("accounts", accounts, ["b"]);
+
+        expect(trigger(wrapper).classes()).toContain("h-9");
+        expect(trigger(wrapper).classes()).not.toContain("rounded-full");
+    });
+
     it("opens a sheet named for the filter when tapped", async () => {
         const wrapper = await mountPill("accounts", accounts, []);
         expect(trigger(wrapper).attributes("aria-expanded")).toBe("false");
@@ -201,7 +216,9 @@ describe("TransactionsFilterPicker pill", () => {
         expect(sheetButton("Clear")).toBeDefined();
 
         // The All row plus one row per account, each a 44px touch target.
-        const rows = Array.from(sheet()!.querySelectorAll<HTMLButtonElement>("button[aria-pressed]"));
+        const rows = Array.from(sheet()!.querySelectorAll<HTMLLabelElement>("label")).filter((label) =>
+            label.querySelector(".p-checkbox"),
+        );
         expect(rows).toHaveLength(4);
         rows.forEach((row) => expect(row.classList).toContain("min-h-11"));
     });
@@ -211,7 +228,7 @@ describe("TransactionsFilterPicker pill", () => {
         await trigger(wrapper).trigger("click");
         await vi.waitFor(() => expect(sheet()).not.toBeNull());
 
-        sheet()!.querySelector<HTMLButtonElement>('button[aria-label="Savings, 2 transactions"]')!.click();
+        sheet()!.querySelector<HTMLInputElement>('input[aria-label="Savings, 2 transactions"]')!.click();
         await flushPromises();
 
         expect(wrapper.emitted("update:selected")?.at(-1)).toEqual([["b"]]);

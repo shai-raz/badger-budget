@@ -23,7 +23,7 @@ Rules and tokens for the web UI. Read before any UI change. How the app is built
 - **Page bands** (the default for every app page): a page sets `definePageMeta({ fullBleed: true })` and wraps its sections in `flex flex-col gap-3 pb-8 md:gap-6`, each section a `SharedSectionBand`. Mobile: full-width, top and bottom border, no side border. Desktop: a card (`md:rounded-xl md:border md:p-5`).
 - **Cards** (desktop only, via a band's `md:` chrome): one look everywhere, `bg-surface-0 dark:bg-surface-900`, 1px `border-surface-200 dark:border-surface-700`, no shadow, `rounded-xl` (12px).
 - **Always a card** (auth, OAuth consent): PrimeVue `Card`. Its look comes from the `shadow: "none"` token in `app/theme/preset.ts` plus a global `pt.card.root.class` border in `nuxt.config.ts`. Don't restyle `Card` per page; change the global preset or pt instead.
-- **Interactive and data widgets** (tables, forms, lists): PrimeVue components.
+- **Interactive and data widgets** (tables, forms, lists, checkboxes, radios, switches, selects): PrimeVue components. If the markup rules one out, change the markup. Hand-build one only when PrimeVue has no equivalent or can't do the job even with `pt`, and say why in a comment beside it.
 - **Dialogs**: PrimeVue `Dialog`, fullscreen below `md`. Forms use `SharedFormDialog`. See [Dialogs and forms](#dialogs-and-forms).
 
 ## Dialogs and forms

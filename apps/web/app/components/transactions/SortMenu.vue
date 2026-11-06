@@ -97,6 +97,16 @@ function pick(value: TransactionSortOption) {
     sheetOpen.value = false;
 }
 
+// One name for the five radios, so they form a single native group even if SortMenu mounts twice.
+const radioName = useId();
+
+// Native arrow keys select (and dispatch a click on) the next radio, so closing on every change would shut the sheet
+// on the first arrow press. A pointer or touch tap has detail >= 1 and picks + closes; keyboard changes (arrows, Space;
+// detail 0) apply live through v-model and the sheet stays open until Done or Escape.
+function onRowClick(event: MouseEvent, value: TransactionSortOption) {
+    if (event.detail > 0) pick(value);
+}
+
 // The sheet has no focus return of its own, so hand focus back to the trigger however it closed.
 watch(sheetOpen, (isOpen, wasOpen) => {
     if (wasOpen && !isOpen) nextTick(() => triggerEl.value?.$el.focus());
@@ -170,7 +180,7 @@ watch(isDesktop, () => {
             </template>
         </Menu>
 
-        <!-- Below md: the same options as radio rows. Mounted at every width, shown only below md. -->
+        <!-- Below md: the same options as PrimeVue RadioButton rows. Mounted at every width, shown only below md. -->
         <SharedBottomSheet
             v-model:visible="sheetOpen"
             title="Sort by"
@@ -180,23 +190,22 @@ watch(isDesktop, () => {
                 aria-label="Sort by"
                 class="flex flex-col"
             >
-                <button
+                <label
                     v-for="option in SORT_OPTIONS"
                     :key="option.value"
-                    type="button"
-                    role="radio"
-                    :aria-checked="option.value === sortOption"
-                    class="flex min-h-11 w-full items-center justify-between px-4 text-left text-sm text-surface-900 hover:bg-surface-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-surface-0 dark:hover:bg-surface-800"
+                    class="flex min-h-11 w-full cursor-pointer select-none items-center gap-3 px-4 text-sm text-surface-900 hover:bg-surface-100 dark:text-surface-0 dark:hover:bg-surface-800"
                     :class="option.value === sortOption ? 'font-bold' : 'font-normal'"
-                    @click="pick(option.value)"
+                    @click="onRowClick($event, option.value)"
                 >
+                    <RadioButton
+                        v-model="sortOption"
+                        :value="option.value"
+                        :name="radioName"
+                        size="small"
+                        class="shrink-0"
+                    />
                     <span>{{ option.label }}</span>
-                    <i
-                        v-if="option.value === sortOption"
-                        class="pi pi-check text-primary"
-                        aria-hidden="true"
-                    ></i>
-                </button>
+                </label>
             </div>
 
             <template #footer>
