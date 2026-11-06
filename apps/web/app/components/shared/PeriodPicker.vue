@@ -37,6 +37,10 @@ const canNext = computed(() => sel.value.kind === "range" && canStepNext(sel.val
 const offDefault = computed(() => !isCurrentMonthSelection(sel.value, now.value));
 const resetActive = computed(() => props.resettable && offDefault.value);
 
+// The transactions filter row uses one 36px control height at every width; Reports' mobile header keeps the compact
+// 32px picker.
+const tall = computed(() => isDesktop.value || props.resettable);
+
 const step = (dir: -1 | 1) => {
     if (sel.value.kind === "all") return;
     sel.value = stepRange(sel.value, dir);
@@ -98,7 +102,8 @@ const sheetPt = {
                 icon="pi pi-chevron-left"
                 :severity="resetActive ? undefined : 'secondary'"
                 :outlined="!resetActive"
-                :class="isDesktop ? 'h-9 w-9 shrink-0' : 'h-8 w-8 shrink-0'"
+                :class="[tall ? 'h-9 w-9 shrink-0' : 'h-8 w-8 shrink-0', resetActive && 'disabled:opacity-100']"
+                :icon-class="resetActive && sel.kind === 'all' ? 'opacity-40' : undefined"
                 aria-label="Previous period"
                 :disabled="sel.kind === 'all'"
                 @click="step(-1)"
@@ -109,7 +114,7 @@ const sheetPt = {
                 :outlined="!resetActive"
                 aria-haspopup="dialog"
                 :aria-expanded="open"
-                :class="isDesktop ? 'h-9 min-w-0 max-w-[16rem]' : 'h-8 min-w-0 max-w-[12rem] px-2 text-sm'"
+                :class="[tall ? 'h-9' : 'h-8', 'min-w-0', isDesktop ? 'max-w-[16rem]' : 'max-w-[12rem] px-2 text-sm']"
                 @click="onLabelClick"
             >
                 <i
@@ -127,7 +132,8 @@ const sheetPt = {
                 icon="pi pi-chevron-right"
                 :severity="resetActive ? undefined : 'secondary'"
                 :outlined="!resetActive"
-                :class="isDesktop ? 'h-9 w-9 shrink-0' : 'h-8 w-8 shrink-0'"
+                :class="[tall ? 'h-9 w-9 shrink-0' : 'h-8 w-8 shrink-0', resetActive && 'disabled:opacity-100']"
+                :icon-class="resetActive && !canNext ? 'opacity-40' : undefined"
                 aria-label="Next period"
                 :disabled="!canNext"
                 @click="step(1)"
@@ -135,7 +141,7 @@ const sheetPt = {
             <Button
                 v-if="resetActive"
                 icon="pi pi-times"
-                :class="isDesktop ? 'h-9 w-9 shrink-0' : 'h-8 w-8 shrink-0'"
+                :class="tall ? 'h-9 w-9 shrink-0' : 'h-8 w-8 shrink-0'"
                 aria-label="Back to this month"
                 @click="resetToThisMonth"
             />

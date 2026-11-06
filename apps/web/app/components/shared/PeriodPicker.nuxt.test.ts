@@ -316,12 +316,46 @@ describe("PeriodPicker", () => {
         expect(document.activeElement).toBe(labelEl);
     });
 
-    it("keeps the × at the stacked height below md", async () => {
+    it("keeps the × and the arrows at the 36px height below md when resettable", async () => {
         layout.desktop = false;
         const wrapper = await mountPicker({ kind: "range", from: "2026-09", to: "2026-09" }, true);
 
-        expect(resetButton(wrapper).classes()).toContain("h-8");
+        expect(resetButton(wrapper).classes()).toContain("h-9");
+        expect(labelButton(wrapper).classes()).toContain("h-9");
+        expect(prevButton(wrapper).classes()).toContain("h-9");
+        expect(nextButton(wrapper).classes()).toContain("h-9");
+    });
+
+    it("keeps the 32px picker below md when not resettable", async () => {
+        layout.desktop = false;
+        const wrapper = await mountPicker({ kind: "range", from: "2026-09", to: "2026-09" });
+
         expect(labelButton(wrapper).classes()).toContain("h-8");
+        expect(prevButton(wrapper).classes()).toContain("h-8");
+        expect(nextButton(wrapper).classes()).toContain("h-8");
+    });
+
+    it("keeps the disabled next arrow outlined and dimmed on the current month when resettable", async () => {
+        const wrapper = await mountPicker({ kind: "range", from: "2026-10", to: "2026-10" }, true);
+
+        expect(nextButton(wrapper).classes()).not.toContain("disabled:opacity-100");
+        expect(nextButton(wrapper).find(".p-button-icon").classes()).not.toContain("opacity-40");
+    });
+
+    it("shows both disabled arrows in the on colour at 40% when resettable on all time", async () => {
+        const wrapper = await mountPicker({ kind: "all" }, true);
+
+        for (const button of [prevButton(wrapper), nextButton(wrapper)]) {
+            expect(button.classes()).toContain("disabled:opacity-100");
+            expect(button.find(".p-button-icon").classes()).toContain("opacity-40");
+        }
+    });
+
+    it("leaves an enabled arrow on a past single month at full opacity", async () => {
+        const wrapper = await mountPicker({ kind: "range", from: "2026-09", to: "2026-09" }, true);
+
+        expect(nextButton(wrapper).attributes("disabled")).toBeUndefined();
+        expect(nextButton(wrapper).find(".p-button-icon").classes()).not.toContain("opacity-40");
     });
 
     it("keeps the outlined secondary group and no × on the current month when resettable", async () => {
