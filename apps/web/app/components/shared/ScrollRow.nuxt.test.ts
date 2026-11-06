@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { h } from "vue";
 import ScrollRow from "./ScrollRow.vue";
@@ -22,6 +22,10 @@ const mountRow = async (
 };
 
 describe("ScrollRow", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
     it("shows no arrows when the content fits", async () => {
         const { wrapper } = await mountRow({ scrollWidth: 400, clientWidth: 400 });
 
@@ -62,7 +66,6 @@ describe("ScrollRow", () => {
 
         expect(wrapper.find('[aria-label="Scroll right"]').exists()).toBe(true);
         wrapper.unmount();
-        vi.unstubAllGlobals();
     });
 
     it("backs each arrow with the surface the caller passes", async () => {
