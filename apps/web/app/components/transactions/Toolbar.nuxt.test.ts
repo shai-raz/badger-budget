@@ -99,6 +99,29 @@ describe("Toolbar desktop", () => {
         expect(wrapper.find('.p-overlaybadge [aria-label="Filters, 1 active"]').exists()).toBe(true);
     });
 
+    it("puts a divider between the Filters button and the quick filters row", async () => {
+        for (const drawerFilterCount of [0, 2]) {
+            desktop.value = true;
+            const wrapper = await mountToolbar({ drawerFilterCount });
+
+            const rowRoot = wrapper.find('[aria-label="Quick filters"]').element.parentElement!;
+            const divider = rowRoot.previousElementSibling!;
+            expect(divider.getAttribute("aria-hidden")).toBe("true");
+            for (const className of ["h-5", "w-px", "shrink-0"]) {
+                expect(divider.classList).toContain(className);
+            }
+
+            const filtersButton = divider.previousElementSibling!;
+            expect(
+                filtersButton.matches('[aria-label^="Filters"]') ||
+                    filtersButton.querySelector('[aria-label^="Filters"]') !== null,
+            ).toBe(true);
+
+            wrapper.unmount();
+            mounted.splice(mounted.indexOf(wrapper), 1);
+        }
+    });
+
     it("holds the period, the three pickers, Show hidden and Clear all in the quick filters row, with the search outside it", async () => {
         const wrapper = await mountToolbar({ activeFilterCount: 2 });
 

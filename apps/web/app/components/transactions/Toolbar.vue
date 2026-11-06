@@ -47,9 +47,9 @@ watch(isDesktop, () => {
 
 <template>
     <div>
-        <!-- Desktop, one layout from md up: search, a Filters button, then the quick pickers in one row that scrolls
-             sideways and never wraps. The pickers sit inside the scroll row, but their popovers are appended to the
-             body, so the row never clips them. -->
+        <!-- Desktop, one layout from md up: search, a Filters button, a divider, then the quick pickers in one row that
+             scrolls sideways and never wraps. The pickers sit inside the scroll row, but their popovers are appended to
+             the body, so the row never clips them. -->
         <div
             v-if="isDesktop"
             class="flex items-center gap-2"
@@ -69,6 +69,11 @@ watch(isDesktop, () => {
                 :expanded="drawerOpen"
                 @click="drawerOpen = true"
             />
+
+            <div
+                class="h-5 w-px shrink-0 bg-surface-200 dark:bg-surface-700"
+                aria-hidden="true"
+            ></div>
 
             <!-- The toolbar sits on the page scroller, not a card, so the arrows back onto the page colour. -->
             <SharedScrollRow
