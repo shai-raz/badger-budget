@@ -1,15 +1,19 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mockNuxtImport, mountSuspended } from "@nuxt/test-utils/runtime";
-import type { VueWrapper } from "@vue/test-utils";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { ref } from "vue";
 import Toolbar from "./Toolbar.vue";
 import { currentMonthSelection } from "~/utils/monthRange";
 import type { FilterOption } from "~/utils/filterOptions";
 
-// Toggled per test to cover the md+ and below-md layouts.
-const layout = vi.hoisted(() => ({ desktop: true }));
+// Toggled per test to cover the md+ and below-md layouts. Shared, so a test can cross md while mounted.
+const desktop = ref(true);
 
-mockNuxtImport("useIsDesktop", () => () => ref(layout.desktop));
+// The full-toolbar media query. A shared ref, so a test can flip it while the toolbar is mounted.
+const fullToolbar = ref(true);
+
+mockNuxtImport("useIsDesktop", () => () => desktop);
+mockNuxtImport("useMediaQuery", () => () => fullToolbar);
 
 const mounted: VueWrapper[] = [];
 
@@ -31,6 +35,13 @@ const accountOptions: FilterOption[] = [
         count: 9,
         stale: false,
     },
+    {
+        value: "a2",
+        label: "Savings",
+        avatar: { kind: "entity", icon: null, color: "#22c55e", fallback: "wallet" },
+        count: 2,
+        stale: false,
+    },
 ];
 
 const typeOptions: FilterOption<"income" | "expense" | "transfer">[] = [
@@ -39,6 +50,8 @@ const typeOptions: FilterOption<"income" | "expense" | "transfer">[] = [
 
 afterEach(() => {
     mounted.splice(0).forEach((wrapper) => wrapper.unmount());
+    desktop.value = true;
+    fullToolbar.value = true;
 });
 
 const mountToolbar = async (props: { activeFilterCount?: number; drawerFilterCount?: number } = {}) => {
@@ -58,9 +71,16 @@ const mountToolbar = async (props: { activeFilterCount?: number; drawerFilterCou
 
 const buttonByText = (wrapper: VueWrapper, text: string) => wrapper.findAll("button").find((b) => b.text() === text);
 
+// The drawer teleports to the body, so its controls are read from the document. Matches an option by its aria-label
+// and a plain button by its text.
+const drawerButton = (text: string) =>
+    Array.from(document.body.querySelectorAll<HTMLButtonElement>(".p-drawer button")).find(
+        (button) => button.getAttribute("aria-label") === text || button.textContent?.trim() === text,
+    );
+
 describe("Toolbar desktop", () => {
     it("has no Filters button, and one picker per filter beside the period", async () => {
-        layout.desktop = true;
+        desktop.value = true;
         const wrapper = await mountToolbar();
 
         expect(wrapper.find('[aria-label="Filters"]').exists()).toBe(false);
@@ -69,7 +89,7 @@ describe("Toolbar desktop", () => {
     });
 
     it("keeps Clear all mounted but hidden with one active filter", async () => {
-        layout.desktop = true;
+        desktop.value = true;
         const wrapper = await mountToolbar({ activeFilterCount: 1 });
 
         const clearAll = buttonByText(wrapper, "Clear all");
@@ -78,14 +98,14 @@ describe("Toolbar desktop", () => {
     });
 
     it("shows Clear all with two active filters", async () => {
-        layout.desktop = true;
+        desktop.value = true;
         const wrapper = await mountToolbar({ activeFilterCount: 2 });
 
         expect(buttonByText(wrapper, "Clear all")!.classes()).not.toContain("invisible");
     });
 
     it("emits clear-all when Clear all is clicked", async () => {
-        layout.desktop = true;
+        desktop.value = true;
         const wrapper = await mountToolbar({ activeFilterCount: 2 });
 
         await buttonByText(wrapper, "Clear all")!.trigger("click");
@@ -96,7 +116,7 @@ describe("Toolbar desktop", () => {
 
 describe("Toolbar below md", () => {
     it("shows the Filters button with the drawer count as its badge", async () => {
-        layout.desktop = false;
+        desktop.value = false;
         const wrapper = await mountToolbar({ drawerFilterCount: 3, activeFilterCount: 4 });
 
         expect(wrapper.find('[aria-label="Filters"]').exists()).toBe(true);
@@ -104,10 +124,107 @@ describe("Toolbar below md", () => {
     });
 
     it("has no Clear all and no per-filter pickers", async () => {
-        layout.desktop = false;
+        desktop.value = false;
         const wrapper = await mountToolbar({ drawerFilterCount: 1, activeFilterCount: 2 });
 
         expect(buttonByText(wrapper, "Clear all")).toBeUndefined();
         expect(wrapper.find('[aria-label="Clear categories filter"]').exists()).toBe(false);
+    });
+});
+
+describe("Toolbar narrow desktop", () => {
+    beforeEach(() => {
+        desktop.value = true;
+        fullToolbar.value = false;
+    });
+
+    it("shows a Filters button whose badge counts the drawer filters, not the period", async () => {
+        const wrapper = await mountToolbar({ drawerFilterCount: 1, activeFilterCount: 2 });
+
+        const filters = wrapper.find('[aria-label="Filters, 1 active"]');
+        expect(filters.exists()).toBe(true);
+        expect(filters.find(".p-badge").text()).toBe("1");
+    });
+
+    it("shows a plain Filters button with no badge when no drawer filter is active", async () => {
+        const wrapper = await mountToolbar({ drawerFilterCount: 0, activeFilterCount: 1 });
+
+        expect(wrapper.find('[aria-label="Filters"]').exists()).toBe(true);
+        expect(wrapper.find(".p-badge").exists()).toBe(false);
+    });
+
+    it("puts the period and every picker in the scrolling row", async () => {
+        const wrapper = await mountToolbar({ drawerFilterCount: 1 });
+
+        const row = wrapper.find('[aria-label="Quick filters"]');
+        expect(row.exists()).toBe(true);
+        // The period picker plus the categories, accounts and type pickers.
+        expect(row.findAll('[aria-haspopup="dialog"]')).toHaveLength(4);
+        expect(buttonByText(wrapper, "Clear all")).toBeDefined();
+    });
+
+    it("opens the drawer with its sections expanded when Filters is clicked", async () => {
+        const wrapper = await mountToolbar({ drawerFilterCount: 1 });
+        expect(document.body.querySelectorAll(".p-drawer button[aria-expanded]")).toHaveLength(0);
+
+        await wrapper.find('[aria-label="Filters, 1 active"]').trigger("click");
+        await flushPromises();
+
+        // The drawer teleports to the body, so its section headers are read from the document.
+        const headers = Array.from(document.body.querySelectorAll(".p-drawer button[aria-expanded]"));
+        expect(headers.map((button) => button.getAttribute("aria-expanded"))).toEqual(["true", "true", "true"]);
+    });
+
+    it("sends an account picked in the drawer up as the account filter", async () => {
+        const wrapper = await mountToolbar({ drawerFilterCount: 1 });
+        await wrapper.find('[aria-label="Filters, 1 active"]').trigger("click");
+        await flushPromises();
+
+        drawerButton("Chequing, 9 transactions")!.click();
+        await flushPromises();
+
+        expect(wrapper.emitted("update:selectedAccountIds")).toEqual([[["a1"]]]);
+    });
+
+    it("emits clear-all when Clear all is clicked in the drawer", async () => {
+        const wrapper = await mountToolbar({ drawerFilterCount: 1, activeFilterCount: 2 });
+        await wrapper.find('[aria-label="Filters, 1 active"]').trigger("click");
+        await flushPromises();
+
+        drawerButton("Clear all")!.click();
+        await flushPromises();
+
+        expect(wrapper.emitted("clear-all")).toHaveLength(1);
+    });
+
+    it("closes the drawer when the layout crosses the full-toolbar width", async () => {
+        const wrapper = await mountToolbar({ drawerFilterCount: 1 });
+        await wrapper.find('[aria-label="Filters, 1 active"]').trigger("click");
+        await flushPromises();
+        expect(wrapper.find('[aria-label="Filters, 1 active"]').attributes("aria-expanded")).toBe("true");
+
+        // Widening past the full-toolbar width unmounts the narrow branch, and narrowing again remounts it.
+        fullToolbar.value = true;
+        await flushPromises();
+        fullToolbar.value = false;
+        await flushPromises();
+
+        expect(wrapper.find('[aria-label="Filters, 1 active"]').attributes("aria-expanded")).toBe("false");
+        expect(document.body.querySelectorAll(".p-drawer button[aria-expanded]")).toHaveLength(0);
+    });
+
+    it("closes the drawer when the layout drops below md and comes back", async () => {
+        const wrapper = await mountToolbar({ drawerFilterCount: 1 });
+        await wrapper.find('[aria-label="Filters, 1 active"]').trigger("click");
+        await flushPromises();
+
+        // Below md the narrow branch unmounts with its drawer, so widening back remounts it. It must come back closed.
+        desktop.value = false;
+        await flushPromises();
+        desktop.value = true;
+        await flushPromises();
+
+        expect(wrapper.find('[aria-label="Filters, 1 active"]').attributes("aria-expanded")).toBe("false");
+        expect(document.body.querySelectorAll(".p-drawer button[aria-expanded]")).toHaveLength(0);
     });
 });
