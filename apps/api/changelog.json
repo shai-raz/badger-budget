@@ -1,6 +1,68 @@
 {
     "releases": [
         {
+            "version": "0.14.0",
+            "date": "2026-11-06",
+            "items": [
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "filter transactions by several accounts and types",
+                    "pr": 107
+                },
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "account and type facet counts for the transactions filters",
+                    "pr": 108
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "account and multi-type filter state for transactions",
+                    "pr": 109
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "per-filter pickers in the desktop transactions toolbar",
+                    "pr": 110
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "filters drawer and scrolling pickers on narrow desktop",
+                    "pr": 111
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "mobile transaction filter pills, sheets and slim totals",
+                    "pr": 112
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "open an account's transactions from Overview and Accounts",
+                    "pr": 113
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "measured transactions filter row and uniform filter controls",
+                    "pr": 115
+                }
+            ]
+        },
+        {
             "version": "0.13.0",
             "date": "2026-11-04",
             "items": [
