@@ -26,13 +26,20 @@ const open = ref(false);
 const popover = ref<{ toggle: (event: Event) => void; hide: () => void } | null>(null);
 const triggerEl = ref<{ $el: HTMLElement } | null>(null);
 const panelEl = ref<HTMLElement | null>(null);
+// Vue clears a template ref as the content starts to leave, before onHide runs, so keep the panel the popover showed.
+let shownPanel: HTMLElement | null = null;
+
+function onShow() {
+    open.value = true;
+    shownPanel = panelEl.value;
+}
 
 // A close from outside the popover (a click on its non-focusable padding, or PrimeVue's Escape) can leave focus on
 // <body>, where the next Escape reaches no handler. Hand focus back to the trigger.
 function onHide() {
     open.value = false;
     const active = document.activeElement;
-    if (!active || active === document.body || panelEl.value?.contains(active)) triggerEl.value?.$el.focus();
+    if (!active || active === document.body || shownPanel?.contains(active)) triggerEl.value?.$el.focus();
 }
 </script>
 
@@ -70,7 +77,7 @@ function onHide() {
         <Popover
             ref="popover"
             :pt="{ content: { class: 'p-1.5' } }"
-            @show="open = true"
+            @show="onShow"
             @hide="onHide"
         >
             <div

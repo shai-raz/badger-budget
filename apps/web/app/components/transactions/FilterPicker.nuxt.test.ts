@@ -35,8 +35,14 @@ const types: FilterOption[] = [
 
 const mounted: VueWrapper[] = [];
 
-const mountPicker = async (noun: "accounts" | "types", options: FilterOption[], selected: string[]) => {
-    const wrapper = await mountSuspended(FilterPicker, { props: { noun, options, selected } });
+// Focus only moves to elements in the document, so a test about focus mounts the picker attached to it.
+const mountPicker = async (noun: "accounts" | "types", options: FilterOption[], selected: string[], attach = false) => {
+    const wrapper = await mountSuspended(FilterPicker, {
+        props: { noun, options, selected },
+        attachTo: attach ? document.body : undefined,
+        // Real transitions, so the popover's show and hide events fire.
+        global: { stubs: { transition: false } },
+    });
     mounted.push(wrapper);
     return wrapper;
 };
@@ -105,12 +111,27 @@ describe("TransactionsFilterPicker trigger", () => {
 });
 
 describe("TransactionsFilterPicker focus", () => {
-    it("autofocuses the first option when the popover opens", async () => {
+    it("moves focus to the All row when the popover opens", async () => {
         const wrapper = await mountPicker("accounts", accounts, []);
 
         await trigger(wrapper).trigger("click");
         await flushPromises();
 
-        expect(document.body.querySelector("button[autofocus]")).not.toBeNull();
+        const allRow = document.body.querySelector("button[autofocus]");
+        expect(allRow).not.toBeNull();
+        expect(document.activeElement).toBe(allRow);
+    });
+
+    it("returns focus to the trigger when the popover closes", async () => {
+        const wrapper = await mountPicker("accounts", accounts, [], true);
+        const triggerButton = trigger(wrapper).element;
+
+        await trigger(wrapper).trigger("click");
+        await flushPromises();
+        // A second click on the trigger toggles the popover closed.
+        await trigger(wrapper).trigger("click");
+        await flushPromises();
+
+        expect(document.activeElement).toBe(triggerButton);
     });
 });
