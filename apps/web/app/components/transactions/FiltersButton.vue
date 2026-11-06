@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import { computed } from "vue";
+
 /**
- * The Filters button that opens the drawer or sheet of drawer filters. Icon-only: a 36px square while no drawer filter
- * is active, widening to a pill with an info badge carrying the count once one is.
+ * The Filters button that opens the drawer or sheet of drawer filters. Always an icon-only 36px square. While a drawer
+ * filter is active, the count shows as a circular info badge on its top-right corner (OverlayBadge, decorative); the
+ * aria-label carries the count.
  */
-defineProps<{
+const props = defineProps<{
     /** Active drawer filters (types, accounts, categories, hidden); the period is not counted. */
     count: number;
     /** Whether the drawer or sheet it opens is open. */
@@ -11,21 +14,36 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{ (event: "click"): void }>();
+
+const buttonProps = computed(() => ({
+    icon: "pi pi-sliders-h",
+    size: "small" as const,
+    severity: "secondary" as const,
+    outlined: true,
+    class: "h-9 w-9 shrink-0",
+    "aria-label": props.count > 0 ? `Filters, ${props.count} active` : "Filters",
+    "aria-haspopup": "dialog" as const,
+    "aria-expanded": props.expanded,
+}));
 </script>
 
 <template>
-    <Button
-        icon="pi pi-sliders-h"
+    <OverlayBadge
+        v-if="count > 0"
+        :value="count"
+        severity="info"
         size="small"
-        severity="secondary"
-        outlined
-        class="h-9 shrink-0"
-        :class="{ 'w-9': count === 0 }"
-        :badge="count > 0 ? String(count) : undefined"
-        badge-severity="info"
-        :aria-label="count > 0 ? `Filters, ${count} active` : 'Filters'"
-        aria-haspopup="dialog"
-        :aria-expanded="expanded"
+        class="flex shrink-0"
+        :pt="{ pcBadge: { root: { class: 'rounded-full px-1', 'aria-hidden': 'true' } } }"
+    >
+        <Button
+            v-bind="buttonProps"
+            @click="emit('click')"
+        />
+    </OverlayBadge>
+    <Button
+        v-else
+        v-bind="buttonProps"
         @click="emit('click')"
     />
 </template>

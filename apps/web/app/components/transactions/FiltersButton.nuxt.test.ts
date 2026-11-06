@@ -22,21 +22,31 @@ describe("TransactionsFiltersButton", () => {
         const button = wrapper.find('[aria-label="Filters"]');
         expect(button.exists()).toBe(true);
         expect(button.text()).toBe("");
+        expect(wrapper.find(".p-overlaybadge").exists()).toBe(false);
         expect(wrapper.find(".p-badge").exists()).toBe(false);
         expect(button.classes()).toContain("h-9");
         expect(button.classes()).toContain("w-9");
     });
 
-    it("shows the count in an info badge and drops the square width", async () => {
+    it("shows the count in a corner info badge and keeps the square", async () => {
         const wrapper = await mountButton(2);
+
+        const overlay = wrapper.find(".p-overlaybadge");
+        expect(overlay.exists()).toBe(true);
+        expect(overlay.classes()).toContain("flex");
+        expect(overlay.classes()).toContain("shrink-0");
+        const badge = wrapper.find(".p-overlaybadge .p-badge");
+        expect(badge.classes()).toContain("p-badge-info");
+        expect(badge.classes()).toContain("rounded-full");
+        expect(badge.text()).toBe("2");
+        expect(badge.attributes("aria-hidden")).toBe("true");
 
         const button = wrapper.find('[aria-label="Filters, 2 active"]');
         expect(button.exists()).toBe(true);
-        const badge = button.find(".p-badge");
-        expect(badge.classes()).toContain("p-badge-info");
-        expect(badge.text()).toBe("2");
+        expect(button.find(".p-badge").exists()).toBe(false);
+        expect(button.text()).toBe("");
         expect(button.classes()).toContain("h-9");
-        expect(button.classes()).not.toContain("w-9");
+        expect(button.classes()).toContain("w-9");
     });
 
     it("reflects the expanded state in aria-expanded", async () => {
@@ -51,6 +61,14 @@ describe("TransactionsFiltersButton", () => {
         const wrapper = await mountButton(0);
 
         await wrapper.find('[aria-label="Filters"]').trigger("click");
+
+        expect(wrapper.emitted("click")).toHaveLength(1);
+    });
+
+    it("emits click when pressed with a count, through the wrapped button", async () => {
+        const wrapper = await mountButton(2);
+
+        await wrapper.find('[aria-label="Filters, 2 active"]').trigger("click");
 
         expect(wrapper.emitted("click")).toHaveLength(1);
     });

@@ -95,9 +95,8 @@ describe("Toolbar desktop", () => {
     it("shows a Filters badge that counts the drawer filters, not the period", async () => {
         const wrapper = await mountToolbar({ drawerFilterCount: 1, activeFilterCount: 2 });
 
-        const filters = wrapper.find('[aria-label="Filters, 1 active"]');
-        expect(filters.exists()).toBe(true);
-        expect(filters.find(".p-badge").text()).toBe("1");
+        expect(wrapper.find(".p-overlaybadge .p-badge").text()).toBe("1");
+        expect(wrapper.find('.p-overlaybadge [aria-label="Filters, 1 active"]').exists()).toBe(true);
     });
 
     it("holds the period, the three pickers, Show hidden and Clear all in the quick filters row, with the search outside it", async () => {
@@ -196,15 +195,14 @@ describe("Toolbar desktop", () => {
 });
 
 describe("Toolbar below md", () => {
-    it("shows the Filters button with the drawer count as an info badge", async () => {
+    it("shows the Filters button with the drawer count as a corner info badge", async () => {
         desktop.value = false;
         const wrapper = await mountToolbar({ drawerFilterCount: 3, activeFilterCount: 4 });
 
-        const filters = wrapper.find('[aria-label="Filters, 3 active"]');
-        expect(filters.exists()).toBe(true);
-        const badge = filters.find(".p-badge-info");
+        const badge = wrapper.find(".p-overlaybadge .p-badge-info");
         expect(badge.exists()).toBe(true);
         expect(badge.text()).toBe("3");
+        expect(wrapper.find('.p-overlaybadge [aria-label="Filters, 3 active"]').exists()).toBe(true);
     });
 
     it("shows a plain Filters button with no count when no drawer filter is active", async () => {
@@ -214,6 +212,7 @@ describe("Toolbar below md", () => {
         const filters = wrapper.find('[aria-label="Filters"]');
         expect(filters.exists()).toBe(true);
         expect(filters.text()).toBe("");
+        expect(wrapper.find(".p-overlaybadge").exists()).toBe(false);
         expect(wrapper.find(".p-badge").exists()).toBe(false);
     });
 
