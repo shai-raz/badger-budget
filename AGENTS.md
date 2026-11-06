@@ -67,7 +67,7 @@ Every agent working in a directory pays for its docs in context, so they hold on
 - Root `AGENTS.md` [1,000]: repo-wide commands, workflow, and pointers. Nothing specific to one app or feature.
 - `apps/*/AGENTS.md` [300]: how to work in that app (conventions, testing).
 - `apps/*/ARCHITECTURE.md` [1,200], auto-loaded with the app: stack, cross-cutting mechanisms (auth, request pipeline, layout contract, CSS layers) and constraints spanning modules. A few lines per mechanism, linking the module doc for depth.
-- `apps/web/DESIGN.md` [1,200]: UI rules and tokens only.
+- `apps/web/DESIGN.md` [1,800]: UI rules and tokens only.
 - Module `AGENTS.md` (`apps/api/src/<module>/`) [400]: that module's invariants and traps. Add one only when the module has some.
 - A code comment, not a doc, when the trap lives in one file or function: it sits where the next editor looks, and dies with the code.
 - `README.md` files are for humans (self-hosting, a package's purpose), not agent instructions.

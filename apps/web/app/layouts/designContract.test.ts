@@ -790,3 +790,33 @@ describe("design contract: sync error action button", () => {
         expect(source).toContain("bg-transparent");
     });
 });
+
+describe("design contract: PrimeVue widgets rule", () => {
+    // DESIGN.md's Surfaces rule: interactive widgets are PrimeVue, and a hand-built one needs a reason in a comment.
+    const WIDGETS_RULE =
+        "- **Interactive and data widgets** (tables, forms, lists, checkboxes, radios, switches, selects): PrimeVue components. If the markup rules one out, change the markup. Hand-build one only when PrimeVue has no equivalent or can't do the job even with `pt`, and say why in a comment beside it.";
+
+    it("states the widgets rule verbatim in DESIGN.md", () => {
+        expect(readFileSync(`${appDir}/../DESIGN.md`, "utf8")).toContain(WIDGETS_RULE);
+    });
+
+    it("deletes the hand-built TypeAvatar, now a SharedEntityAvatar glyph", () => {
+        expect(existsSync(`${appDir}/components/transactions/TypeAvatar.vue`)).toBe(false);
+    });
+
+    it("draws the filter option rows with PrimeVue Checkbox and no pi-check icon", () => {
+        const source = readFileSync(`${appDir}/components/transactions/FilterOptionList.vue`, "utf8");
+        expect(source).toContain("<Checkbox");
+        expect(source).not.toContain("pi-check");
+    });
+
+    it("draws the mobile sort rows with PrimeVue RadioButton and no hand-built radio role", () => {
+        const source = readFileSync(`${appDir}/components/transactions/SortMenu.vue`, "utf8");
+        expect(source).toContain("<RadioButton");
+        expect(source).not.toContain('role="radio"');
+    });
+
+    it("documents in ScrollRow why it is hand-built", () => {
+        expect(readFileSync(`${appDir}/components/shared/ScrollRow.vue`, "utf8")).toContain("PrimeVue has no");
+    });
+});

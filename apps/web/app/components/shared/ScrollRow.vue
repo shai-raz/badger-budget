@@ -2,6 +2,7 @@
 /**
  * A sideways-scrolling row: no visible scrollbar, a vertical wheel turn scrolls it, and edge arrows show only
  * on the side that can scroll. The arrows sit over the edges on a backing, so they never shift the content.
+ * Hand-built because PrimeVue has no sideways-scrolling row with overflow-driven edge arrows (Carousel pages items instead); the arrows themselves are PrimeVue Buttons.
  */
 import { useEventListener } from "@vueuse/core";
 import { SCROLL_ROW_STEP_RATIO, scrollRowEdges, wheelToHorizontal } from "~/utils/scrollRow";
