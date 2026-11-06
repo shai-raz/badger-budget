@@ -54,7 +54,7 @@ const categorySummary = computed(() => summaryOf("categories", props.categoryOpt
                     <span class="font-semibold text-surface-900 dark:text-surface-0">{{
                         FILTER_COPY.types.title
                     }}</span>
-                    <span class="ml-auto pl-3 text-sm text-muted-color">{{ typeSummary }}</span>
+                    <span class="ml-auto mr-2 pl-3 text-sm text-muted-color">{{ typeSummary }}</span>
                 </AccordionHeader>
                 <AccordionContent>
                     <TransactionsFilterOptionList
@@ -71,7 +71,7 @@ const categorySummary = computed(() => summaryOf("categories", props.categoryOpt
                     <span class="font-semibold text-surface-900 dark:text-surface-0">{{
                         FILTER_COPY.accounts.title
                     }}</span>
-                    <span class="ml-auto pl-3 text-sm text-muted-color">{{ accountSummary }}</span>
+                    <span class="ml-auto mr-2 pl-3 text-sm text-muted-color">{{ accountSummary }}</span>
                 </AccordionHeader>
                 <AccordionContent>
                     <TransactionsFilterOptionList
@@ -88,7 +88,7 @@ const categorySummary = computed(() => summaryOf("categories", props.categoryOpt
                     <span class="font-semibold text-surface-900 dark:text-surface-0">{{
                         FILTER_COPY.categories.title
                     }}</span>
-                    <span class="ml-auto pl-3 text-sm text-muted-color">{{ categorySummary }}</span>
+                    <span class="ml-auto mr-2 pl-3 text-sm text-muted-color">{{ categorySummary }}</span>
                 </AccordionHeader>
                 <AccordionContent>
                     <TransactionsFilterOptionList

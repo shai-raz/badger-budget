@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+    accountTransactionsLink,
     DEFAULT_TRANSACTION_FILTERS,
     parseTransactionFilters,
     sameTransactionFilters,
@@ -189,5 +190,11 @@ describe("sameTransactionFilters", () => {
         expect(sameTransactionFilters(FULL, { ...FULL, categoryIds: ["cat-a"] })).toBe(false);
         expect(sameTransactionFilters(FULL, { ...FULL, accountIds: ["acc-a"] })).toBe(false);
         expect(sameTransactionFilters(FULL, { ...FULL, types: ["income"] })).toBe(false);
+    });
+});
+
+describe("accountTransactionsLink", () => {
+    it("opens the transactions list filtered to one account, with no period keys so it shows this month", () => {
+        expect(accountTransactionsLink("acc-a")).toEqual({ path: "/transactions", query: { accounts: "acc-a" } });
     });
 });

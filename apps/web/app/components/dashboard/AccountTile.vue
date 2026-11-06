@@ -5,6 +5,7 @@ import { accountCaption, getBalanceDisplay, formatChargeLine } from "~/utils/acc
 import { formatCurrency } from "~/utils/currency";
 import { formatTimeAgo, isStale } from "~/utils/relativeTime";
 import { accountFallbackIcon } from "~/utils/avatarIcons";
+import { accountTransactionsLink } from "~/utils/transactionFilterQuery";
 
 const props = withDefaults(
     defineProps<{
@@ -36,7 +37,7 @@ const stale = computed(() =>
 
 <template>
     <Card
-        class="h-full"
+        class="relative h-full transition-colors has-[a:hover]:bg-surface-50 has-[a:active]:bg-surface-100 dark:has-[a:hover]:bg-surface-800 dark:has-[a:active]:bg-surface-700 has-[a:focus-visible]:outline has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-primary"
         :pt="{ body: { class: 'h-full' }, content: { class: 'flex h-full flex-col' } }"
     >
         <template #content>
@@ -47,7 +48,14 @@ const stale = computed(() =>
                     :fallback="accountFallbackIcon(account.type)"
                 />
                 <div class="min-w-0 flex-1">
-                    <p class="truncate font-semibold">{{ account.name }}</p>
+                    <p class="truncate font-semibold">
+                        <!-- Stretched link: its ::after covers the whole tile, so ⋮ and Update sit above it (z-10). -->
+                        <NuxtLink
+                            :to="accountTransactionsLink(account.id)"
+                            class="after:absolute after:inset-0 after:z-[1] after:content-[''] focus-visible:outline-none"
+                            >{{ account.name }}</NuxtLink
+                        >
+                    </p>
                     <p class="text-xs text-muted-color">{{ subtypeCaption }}</p>
                 </div>
                 <Button
@@ -57,7 +65,7 @@ const stale = computed(() =>
                     rounded
                     size="small"
                     aria-label="Account actions"
-                    class="-mr-2 -mt-1 shrink-0 text-muted-color"
+                    class="relative z-10 -mr-2 -mt-1 shrink-0 text-muted-color"
                     @click="handleMenu"
                 />
             </div>
@@ -104,7 +112,7 @@ const stale = computed(() =>
                     icon="pi pi-pencil"
                     size="small"
                     outlined
-                    class="mt-auto self-start"
+                    class="relative z-10 mt-auto self-start"
                     @click="emit('updateCash')"
                 />
             </template>
