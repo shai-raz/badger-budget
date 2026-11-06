@@ -1,9 +1,9 @@
 <script setup lang="ts" generic="T extends string">
 /**
- * One transaction filter. The `button` variant (desktop toolbar) is a trigger that summarises the selection, a clear
- * button while something is selected, and a popover holding the option list. The `pill` variant (mobile chip row) is
- * one trigger with no clear button, opening a bottom sheet with the same option list. The trigger label and avatar
- * come from the selection; an empty selection means "all". Both variants apply changes live.
+ * One transaction filter. Both variants show a trigger that summarises the selection, plus a × button while something is
+ * selected. The `button` variant (desktop toolbar) opens a popover holding the option list; the `pill` variant (mobile
+ * chip row) opens a bottom sheet with the same list. The trigger label and avatar come from the selection; an empty
+ * selection means "all". Both variants apply changes live.
  */
 import { FILTER_COPY, filterSelectionLabel, type FilterNoun } from "~/utils/filterLabels";
 import type { FilterOption } from "~/utils/filterOptions";
@@ -92,7 +92,7 @@ function clear() {
             ></i>
         </Button>
         <Button
-            v-if="active && variant === 'button'"
+            v-if="active"
             icon="pi pi-times"
             size="small"
             class="h-9 w-9"
