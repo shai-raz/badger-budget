@@ -217,7 +217,6 @@ watch(isDesktop, () => {
                     <TransactionsShowHiddenToggle
                         v-model="showHidden"
                         class="shrink-0"
-                        variant="pill"
                     />
 
                     <div

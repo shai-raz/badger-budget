@@ -24,8 +24,8 @@ const label = computed(() => filterSelectionLabel(props.noun, selectedOptions.va
 const active = computed(() => selected.value.length > 0);
 const onlySelected = computed(() => (selectedOptions.value.length === 1 ? selectedOptions.value[0] : undefined));
 
-// Idle controls are outlined; an active one fills with the primary colour so a filtered toolbar reads at a glance.
-// A pill is never outlined: idle grey and filled primary when active, with the button radius like the rest of the row.
+// Idle controls are outlined in both variants, like the period picker beside them; an active one fills with the primary
+// colour so a filtered toolbar reads at a glance.
 const severity = computed(() => (active.value ? undefined : "secondary"));
 
 const open = ref(false);
@@ -74,7 +74,7 @@ function clear() {
             ref="triggerEl"
             size="small"
             :severity="severity"
-            :outlined="variant === 'button' && !active"
+            :outlined="!active"
             class="h-9 min-w-0"
             aria-haspopup="dialog"
             :aria-expanded="expanded"

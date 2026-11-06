@@ -5,8 +5,8 @@ import ShowHiddenToggle from "./ShowHiddenToggle.vue";
 
 const mounted: VueWrapper[] = [];
 
-const mountToggle = async (modelValue: boolean, variant?: "button" | "pill") => {
-    const wrapper = await mountSuspended(ShowHiddenToggle, { props: { modelValue, variant } });
+const mountToggle = async (modelValue: boolean) => {
+    const wrapper = await mountSuspended(ShowHiddenToggle, { props: { modelValue } });
     mounted.push(wrapper);
     return wrapper;
 };
@@ -30,28 +30,20 @@ describe("TransactionsShowHiddenToggle", () => {
         expect(toggleButton(wrapper).attributes("aria-pressed")).toBe("true");
     });
 
-    it("is outlined while off in the desktop toolbar", async () => {
+    it("is outlined while off and filled while on", async () => {
+        const off = await mountToggle(false);
+        expect(toggleButton(off).classes()).toContain("p-button-outlined");
+
+        const on = await mountToggle(true);
+        expect(toggleButton(on).classes()).not.toContain("p-button-outlined");
+    });
+
+    it("is 36px square, with the button radius", async () => {
         const wrapper = await mountToggle(false);
 
-        expect(toggleButton(wrapper).classes()).toContain("p-button-outlined");
-    });
-
-    it("is 36px square in both variants, with the button radius", async () => {
-        for (const variant of ["button", "pill"] as const) {
-            const wrapper = await mountToggle(false, variant);
-
-            expect(toggleButton(wrapper).classes()).toContain("h-9");
-            expect(toggleButton(wrapper).classes()).toContain("w-9");
-            expect(toggleButton(wrapper).classes()).not.toContain("rounded-full");
-        }
-    });
-
-    it("is a filled pill in the mobile chip row, never outlined", async () => {
-        const off = await mountToggle(false, "pill");
-        expect(toggleButton(off).classes()).not.toContain("p-button-outlined");
-
-        const on = await mountToggle(true, "pill");
-        expect(toggleButton(on).classes()).not.toContain("p-button-outlined");
+        expect(toggleButton(wrapper).classes()).toContain("h-9");
+        expect(toggleButton(wrapper).classes()).toContain("w-9");
+        expect(toggleButton(wrapper).classes()).not.toContain("rounded-full");
     });
 
     it("toggles the model on click", async () => {
