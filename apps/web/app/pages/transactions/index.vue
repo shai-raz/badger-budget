@@ -1,15 +1,24 @@
 <script setup lang="ts">
+import type { TransactionType } from "@badger/shared-data";
 import type { ICategoryResponse, ITransactionResponse } from "@badger/types";
 import { useQueryClient } from "@tanstack/vue-query";
 import {
     transactionKeys,
     useInfiniteTransactions,
+    useTransactionAccountFacets,
     useTransactionCategoryFacets,
     useTransactionsSummary,
+    useTransactionTypeFacets,
 } from "../../composables/transactions/useTransactions";
 import { useTransactionFilters } from "../../composables/transactions/useTransactionFilters";
 import { listScrollKey, saveListScroll, takeListScroll } from "../../utils/listScroll";
-import { buildCategoryFilterOptions, type FilterOption, UNCATEGORIZED_VALUE } from "../../utils/filterOptions";
+import {
+    buildAccountFilterOptions,
+    buildCategoryFilterOptions,
+    buildTypeFilterOptions,
+    type FilterOption,
+    UNCATEGORIZED_VALUE,
+} from "../../utils/filterOptions";
 // Imported explicitly (Nuxt would otherwise auto-import it) so its instance
 // type is in scope for the template ref below.
 import TransactionsListRows from "../../components/transactions/ListRows.vue";
@@ -27,7 +36,7 @@ definePageMeta({
 const router = useRouter();
 
 const { data: categoriesData, isPending: isCategoriesPending } = useGetCategoriesQuery();
-const { data: accountsData } = useGetAccounts();
+const { data: accountsData, isPending: isAccountsPending } = useGetAccounts();
 
 // Ids the URL's category filter is checked against. Built from the full categories list, not the offered options,
 // so a shared link's category is not pruned just because it has no matches in the current view. Undefined until the
@@ -44,6 +53,7 @@ const knownAccountIds = () => accountsData.value?.map((account) => account.id);
 const {
     searchQuery,
     selectedTypes,
+    selectedAccountIds,
     selectedCategoryIds,
     sortOption,
     period,
@@ -51,9 +61,10 @@ const {
     listParams,
     summaryParams,
     categoryFacetParams,
+    accountFacetParams,
+    typeFacetParams,
     drawerFilterCount,
-    activeChips,
-    hasActiveFilters,
+    activeFilterCount,
     clearAllFilters,
 } = useTransactionFilters({
     knownCategoryIds,
@@ -85,47 +96,66 @@ const categoryOptions = computed<FilterOption[]>(() => {
     });
 });
 
+// Per-account and per-type counts for the current view, with the same offering rules as the categories above. Each
+// facet ignores its own selection, so a picker's options stay put while it is edited.
+const {
+    data: accountFacetData,
+    isPending: isAccountFacetPending,
+    isError: isAccountFacetError,
+} = useTransactionAccountFacets(accountFacetParams);
+const accountFacetFailed = computed(() => isAccountFacetError.value && !accountFacetData.value);
+
+const {
+    data: typeFacetData,
+    isPending: isTypeFacetPending,
+    isError: isTypeFacetError,
+} = useTransactionTypeFacets(typeFacetParams);
+const typeFacetFailed = computed(() => isTypeFacetError.value && !typeFacetData.value);
+
+// Same loading guard as the categories: no options until the source list and the counts are in, so a lone option
+// cannot collapse the first tap.
+const accountOptions = computed<FilterOption[]>(() => {
+    if (isAccountsPending.value || (isAccountFacetPending.value && !accountFacetFailed.value)) return [];
+
+    return buildAccountFilterOptions({
+        accounts: accountsData.value,
+        facets: accountFacetData.value?.accounts,
+        facetFailed: accountFacetFailed.value,
+        selectedIds: selectedAccountIds.value,
+    });
+});
+
+const typeOptions = computed<FilterOption<TransactionType>[]>(() => {
+    if (isTypeFacetPending.value && !typeFacetFailed.value) return [];
+
+    return buildTypeFilterOptions({
+        facets: typeFacetData.value?.types,
+        facetFailed: typeFacetFailed.value,
+        selected: selectedTypes.value,
+    });
+});
+
 // Below md the page switches to the compact mobile experience: compact header,
 // collapsible summary, bottom-sheet filters, and tap-to-navigate rows.
 const isDesktop = useIsDesktop();
 
-// Inline filters panel (desktop) / bottom-sheet (mobile) visibility. The desktop
-// panel's state is kept in app state so it is still open when returning from a
-// transaction; the mobile sheet always starts closed. The compact header's filter
-// icon and the desktop Filters button toggle the same flag.
-const desktopFiltersOpen = useState("transactions-filters-open", () => false);
+// Mobile bottom-sheet visibility. The compact header's Filters button toggles it. The desktop toolbar has no drawer,
+// so the flag only matters below md.
 const mobileFiltersOpen = ref(false);
-const filtersOpen = computed({
-    get: () => (isDesktop.value ? desktopFiltersOpen.value : mobileFiltersOpen.value),
-    set: (open: boolean) => {
-        if (isDesktop.value) desktopFiltersOpen.value = open;
-        else mobileFiltersOpen.value = open;
-    },
-});
 
 // Server-driven, paginated list.
-const { data, error, isLoading, isFetching, isFetchingNextPage, hasNextPage, fetchNextPage } =
+const { data, error, isLoading, isFetchingNextPage, isPlaceholderData, hasNextPage, fetchNextPage } =
     useInfiniteTransactions(listParams);
 
-// True from the moment listParams changes (a filter/search/timeframe/sort
-// edit) until the resulting fetch settles — latched explicitly rather than
-// inferred from fetch state, because isFetching alone can't tell a listParams
-// change apart from a mutation's invalidateQueries refetch (hide, edit
-// category, mark transfer, sync, etc. all invalidate the same query key). The
-// latch is set by the watch(listParams, ...) below and cleared here once
-// isFetching drops, so a mutation-triggered refetch never fades the list —
-// its optimistic update (see useUpdateTransaction.mutation.ts) already gives
-// instant feedback, and dimming the whole list on every row action would be
-// wrong. Also excluded: the first load (handled by the spinner, isLoading)
-// and an infinite-scroll next-page append (isFetchingNextPage). Drives the
-// list fade so a filter change reads as "results updating" instead of a
-// frozen UI that then swaps abruptly. `keepPreviousData` keeps the old rows
-// mounted underneath, so the fade cross-dissolves old → new.
-const paramsChanging = ref(false);
-watch(isFetching, (fetching) => {
-    if (!fetching) paramsChanging.value = false;
-});
-const isRefetching = computed(() => paramsChanging.value && !isFetchingNextPage.value && !isLoading.value);
+// Drives the list fade so a filter change reads as "results updating" instead of a frozen UI that then swaps abruptly.
+// isPlaceholderData is true only while the previous key's rows are shown under keepPreviousData (see
+// useInfiniteTransactions), so it covers the fetch for a new key and clears as soon as that key's data is served, even
+// from cache with no fetch. A mutation's invalidateQueries refetch keeps the same key, so it never fades the list: its
+// optimistic update (see useUpdateTransaction.mutation.ts) already gives instant feedback, and dimming the whole list on
+// every row action would be wrong. Also excluded: the first load (handled by the spinner, isLoading) and an
+// infinite-scroll next-page append (isFetchingNextPage). `keepPreviousData` keeps the old rows mounted underneath, so
+// the fade cross-dissolves old → new.
+const isRefetching = computed(() => isPlaceholderData.value && !isFetchingNextPage.value && !isLoading.value);
 
 // Aggregate totals for the active filters (always excludes hidden rows, so the
 // metrics never react to the show-hidden toggle).
@@ -165,12 +195,8 @@ const listRows = ref<InstanceType<typeof TransactionsListRows> | null>(null);
 // the new bottom (landing the user mid-list) and the sentinel from firing a
 // spurious extra fetchNextPage() the moment the shorter list lands. The
 // computed returns a fresh object each time it re-evaluates, so identity
-// comparison alone is enough to fire this — no `deep` needed. This is also
-// the one place that knows listParams (rather than any background fetch)
-// changed, so it doubles as the trigger for the isRefetching fade latch
-// above — both effects fire off the same event, so they share one watcher.
+// comparison alone is enough to fire this — no `deep` needed.
 watch(listParams, () => {
-    paramsChanging.value = true;
     listRows.value?.scrollToTop();
 });
 
@@ -242,7 +268,7 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
 </script>
 
 <template>
-    <!-- Full-height flex column: header/metrics/toolbar/panel/chips stay pinned,
+    <!-- Full-height flex column: header/metrics/toolbar stay pinned,
          only the list region below scrolls. -->
     <div class="flex h-full min-h-0 flex-col">
         <!-- Rendered before the loading/error chain so the header stays up while
@@ -256,9 +282,8 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
                 <TransactionsToolbar
                     v-model:search-query="searchQuery"
                     v-model:period="period"
-                    v-model:filters-open="filtersOpen"
-                    v-model:sort-option="sortOption"
-                    :active-filter-count="drawerFilterCount"
+                    v-model:filters-open="mobileFiltersOpen"
+                    :drawer-filter-count="drawerFilterCount"
                 />
             </template>
             <template #actions>
@@ -304,25 +329,20 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
                 class="shrink-0 md:mb-4"
             />
 
-            <!-- Desktop toolbar: search + timeframe + Filters toggle. Mobile
-                 controls live in the page header's second row instead. -->
+            <!-- Desktop toolbar: search, the period and one picker per filter, then show hidden and Clear all. -->
             <TransactionsToolbar
                 v-if="isDesktop"
                 v-model:search-query="searchQuery"
                 v-model:period="period"
-                v-model:filters-open="filtersOpen"
-                v-model:sort-option="sortOption"
-                :active-filter-count="drawerFilterCount"
-                class="mb-3 shrink-0"
-            />
-
-            <!-- Inline filters panel (desktop only; mobile uses the bottom sheet) -->
-            <TransactionsFiltersPanel
-                v-if="isDesktop && filtersOpen"
-                v-model:selected-types="selectedTypes"
                 v-model:selected-category-ids="selectedCategoryIds"
+                v-model:selected-account-ids="selectedAccountIds"
+                v-model:selected-types="selectedTypes"
                 v-model:show-hidden="showHidden"
                 :category-options="categoryOptions"
+                :account-options="accountOptions"
+                :type-options="typeOptions"
+                :active-filter-count="activeFilterCount"
+                :drawer-filter-count="drawerFilterCount"
                 class="mb-3 shrink-0"
                 @clear-all="clearAllFilters"
             />
@@ -330,21 +350,13 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
             <!-- Filters bottom sheet (mobile only) -->
             <TransactionsFiltersSheet
                 v-if="!isDesktop"
-                v-model:visible="filtersOpen"
+                v-model:visible="mobileFiltersOpen"
                 v-model:selected-types="selectedTypes"
                 v-model:selected-category-ids="selectedCategoryIds"
                 v-model:show-hidden="showHidden"
                 :category-options="categoryOptions"
                 @clear-all="clearAllFilters"
             />
-
-            <!-- Active filter chips (desktop only; mobile relies on the badge) -->
-            <div
-                v-if="isDesktop && hasActiveFilters"
-                class="mb-4 shrink-0"
-            >
-                <TransactionsActiveFilterChips :chips="activeChips" />
-            </div>
 
             <!-- The list takes all the height left by the pinned chrome above and
                  scrolls internally: it owns the scroller, the infinite-scroll
@@ -361,7 +373,14 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
                 class="min-h-0 flex-1"
                 @load-more="fetchNextPage"
                 @transaction-click="handleTransactionClick"
-            />
+            >
+                <template #header-actions>
+                    <TransactionsSortMenu
+                        v-model="sortOption"
+                        :compact="!isDesktop"
+                    />
+                </template>
+            </TransactionsListRows>
         </div>
 
         <!-- Mobile-only create shortcut; desktop uses the header "New" button. -->

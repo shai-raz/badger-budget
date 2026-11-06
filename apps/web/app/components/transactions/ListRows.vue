@@ -3,6 +3,7 @@ import type { ITransactionResponse } from "@badger/types";
 import TransactionRow from "./TransactionRow.vue";
 import ListFooter from "./ListFooter.vue";
 import TransactionActionsHost from "./TransactionActionsHost.vue";
+import { transactionCountText } from "../../utils/transactionCount";
 
 interface Props {
     transactions: ITransactionResponse[];
@@ -91,6 +92,16 @@ defineExpose({ scrollToTop, getScrollTop, scrollToOffset });
     <div
         class="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-0 md:rounded-xl md:border md:border-surface-200 dark:bg-surface-900 dark:md:border-surface-700"
     >
+        <!-- List header: the result count on the left and the #header-actions slot
+             (sort) on the right. It sits outside the scroller so it never scrolls
+             away, at every width. -->
+        <div
+            class="flex shrink-0 items-center justify-between border-b border-surface-200 py-1 pl-4 pr-2 dark:border-surface-700"
+        >
+            <span class="text-[13px] text-muted-color">{{ transactionCountText(total) }}</span>
+            <slot name="header-actions" />
+        </div>
+
         <!-- The ONLY scrolling region — the scrollbar sits inside the card.
              Rows carry their own 16px gutter (TransactionRow), so the scroller
              adds only the vertical inset. -->

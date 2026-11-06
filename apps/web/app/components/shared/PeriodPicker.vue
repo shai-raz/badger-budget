@@ -9,8 +9,11 @@ import {
     type PeriodSelection,
 } from "~/utils/monthRange";
 
-defineProps<{
+const props = defineProps<{
     presets: readonly PeriodPresetId[];
+    // Off the current month, the picker fills primary and shows a × that jumps back to it. Reports keeps the
+    // plain outlined picker with its This month link.
+    resettable?: boolean;
 }>();
 
 const sel = defineModel<PeriodSelection>({ required: true });
@@ -31,12 +34,22 @@ const now = computed(() => {
 
 const canNext = computed(() => sel.value.kind === "range" && canStepNext(sel.value, now.value));
 
+const offDefault = computed(() => !isCurrentMonthSelection(sel.value, now.value));
+const resetActive = computed(() => props.resettable && offDefault.value);
+
 const step = (dir: -1 | 1) => {
     if (sel.value.kind === "all") return;
     sel.value = stepRange(sel.value, dir);
 };
 
 const popover = ref<{ toggle: (event: Event) => void; hide: () => void } | null>(null);
+const labelEl = ref<{ $el: HTMLElement } | null>(null);
+
+// The × unmounts once the period is back on this month, taking its focus with it; send focus to the label instead.
+const resetToThisMonth = () => {
+    sel.value = currentMonthSelection(now.value);
+    nextTick(() => labelEl.value?.$el.focus());
+};
 
 // md+ opens the popover anchored to the label; below md the label opens the bottom sheet.
 const onLabelClick = (event: Event) => {
@@ -72,7 +85,7 @@ const sheetPt = {
     <div class="flex items-center gap-1">
         <!-- Below md there is no room beside the arrows at 360px; the sheet's presets are the reset there. -->
         <Button
-            v-if="isDesktop && !isCurrentMonthSelection(sel, now)"
+            v-if="isDesktop && !resettable && !isCurrentMonthSelection(sel, now)"
             link
             size="small"
             label="This month"
@@ -83,16 +96,17 @@ const sheetPt = {
         <ButtonGroup class="min-w-0">
             <Button
                 icon="pi pi-chevron-left"
-                severity="secondary"
-                outlined
+                :severity="resetActive ? undefined : 'secondary'"
+                :outlined="!resetActive"
                 :class="isDesktop ? 'h-9 w-9 shrink-0' : 'h-8 w-8 shrink-0'"
                 aria-label="Previous period"
                 :disabled="sel.kind === 'all'"
                 @click="step(-1)"
             />
             <Button
-                severity="secondary"
-                outlined
+                ref="labelEl"
+                :severity="resetActive ? undefined : 'secondary'"
+                :outlined="!resetActive"
                 aria-haspopup="dialog"
                 :aria-expanded="open"
                 :class="isDesktop ? 'h-9 min-w-0 max-w-[16rem]' : 'h-8 min-w-0 max-w-[12rem] px-2 text-sm'"
@@ -111,12 +125,19 @@ const sheetPt = {
             </Button>
             <Button
                 icon="pi pi-chevron-right"
-                severity="secondary"
-                outlined
+                :severity="resetActive ? undefined : 'secondary'"
+                :outlined="!resetActive"
                 :class="isDesktop ? 'h-9 w-9 shrink-0' : 'h-8 w-8 shrink-0'"
                 aria-label="Next period"
                 :disabled="!canNext"
                 @click="step(1)"
+            />
+            <Button
+                v-if="resetActive"
+                icon="pi pi-times"
+                :class="isDesktop ? 'h-9 w-9 shrink-0' : 'h-8 w-8 shrink-0'"
+                aria-label="Back to this month"
+                @click="resetToThisMonth"
             />
         </ButtonGroup>
 

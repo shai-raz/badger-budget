@@ -16,9 +16,11 @@ mockNuxtImport("useIsDesktop", () => () => ref(layout.desktop));
 const mounted: { unmount: () => void }[] = [];
 
 // The real Transition runs here: the Popover emits show and hide from its enter and leave hooks.
-const mountPicker = async (modelValue: PeriodSelection) => {
+// Focus only moves to elements in the document, so a test about focus mounts the picker attached to it.
+const mountPicker = async (modelValue: PeriodSelection, resettable = false, attach = false) => {
     const wrapper = await mountSuspended(PeriodPicker, {
-        props: { modelValue, presets: TRANSACTIONS_PRESETS },
+        props: { modelValue, presets: TRANSACTIONS_PRESETS, resettable },
+        attachTo: attach ? document.body : undefined,
         global: { stubs: { transition: false } },
     });
     mounted.push(wrapper);
@@ -32,6 +34,7 @@ const prevButton = (wrapper: Wrapper) => wrapper.find('[aria-label="Previous per
 const nextButton = (wrapper: Wrapper) => wrapper.find('[aria-label="Next period"]');
 const thisMonthButton = (wrapper: Wrapper) =>
     wrapper.findAll("button").find((button) => button.text() === "This month");
+const resetButton = (wrapper: Wrapper) => wrapper.find('[aria-label="Back to this month"]');
 
 const lastEmit = (wrapper: Wrapper) => {
     const emits = wrapper.emitted("update:modelValue") ?? [];
@@ -271,5 +274,64 @@ describe("PeriodPicker", () => {
 
         expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-08", to: "2026-10" });
         expect(labelButton(wrapper).attributes("aria-expanded")).toBe("false");
+    });
+
+    it("keeps the outlined group and no × off the current month when not resettable", async () => {
+        const wrapper = await mountPicker({ kind: "range", from: "2026-09", to: "2026-09" });
+
+        expect(labelButton(wrapper).classes()).toContain("p-button-outlined");
+        expect(prevButton(wrapper).classes()).toContain("p-button-outlined");
+        expect(nextButton(wrapper).classes()).toContain("p-button-outlined");
+        expect(resetButton(wrapper).exists()).toBe(false);
+    });
+
+    it("fills the group and offers a × back to this month when resettable off the current month", async () => {
+        const wrapper = await mountPicker({ kind: "range", from: "2026-09", to: "2026-09" }, true);
+
+        expect(labelButton(wrapper).classes()).not.toContain("p-button-outlined");
+        expect(prevButton(wrapper).classes()).not.toContain("p-button-outlined");
+        expect(nextButton(wrapper).classes()).not.toContain("p-button-outlined");
+        expect(thisMonthButton(wrapper)).toBeUndefined();
+        expect(resetButton(wrapper).exists()).toBe(true);
+    });
+
+    it("sets the current month when the × is clicked on a resettable picker", async () => {
+        const wrapper = await mountPicker({ kind: "range", from: "2026-08", to: "2026-09" }, true);
+
+        await resetButton(wrapper).trigger("click");
+
+        expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-10", to: "2026-10" });
+    });
+
+    it("keeps focus on the label when the × is activated from the keyboard", async () => {
+        const wrapper = await mountPicker({ kind: "range", from: "2026-08", to: "2026-09" }, true, true);
+        const labelEl = labelButton(wrapper).element;
+        const resetEl = resetButton(wrapper).element as HTMLElement;
+
+        // Focus the × first, as a Tab would, so clearing it has to move focus rather than leave it on a dropped node.
+        resetEl.focus();
+        await resetButton(wrapper).trigger("click");
+        await nextTick();
+
+        expect(document.activeElement).toBe(labelEl);
+    });
+
+    it("keeps the × at the stacked height below md", async () => {
+        layout.desktop = false;
+        const wrapper = await mountPicker({ kind: "range", from: "2026-09", to: "2026-09" }, true);
+
+        expect(resetButton(wrapper).classes()).toContain("h-8");
+        expect(labelButton(wrapper).classes()).toContain("h-8");
+    });
+
+    it("keeps the outlined secondary group and no × on the current month when resettable", async () => {
+        const wrapper = await mountPicker({ kind: "range", from: "2026-10", to: "2026-10" }, true);
+
+        expect(labelButton(wrapper).classes()).toContain("p-button-outlined");
+        expect(labelButton(wrapper).classes()).toContain("p-button-secondary");
+        expect(prevButton(wrapper).classes()).toContain("p-button-outlined");
+        expect(nextButton(wrapper).classes()).toContain("p-button-outlined");
+        expect(resetButton(wrapper).exists()).toBe(false);
+        expect(thisMonthButton(wrapper)).toBeUndefined();
     });
 });
