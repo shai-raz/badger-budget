@@ -108,6 +108,14 @@ describe("TransactionsFilterPicker trigger", () => {
 
         expect(trigger(wrapper).attributes("aria-expanded")).toBe("false");
     });
+
+    it("is 36px tall in the button variant, with a 36px clear button", async () => {
+        const wrapper = await mountPicker("accounts", accounts, ["a"]);
+
+        expect(trigger(wrapper).classes()).toContain("h-9");
+        expect(clearButton(wrapper).classes()).toContain("h-9");
+        expect(clearButton(wrapper).classes()).toContain("w-9");
+    });
 });
 
 describe("TransactionsFilterPicker focus", () => {
@@ -173,6 +181,13 @@ describe("TransactionsFilterPicker pill", () => {
 
         expect(trigger(wrapper).text()).toBe("Savings");
         expect(clearButton(wrapper).exists()).toBe(false);
+    });
+
+    it("is 36px tall with the button radius, not a chip", async () => {
+        const wrapper = await mountPill("accounts", accounts, ["b"]);
+
+        expect(trigger(wrapper).classes()).toContain("h-9");
+        expect(trigger(wrapper).classes()).not.toContain("rounded-full");
     });
 
     it("opens a sheet named for the filter when tapped", async () => {

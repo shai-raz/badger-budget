@@ -116,8 +116,7 @@ const categorySummary = computed(() => summaryOf("categories", props.categoryOpt
             </div>
             <Button
                 label="Clear all"
-                severity="secondary"
-                outlined
+                link
                 size="small"
                 :disabled="activeFilterCount === 0"
                 @click="emit('clear-all')"

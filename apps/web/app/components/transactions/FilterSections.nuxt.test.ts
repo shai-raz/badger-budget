@@ -129,6 +129,13 @@ describe("TransactionsFilterSections", () => {
         expect(clearAll(wrapper).attributes("disabled")).toBeDefined();
     });
 
+    it("renders Clear all as a text action, not an outlined button", async () => {
+        const wrapper = await mountSections({ activeFilterCount: 2 });
+
+        expect(clearAll(wrapper).classes()).toContain("p-button-link");
+        expect(clearAll(wrapper).classes()).not.toContain("p-button-outlined");
+    });
+
     it("emits clear-all when Clear all is enabled and pressed", async () => {
         const wrapper = await mountSections({ activeFilterCount: 2 });
 

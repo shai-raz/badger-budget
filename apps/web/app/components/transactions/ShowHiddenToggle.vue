@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * The eye toggle that includes hidden accounts' transactions in the list. Pressed while it is on. The `pill` variant
- * (mobile chip row) matches the filter pills: rounded, never outlined.
+ * (mobile chip row) matches the filter pills: never outlined, otherwise the same 36px button as the desktop toolbar.
  */
 const props = withDefaults(defineProps<{ variant?: "button" | "pill" }>(), { variant: "button" });
 
@@ -19,9 +19,9 @@ function toggle(): void {
         v-tooltip.bottom="LABEL"
         icon="pi pi-eye"
         size="small"
+        class="h-9 w-9"
         :severity="showHidden ? undefined : 'secondary'"
         :outlined="props.variant === 'button' && !showHidden"
-        :class="props.variant === 'pill' ? 'rounded-full' : undefined"
         :aria-pressed="showHidden"
         :aria-label="LABEL"
         @click="toggle()"

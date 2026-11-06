@@ -34,17 +34,24 @@ describe("TransactionsShowHiddenToggle", () => {
         const wrapper = await mountToggle(false);
 
         expect(toggleButton(wrapper).classes()).toContain("p-button-outlined");
-        expect(toggleButton(wrapper).classes()).not.toContain("rounded-full");
     });
 
-    it("is a filled, rounded pill in the mobile chip row, never outlined", async () => {
+    it("is 36px square in both variants, with the button radius", async () => {
+        for (const variant of ["button", "pill"] as const) {
+            const wrapper = await mountToggle(false, variant);
+
+            expect(toggleButton(wrapper).classes()).toContain("h-9");
+            expect(toggleButton(wrapper).classes()).toContain("w-9");
+            expect(toggleButton(wrapper).classes()).not.toContain("rounded-full");
+        }
+    });
+
+    it("is a filled pill in the mobile chip row, never outlined", async () => {
         const off = await mountToggle(false, "pill");
         expect(toggleButton(off).classes()).not.toContain("p-button-outlined");
-        expect(toggleButton(off).classes()).toContain("rounded-full");
 
         const on = await mountToggle(true, "pill");
         expect(toggleButton(on).classes()).not.toContain("p-button-outlined");
-        expect(toggleButton(on).classes()).toContain("rounded-full");
     });
 
     it("toggles the model on click", async () => {
