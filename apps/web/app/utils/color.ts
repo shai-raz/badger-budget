@@ -35,3 +35,14 @@ export const hexToRgba = (hex: string, alpha: number): string => {
     const blue = parseInt(normalized.slice(5, 7), 16);
     return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 };
+
+const CSS_VAR_COLOR = /^var\(--[A-Za-z0-9-]+\)$/;
+
+/**
+ * The trimmed `var(--token)` when `value` is exactly one custom property, else `null`. Lets a colour follow the theme
+ * palette instead of a fixed hex; anything else (a fallback list, extra declarations) is rejected.
+ */
+export const cssVarColor = (value: string | null | undefined): string | null => {
+    const trimmed = (value ?? "").trim();
+    return CSS_VAR_COLOR.test(trimmed) ? trimmed : null;
+};
