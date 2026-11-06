@@ -115,7 +115,10 @@ export function withTransactionFilters(
  * row links here.
  */
 export function accountTransactionsLink(accountId: string): RouteLocationRaw {
-    return { path: "/transactions", query: { accounts: accountId } };
+    return {
+        path: "/transactions",
+        query: serializeTransactionFilters({ ...DEFAULT_TRANSACTION_FILTERS, accountIds: [accountId] }),
+    };
 }
 
 /** Whether two filter states would produce the same URL. */

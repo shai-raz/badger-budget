@@ -37,7 +37,7 @@ const stale = computed(() =>
 
 <template>
     <Card
-        class="relative h-full transition-colors hover:bg-surface-50 active:bg-surface-100 dark:hover:bg-surface-800 dark:active:bg-surface-700 has-[a:focus-visible]:outline has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-primary"
+        class="relative h-full transition-colors has-[a:hover]:bg-surface-50 has-[a:active]:bg-surface-100 dark:has-[a:hover]:bg-surface-800 dark:has-[a:active]:bg-surface-700 has-[a:focus-visible]:outline has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-primary"
         :pt="{ body: { class: 'h-full' }, content: { class: 'flex h-full flex-col' } }"
     >
         <template #content>
@@ -52,7 +52,7 @@ const stale = computed(() =>
                         <!-- Stretched link: its ::after covers the whole tile, so ⋮ and Update sit above it (z-10). -->
                         <NuxtLink
                             :to="accountTransactionsLink(account.id)"
-                            class="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
+                            class="after:absolute after:inset-0 after:z-[1] after:content-[''] focus-visible:outline-none"
                             >{{ account.name }}</NuxtLink
                         >
                     </p>

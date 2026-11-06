@@ -41,7 +41,7 @@ const handleMenu = (event: Event) => emit("menuToggle", { account: props.account
 
 <template>
     <div
-        class="relative flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-surface-50 active:bg-surface-100 dark:hover:bg-surface-800 dark:active:bg-surface-700 has-[a:focus-visible]:outline has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-primary"
+        class="relative flex flex-col gap-2 px-4 py-3 transition-colors has-[a:hover]:bg-surface-50 has-[a:active]:bg-surface-100 dark:has-[a:hover]:bg-surface-800 dark:has-[a:active]:bg-surface-700 has-[a:focus-visible]:outline has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-primary"
     >
         <div class="flex items-center gap-3">
             <SharedEntityAvatar
@@ -54,7 +54,7 @@ const handleMenu = (event: Event) => emit("menuToggle", { account: props.account
                     <!-- Stretched link: its ::after covers the whole row, so ⋮ and Update sit above it (z-10). -->
                     <NuxtLink
                         :to="accountTransactionsLink(account.id)"
-                        class="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
+                        class="after:absolute after:inset-0 after:z-[1] after:content-[''] focus-visible:outline-none"
                         >{{ account.name }}</NuxtLink
                     >
                 </p>
