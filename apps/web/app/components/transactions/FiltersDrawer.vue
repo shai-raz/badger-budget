@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The narrow-desktop Filters drawer: a right-hand drawer over the page, opened with its sections expanded. Changes
+ * The desktop Filters drawer: a right-hand drawer over the page, opened with its sections expanded. Changes
  * apply live, since the selections are the page's URL-backed models passed straight through.
  */
 import type { TransactionType } from "@badger/shared-data";

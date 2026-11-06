@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import type { TransactionType } from "@badger/shared-data";
 import { TRANSACTIONS_PRESETS, type PeriodSelection } from "~/utils/monthRange";
-import { TRANSACTIONS_TOOLBAR_FULL } from "~/utils/breakpoints";
 import type { FilterOption } from "~/utils/filterOptions";
 
-// Desktop-only inputs default to empty. The mobile instance renders the same option lists for its pills, so it passes
-// them as well; the defaults only cover callers that render no pickers at all.
+// The option lists default to empty. Desktop and the mobile instance both render the pickers, so both pass them; the
+// defaults only cover callers that render no pickers at all.
 withDefaults(
     defineProps<{
         categoryOptions?: FilterOption[];
@@ -34,93 +33,33 @@ const selectedTypes = defineModel<TransactionType[]>("selectedTypes", { default:
 const showHidden = defineModel<boolean>("showHidden", { default: false });
 const filtersOpen = defineModel<boolean>("filtersOpen", { default: false });
 
-// Desktop shows the full toolbar in the body; below md the same controls render
-// in the page header's second row (LayoutPageHeader's toolbar slot).
+// Desktop renders its toolbar in the body; below md the same controls render in the page header's second row
+// (LayoutPageHeader's toolbar slot).
 const isDesktop = useIsDesktop();
 
-// Between md and the full-toolbar width the drawer filters move behind a Filters button, and the quick pickers
-// scroll sideways beside it. The drawer belongs to this toolbar, so it closes when the layout changes, including
-// crossing md, which unmounts the narrow branch that holds it.
-const fullToolbar = useMediaQuery(TRANSACTIONS_TOOLBAR_FULL);
+// The desktop drawer belongs to this toolbar, so it closes when the layout changes, including crossing md, which
+// unmounts the desktop branch that holds it.
 const drawerOpen = ref(false);
-watch([isDesktop, fullToolbar], () => {
+watch(isDesktop, () => {
     drawerOpen.value = false;
 });
 </script>
 
 <template>
     <div>
-        <!-- Desktop toolbar: search, then the period and one picker per filter, then show hidden and Clear all. The
-             search box shrinks first; everything else keeps its size. -->
+        <!-- Desktop, one layout from md up: search, a Filters button, then the quick pickers in one row that scrolls
+             sideways and never wraps. The pickers sit inside the scroll row, but their popovers are appended to the
+             body, so the row never clips them. -->
         <div
-            v-if="isDesktop && fullToolbar"
-            class="flex flex-wrap items-center gap-2"
-        >
-            <IconField class="min-w-[10rem] max-w-[340px] flex-1">
-                <InputIcon class="pi pi-search" />
-                <InputText
-                    v-model="searchQuery"
-                    placeholder="Search transactions"
-                    class="w-full"
-                />
-            </IconField>
-
-            <SharedPeriodPicker
-                v-model="period"
-                class="shrink-0"
-                :presets="TRANSACTIONS_PRESETS"
-                resettable
-            />
-
-            <TransactionsFilterPicker
-                v-model:selected="selectedCategoryIds"
-                class="shrink-0"
-                noun="categories"
-                :options="categoryOptions"
-            />
-            <TransactionsFilterPicker
-                v-model:selected="selectedAccountIds"
-                class="shrink-0"
-                noun="accounts"
-                :options="accountOptions"
-            />
-            <TransactionsFilterPicker
-                v-model:selected="selectedTypes"
-                class="shrink-0"
-                noun="types"
-                :options="typeOptions"
-            />
-
-            <TransactionsShowHiddenToggle
-                v-model="showHidden"
-                class="shrink-0"
-            />
-
-            <!-- Last in the row. Always mounted and hidden with visibility, so its width holds and the search box
-                 never reflows the pickers; visibility also keeps it out of the tab order. -->
-            <Button
-                label="Clear all"
-                text
-                size="small"
-                class="shrink-0"
-                :class="{ invisible: activeFilterCount < 2 }"
-                @click="emit('clear-all')"
-            />
-        </div>
-
-        <!-- Narrow desktop (md up to the full-toolbar width): search and a Filters button, then the quick pickers in one
-             row that scrolls sideways. The pickers sit inside the scroll row, but their popovers are appended to the body,
-             so the row never clips them. -->
-        <div
-            v-else-if="isDesktop"
+            v-if="isDesktop"
             class="flex items-center gap-2"
         >
-            <IconField class="w-[14rem] shrink-0">
+            <IconField class="w-[340px] min-w-[10rem] shrink-[1000]">
                 <InputIcon class="pi pi-search" />
                 <InputText
                     v-model="searchQuery"
                     placeholder="Search transactions"
-                    class="w-full"
+                    class="h-9 w-full"
                 />
             </IconField>
 
@@ -133,7 +72,7 @@ watch([isDesktop, fullToolbar], () => {
 
             <!-- The toolbar sits on the page scroller, not a card, so the arrows back onto the page colour. -->
             <SharedScrollRow
-                class="min-w-0 flex-1"
+                class="min-w-0 flex-auto"
                 label="Quick filters"
                 backdrop-class="bg-surface-50 dark:bg-surface-950"
             >
@@ -168,12 +107,13 @@ watch([isDesktop, fullToolbar], () => {
                     class="shrink-0"
                 />
 
-                <!-- Last in the row, mounted and hidden like the full toolbar's, so its width holds. -->
+                <!-- Last in the row. Always mounted and hidden with visibility, so its width holds and the search box
+                     never reflows the pickers; visibility also keeps it out of the tab order. -->
                 <Button
                     label="Clear all"
                     text
                     size="small"
-                    class="shrink-0"
+                    class="h-9 shrink-0"
                     :class="{ invisible: activeFilterCount < 2 }"
                     @click="emit('clear-all')"
                 />

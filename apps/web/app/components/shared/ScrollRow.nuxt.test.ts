@@ -38,6 +38,33 @@ describe("ScrollRow", () => {
         wrapper.unmount();
     });
 
+    it("shows the end arrow when content grows without a scroll", async () => {
+        // The row re-reads its edges from its ResizeObserver, so capture the callback before it mounts.
+        let resized: () => void = () => {};
+        vi.stubGlobal(
+            "ResizeObserver",
+            class {
+                constructor(callback: () => void) {
+                    resized = callback;
+                }
+                observe() {}
+                disconnect() {}
+            },
+        );
+
+        const { wrapper, track } = await mountRow({ scrollWidth: 400, clientWidth: 400 });
+        expect(wrapper.find('[aria-label="Scroll right"]').exists()).toBe(false);
+
+        // Content widens with no scroll event, the way a picker label does.
+        Object.defineProperty(track, "scrollWidth", { value: 900, configurable: true });
+        resized();
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.find('[aria-label="Scroll right"]').exists()).toBe(true);
+        wrapper.unmount();
+        vi.unstubAllGlobals();
+    });
+
     it("backs each arrow with the surface the caller passes", async () => {
         const { wrapper } = await mountRow(
             { scrollWidth: 900, clientWidth: 400 },

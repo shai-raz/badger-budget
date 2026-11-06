@@ -139,8 +139,8 @@ const typeOptions = computed<FilterOption<TransactionType>[]>(() => {
 // collapsible summary, bottom-sheet filters, and tap-to-navigate rows.
 const isDesktop = useIsDesktop();
 
-// Mobile bottom-sheet visibility. The compact header's Filters button toggles it. The desktop toolbar has no drawer,
-// so the flag only matters below md.
+// Mobile bottom-sheet visibility. The compact header's Filters button toggles it. Desktop has its own drawer in the
+// toolbar, so the flag only matters below md.
 const mobileFiltersOpen = ref(false);
 
 // Server-driven, paginated list.
@@ -342,7 +342,7 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
                 class="shrink-0 md:mb-4"
             />
 
-            <!-- Desktop toolbar: search, the period and one picker per filter, then show hidden and Clear all. -->
+            <!-- Desktop toolbar: search, a Filters button, then the quick pickers in one row. -->
             <TransactionsToolbar
                 v-if="isDesktop"
                 v-model:search-query="searchQuery"
