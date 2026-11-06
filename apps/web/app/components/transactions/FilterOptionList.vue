@@ -109,8 +109,12 @@ const ALL_ROW_ATTRS = computed(() => (props.autofocusFirst ? { autofocus: true }
                 <!-- Purely visual: the button's aria-label carries the state and count. A span rather than a
                      Checkbox, because an input cannot sit inside a button. -->
                 <span
-                    class="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-surface-300 text-xs dark:border-surface-600"
-                    :class="isSelected(option.value) && 'border-primary bg-primary text-primary-contrast'"
+                    class="flex h-4 w-4 shrink-0 items-center justify-center rounded border text-xs"
+                    :class="
+                        isSelected(option.value)
+                            ? 'border-primary bg-primary text-primary-contrast'
+                            : 'border-surface-300 dark:border-surface-600'
+                    "
                     aria-hidden="true"
                 >
                     <i
