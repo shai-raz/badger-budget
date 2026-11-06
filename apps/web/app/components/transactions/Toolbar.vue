@@ -93,13 +93,14 @@ const filtersBadgePt = computed(() => ({
                 class="shrink-0"
             />
 
-            <!-- Last in the row, so appearing never shifts the pickers. -->
+            <!-- Last in the row. Always mounted and hidden with visibility, so its width holds and the search box
+                 never reflows the pickers; visibility also keeps it out of the tab order. -->
             <Button
-                v-if="activeFilterCount >= 2"
                 label="Clear all"
                 text
                 size="small"
                 class="shrink-0"
+                :class="{ invisible: activeFilterCount < 2 }"
                 @click="emit('clear-all')"
             />
         </div>

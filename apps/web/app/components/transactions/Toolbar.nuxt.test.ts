@@ -68,18 +68,20 @@ describe("Toolbar desktop", () => {
         expect(wrapper.findAll('[aria-haspopup="dialog"]')).toHaveLength(4);
     });
 
-    it("hides Clear all with one active filter", async () => {
+    it("keeps Clear all mounted but hidden with one active filter", async () => {
         layout.desktop = true;
         const wrapper = await mountToolbar({ activeFilterCount: 1 });
 
-        expect(buttonByText(wrapper, "Clear all")).toBeUndefined();
+        const clearAll = buttonByText(wrapper, "Clear all");
+        expect(clearAll).toBeDefined();
+        expect(clearAll!.classes()).toContain("invisible");
     });
 
     it("shows Clear all with two active filters", async () => {
         layout.desktop = true;
         const wrapper = await mountToolbar({ activeFilterCount: 2 });
 
-        expect(buttonByText(wrapper, "Clear all")).toBeDefined();
+        expect(buttonByText(wrapper, "Clear all")!.classes()).not.toContain("invisible");
     });
 
     it("emits clear-all when Clear all is clicked", async () => {
