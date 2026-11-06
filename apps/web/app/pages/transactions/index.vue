@@ -287,7 +287,14 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
                     <TransactionsToolbar
                         v-model:search-query="searchQuery"
                         v-model:period="period"
+                        v-model:selected-category-ids="selectedCategoryIds"
+                        v-model:selected-account-ids="selectedAccountIds"
+                        v-model:selected-types="selectedTypes"
+                        v-model:show-hidden="showHidden"
                         v-model:filters-open="mobileFiltersOpen"
+                        :category-options="categoryOptions"
+                        :account-options="accountOptions"
+                        :type-options="typeOptions"
                         :drawer-filter-count="drawerFilterCount"
                     />
                 </div>

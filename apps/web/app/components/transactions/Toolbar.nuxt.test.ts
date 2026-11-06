@@ -3,7 +3,7 @@ import { mockNuxtImport, mountSuspended } from "@nuxt/test-utils/runtime";
 import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { ref } from "vue";
 import Toolbar from "./Toolbar.vue";
-import { currentMonthSelection } from "~/utils/monthRange";
+import { currentMonthSelection, stepRange, type PeriodSelection } from "~/utils/monthRange";
 import type { FilterOption } from "~/utils/filterOptions";
 
 // Toggled per test to cover the md+ and below-md layouts. Shared, so a test can cross md while mounted.
@@ -54,13 +54,21 @@ afterEach(() => {
     fullToolbar.value = true;
 });
 
-const mountToolbar = async (props: { activeFilterCount?: number; drawerFilterCount?: number } = {}) => {
+const mountToolbar = async (
+    props: {
+        activeFilterCount?: number;
+        drawerFilterCount?: number;
+        period?: PeriodSelection;
+        selectedCategoryIds?: string[];
+    } = {},
+) => {
     const wrapper = await mountSuspended(Toolbar, {
         props: {
-            period: currentMonthSelection(new Date()),
+            period: props.period ?? currentMonthSelection(new Date()),
             categoryOptions,
             accountOptions,
             typeOptions,
+            selectedCategoryIds: props.selectedCategoryIds ?? [],
             activeFilterCount: props.activeFilterCount ?? 0,
             drawerFilterCount: props.drawerFilterCount ?? 0,
         },
@@ -115,20 +123,75 @@ describe("Toolbar desktop", () => {
 });
 
 describe("Toolbar below md", () => {
-    it("shows the Filters button with the drawer count as its badge", async () => {
+    it("shows the Filters button with the drawer count as its text", async () => {
         desktop.value = false;
         const wrapper = await mountToolbar({ drawerFilterCount: 3, activeFilterCount: 4 });
 
-        expect(wrapper.find('[aria-label="Filters"]').exists()).toBe(true);
-        expect(wrapper.find(".p-badge").text()).toBe("3");
+        const filters = wrapper.find('[aria-label="Filters, 3 active"]');
+        expect(filters.exists()).toBe(true);
+        expect(filters.text()).toBe("3");
+        expect(wrapper.find(".p-badge").exists()).toBe(false);
     });
 
-    it("has no Clear all and no per-filter pickers", async () => {
+    it("shows a plain Filters button with no count when no drawer filter is active", async () => {
+        desktop.value = false;
+        const wrapper = await mountToolbar({ drawerFilterCount: 0, activeFilterCount: 1 });
+
+        const filters = wrapper.find('[aria-label="Filters"]');
+        expect(filters.exists()).toBe(true);
+        expect(filters.text()).toBe("");
+    });
+
+    it("puts the period, one pill per filter and show hidden in the scrolling row", async () => {
+        desktop.value = false;
+        const wrapper = await mountToolbar({ drawerFilterCount: 1 });
+
+        const row = wrapper.find('[aria-label="Quick filters"]');
+        expect(row.exists()).toBe(true);
+        // The period picker plus the categories, accounts and type pills.
+        expect(row.findAll('[aria-haspopup="dialog"]')).toHaveLength(4);
+        expect(row.find('[aria-label="Show hidden transactions"]').exists()).toBe(true);
+    });
+
+    it("opens a one-filter sheet from a pill", async () => {
+        desktop.value = false;
+        const wrapper = await mountToolbar();
+        const categories = wrapper
+            .find('[aria-label="Quick filters"]')
+            .findAll("button")
+            .find((b) => b.text() === "Categories");
+
+        await categories!.trigger("click");
+        await flushPromises();
+
+        expect(document.body.querySelector("[data-bottom-sheet]")?.getAttribute("aria-label")).toBe("Categories");
+    });
+
+    it("shows a selected pill with its name and no clear button", async () => {
+        desktop.value = false;
+        const wrapper = await mountToolbar({ selectedCategoryIds: ["c1"] });
+
+        const row = wrapper.find('[aria-label="Quick filters"]');
+        expect(row.findAll("button").some((b) => b.text() === "Groceries")).toBe(true);
+        expect(row.find('[aria-label="Clear categories filter"]').exists()).toBe(false);
+    });
+
+    it("has no Clear all", async () => {
         desktop.value = false;
         const wrapper = await mountToolbar({ drawerFilterCount: 1, activeFilterCount: 2 });
 
         expect(buttonByText(wrapper, "Clear all")).toBeUndefined();
-        expect(wrapper.find('[aria-label="Clear categories filter"]').exists()).toBe(false);
+    });
+
+    it("shows the period's × only away from this month", async () => {
+        desktop.value = false;
+        const wrapper = await mountToolbar();
+        expect(wrapper.find('[aria-label="Back to this month"]').exists()).toBe(false);
+
+        const previousMonth = stepRange(currentMonthSelection(new Date()), -1);
+        const away = await mountToolbar({ period: previousMonth });
+
+        expect(away.find('[aria-label="Back to this month"]').exists()).toBe(true);
     });
 });
 
