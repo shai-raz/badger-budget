@@ -1,6 +1,19 @@
 {
     "releases": [
         {
+            "version": "0.14.1",
+            "date": "2026-11-06",
+            "items": [
+                {
+                    "type": "fix",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "clear a mobile filter pill from its own ×",
+                    "pr": 116
+                }
+            ]
+        },
+        {
             "version": "0.14.0",
             "date": "2026-11-06",
             "items": [
