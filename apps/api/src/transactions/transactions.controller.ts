@@ -22,6 +22,10 @@ import { PaginatedTransactionsResponseDto } from "./dto/transaction-list-respons
 import { TransactionsSummaryResponseDto } from "./dto/transactions-summary-response.dto";
 import { CategoryFacetsQueryDto } from "./dto/category-facets-query.dto";
 import { TransactionCategoryFacetsResponseDto } from "./dto/category-facets-response.dto";
+import { AccountFacetsQueryDto } from "./dto/account-facets-query.dto";
+import { TransactionAccountFacetsResponseDto } from "./dto/account-facets-response.dto";
+import { TypeFacetsQueryDto } from "./dto/type-facets-query.dto";
+import { TransactionTypeFacetsResponseDto } from "./dto/type-facets-response.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 
@@ -72,7 +76,7 @@ export class TransactionsController {
     }
 
     // NOTE: these MUST stay above `@Get(":id")` — otherwise "summary" and
-    // "category-facets" are captured as an :id and routed to findOne.
+    // "category-facets", "account-facets" and "type-facets" are captured as an :id and routed to findOne.
     @Get("summary")
     @ApiOperation({
         summary: "Aggregate totals (income/expenses/net/transferred/available) for the filtered list",
@@ -112,6 +116,44 @@ export class TransactionsController {
         @CurrentUser() user: any,
     ): Promise<TransactionCategoryFacetsResponseDto> {
         return this.transactionsService.getCategoryFacets(user.id, query);
+    }
+
+    @Get("account-facets")
+    @ApiOperation({
+        summary: "Per-account transaction counts for the current filters, ignoring the account filter",
+        description:
+            "Applies the same filters as `GET /transactions` (search, types, categoryIds, date range, includeHidden, " +
+            "legacy budgetId) but ignores `accountIds`, so every account with rows in the rest of the view is listed.",
+    })
+    @ApiResponse({
+        status: 200,
+        description: "Per-account transaction counts.",
+        type: TransactionAccountFacetsResponseDto,
+    })
+    getAccountFacets(
+        @Query() query: AccountFacetsQueryDto,
+        @CurrentUser() user: any,
+    ): Promise<TransactionAccountFacetsResponseDto> {
+        return this.transactionsService.getAccountFacets(user.id, query);
+    }
+
+    @Get("type-facets")
+    @ApiOperation({
+        summary: "Per-type transaction counts for the current filters, ignoring the type filter",
+        description:
+            "Applies the same filters as `GET /transactions` (search, accountIds, categoryIds, date range, includeHidden, " +
+            "legacy budgetId) but ignores `types`, so every type with rows in the rest of the view is listed.",
+    })
+    @ApiResponse({
+        status: 200,
+        description: "Per-type transaction counts.",
+        type: TransactionTypeFacetsResponseDto,
+    })
+    getTypeFacets(
+        @Query() query: TypeFacetsQueryDto,
+        @CurrentUser() user: any,
+    ): Promise<TransactionTypeFacetsResponseDto> {
+        return this.transactionsService.getTypeFacets(user.id, query);
     }
 
     @Get(":id")

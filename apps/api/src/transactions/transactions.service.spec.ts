@@ -1075,14 +1075,74 @@ describe("TransactionsService", () => {
                 expect(result.transferred).toBe(0);
             });
 
-            it("should skip the linked query and count legs when filtering by account", async () => {
-                mockPrismaService.transaction.groupBy.mockResolvedValueOnce([group("transfer", "out", 370)]);
-                mockPrismaService.transaction.findFirst.mockResolvedValue(null);
+            // Synthetic account ids. Checking pays 4740 out: a linked 1500 transfer to savings (source out on
+            // checking, mirror in on savings) plus an unlinked 3240 payoff.
+            describe("account selection (AC4)", () => {
+                const CHECKING = "acc-checking";
+                const SAVINGS = "acc-savings";
+                const linkedClause = (ids: string[]) => ({
+                    OR: [
+                        { counterpartOf: { is: { accountId: { in: ids } } } },
+                        { counterpart: { is: { accountId: { in: ids } } } },
+                    ],
+                });
+                const notNullClause = {
+                    OR: [{ counterpartOfId: { not: null } }, { counterpart: { isNot: null } }],
+                };
 
-                const result = await service.getSummary("test-user", { accountIds: ["acc-1"] });
+                it.each([
+                    {
+                        name: "no selection",
+                        accountIds: undefined,
+                        groups: [group("transfer", "out", 4740), group("transfer", "in", 1500)],
+                        linked: [linkedBucket("out", 1500), linkedBucket("in", 1500)],
+                        transferred: 3240,
+                        clause: notNullClause,
+                    },
+                    {
+                        name: "checking only",
+                        accountIds: [CHECKING],
+                        groups: [group("transfer", "out", 4740)],
+                        linked: [],
+                        transferred: 4740,
+                        clause: linkedClause([CHECKING]),
+                    },
+                    {
+                        name: "savings only",
+                        accountIds: [SAVINGS],
+                        groups: [group("transfer", "in", 1500)],
+                        linked: [],
+                        transferred: -1500,
+                        clause: linkedClause([SAVINGS]),
+                    },
+                    {
+                        name: "both accounts",
+                        accountIds: [CHECKING, SAVINGS],
+                        groups: [group("transfer", "out", 4740), group("transfer", "in", 1500)],
+                        linked: [linkedBucket("out", 1500), linkedBucket("in", 1500)],
+                        transferred: 3240,
+                        clause: linkedClause([CHECKING, SAVINGS]),
+                    },
+                ])(
+                    "$name: backs the pair out only when both legs are selected",
+                    async ({ accountIds, groups, linked, transferred, clause }) => {
+                        mockPrismaService.transaction.groupBy
+                            .mockResolvedValueOnce(groups)
+                            .mockResolvedValueOnce(linked);
+                        mockPrismaService.transaction.findFirst.mockResolvedValue(null);
 
-                expect(mockPrismaService.transaction.groupBy).toHaveBeenCalledTimes(1);
-                expect(result.transferred).toBe(370);
+                        const result = await service.getSummary("test-user", accountIds ? { accountIds } : {});
+
+                        expect(result.transferred).toBe(transferred);
+                        expect(mockPrismaService.transaction.groupBy).toHaveBeenCalledTimes(2);
+                        const groupByCalls = mockPrismaService.transaction.groupBy.mock.calls.map(([args]) => args);
+                        if (accountIds) {
+                            expect(groupByCalls[0].where.accountId).toEqual({ in: accountIds });
+                        }
+                        expect(groupByCalls[1].where.AND).toContainEqual({ type: "transfer" });
+                        expect(groupByCalls[1].where.AND).toContainEqual(clause);
+                    },
+                );
             });
 
             it("should keep the type filter and restrict linked legs to transfers via AND", async () => {
@@ -1210,6 +1270,163 @@ describe("TransactionsService", () => {
             const result = await service.getCategoryFacets("test-user", { search: "nothing" });
 
             expect(result).toEqual({ categories: [] });
+        });
+    });
+
+    describe("getAccountFacets", () => {
+        it("groups by accountId and ignores the account selection but applies the other filters", async () => {
+            mockPrismaService.transaction.groupBy.mockResolvedValueOnce([]);
+
+            await service.getAccountFacets("test-user", {
+                accountIds: ["acc-1"],
+                categoryIds: ["c1", "uncategorized"],
+                types: ["expense"],
+                search: "rent",
+                includeHidden: true,
+            });
+
+            expect(mockPrismaService.transaction.groupBy).toHaveBeenCalledWith({
+                by: ["accountId"],
+                where: {
+                    userId: "test-user",
+                    deletedAt: null,
+                    type: { in: ["expense"] },
+                    AND: [
+                        { OR: [{ categoryId: { in: ["c1"] } }, { categoryId: null }] },
+                        {
+                            OR: [
+                                { description: { contains: "rent", mode: "insensitive" } },
+                                { additionalDescription: { contains: "rent", mode: "insensitive" } },
+                                { category: { name: { contains: "rent", mode: "insensitive" } } },
+                            ],
+                        },
+                    ],
+                },
+                _count: { _all: true },
+            });
+            expect(mockPrismaService.transaction.groupBy.mock.calls[0][0].where).not.toHaveProperty("accountId");
+        });
+
+        it("follows the show-hidden toggle: hidden=false only when includeHidden is explicitly false", async () => {
+            mockPrismaService.transaction.groupBy
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([]);
+
+            await service.getAccountFacets("test-user", { includeHidden: false });
+            await service.getAccountFacets("test-user", { includeHidden: true });
+            await service.getAccountFacets("test-user", {});
+
+            const [hiddenOff, hiddenOn, hiddenAbsent] = mockPrismaService.transaction.groupBy.mock.calls.map(
+                (call) => call[0].where,
+            );
+            expect(hiddenOff.hidden).toBe(false);
+            expect(hiddenOn).not.toHaveProperty("hidden");
+            expect(hiddenAbsent).not.toHaveProperty("hidden");
+        });
+
+        it("maps grouped rows to accounts", async () => {
+            mockPrismaService.transaction.groupBy.mockResolvedValueOnce([
+                { accountId: "acc-1", _count: { _all: 4 } },
+                { accountId: "acc-2", _count: { _all: 1 } },
+            ]);
+
+            const result = await service.getAccountFacets("test-user", {});
+
+            expect(result).toEqual({
+                accounts: [
+                    { accountId: "acc-1", count: 4 },
+                    { accountId: "acc-2", count: 1 },
+                ],
+            });
+        });
+
+        it("returns an empty accounts list when nothing matches", async () => {
+            mockPrismaService.transaction.groupBy.mockResolvedValueOnce([]);
+
+            const result = await service.getAccountFacets("test-user", { search: "nothing" });
+
+            expect(result).toEqual({ accounts: [] });
+        });
+    });
+
+    describe("getTypeFacets", () => {
+        it("groups by type and ignores the type selection but applies the other filters", async () => {
+            mockPrismaService.transaction.groupBy.mockResolvedValueOnce([]);
+
+            await service.getTypeFacets("test-user", {
+                types: ["income", "expense"],
+                accountIds: ["acc-1"],
+                startDate: "2025-12-01",
+                endDate: "2025-12-31",
+            });
+
+            expect(mockPrismaService.transaction.groupBy).toHaveBeenCalledWith({
+                by: ["type"],
+                where: {
+                    userId: "test-user",
+                    deletedAt: null,
+                    accountId: { in: ["acc-1"] },
+                    transactionDate: {
+                        gte: new Date("2025-12-01"),
+                        lte: new Date("2025-12-31"),
+                    },
+                },
+                _count: { _all: true },
+            });
+        });
+
+        it("follows the show-hidden toggle: hidden=false only when includeHidden is explicitly false", async () => {
+            mockPrismaService.transaction.groupBy
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([]);
+
+            await service.getTypeFacets("test-user", { includeHidden: false });
+            await service.getTypeFacets("test-user", { includeHidden: true });
+            await service.getTypeFacets("test-user", {});
+
+            const [hiddenOff, hiddenOn, hiddenAbsent] = mockPrismaService.transaction.groupBy.mock.calls.map(
+                (call) => call[0].where,
+            );
+            expect(hiddenOff.hidden).toBe(false);
+            expect(hiddenOn).not.toHaveProperty("hidden");
+            expect(hiddenAbsent).not.toHaveProperty("hidden");
+        });
+
+        it("maps grouped rows to types", async () => {
+            mockPrismaService.transaction.groupBy.mockResolvedValueOnce([
+                { type: "expense", _count: { _all: 7 } },
+                { type: "transfer", _count: { _all: 2 } },
+            ]);
+
+            const result = await service.getTypeFacets("test-user", {});
+
+            expect(result).toEqual({
+                types: [
+                    { type: "expense", count: 7 },
+                    { type: "transfer", count: 2 },
+                ],
+            });
+        });
+
+        it("drops a row whose type is not a known transaction type", async () => {
+            mockPrismaService.transaction.groupBy.mockResolvedValueOnce([
+                { type: "income", _count: { _all: 1 } },
+                { type: "bogus", _count: { _all: 9 } },
+            ]);
+
+            const result = await service.getTypeFacets("test-user", {});
+
+            expect(result).toEqual({ types: [{ type: "income", count: 1 }] });
+        });
+
+        it("returns an empty types list when nothing matches", async () => {
+            mockPrismaService.transaction.groupBy.mockResolvedValueOnce([]);
+
+            const result = await service.getTypeFacets("test-user", { search: "nothing" });
+
+            expect(result).toEqual({ types: [] });
         });
     });
 

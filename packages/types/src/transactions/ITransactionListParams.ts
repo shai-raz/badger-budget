@@ -78,3 +78,27 @@ export type ITransactionCategoryFacetParams = Omit<
     ITransactionListParams,
     "page" | "limit" | "sortBy" | "sortOrder" | "categoryIds" | "categoryId"
 >;
+
+/**
+ * Params for the `GET /transactions/account-facets` per-account counts.
+ *
+ * `includeHidden` is kept: the facet follows the list's show-hidden toggle. The
+ * account filter (`accountIds`) is omitted because the facet counts ignore the
+ * account selection — every account stays offered while one is picked.
+ */
+export type ITransactionAccountFacetParams = Omit<
+    ITransactionListParams,
+    "page" | "limit" | "sortBy" | "sortOrder" | "accountIds"
+>;
+
+/**
+ * Params for the `GET /transactions/type-facets` per-type counts.
+ *
+ * `includeHidden` is kept: the facet follows the list's show-hidden toggle. The
+ * type filter (`types`) is omitted because the facet counts ignore the type
+ * selection — every type stays offered while one is picked.
+ */
+export type ITransactionTypeFacetParams = Omit<
+    ITransactionListParams,
+    "page" | "limit" | "sortBy" | "sortOrder" | "types"
+>;

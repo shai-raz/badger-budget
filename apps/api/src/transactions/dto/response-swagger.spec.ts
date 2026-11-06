@@ -23,6 +23,8 @@ const dtos = loadWithSwcDesignTypes(() => ({
     categoryFacets: jest.requireActual<typeof import("./category-facets-response.dto")>(
         "./category-facets-response.dto",
     ),
+    accountFacets: jest.requireActual<typeof import("./account-facets-response.dto")>("./account-facets-response.dto"),
+    typeFacets: jest.requireActual<typeof import("./type-facets-response.dto")>("./type-facets-response.dto"),
     category: jest.requireActual<typeof import("./category-response.dto")>("./category-response.dto"),
     transaction: jest.requireActual<typeof import("./transaction-response.dto")>("./transaction-response.dto"),
     sheetConnection: jest.requireActual<typeof import("../../google-sheets/dto/sheet-connection.dto")>(
@@ -57,5 +59,17 @@ const rows = [
 describe("response DTO Swagger metadata", () => {
     it.each(rows)("$dto.name / $property documents its type and nullability", ({ dto, property, type }) => {
         expect(apiPropertyOf(dto.prototype, property)).toEqual(expect.objectContaining({ type, nullable: true }));
+    });
+
+    it("documents the account id of an account facet as a string", () => {
+        expect(apiPropertyOf(dtos.accountFacets.TransactionAccountFacetDto.prototype, "accountId")).toEqual(
+            expect.objectContaining({ type: String }),
+        );
+    });
+
+    it("documents the transaction type of a type facet as the TRANSACTION_TYPES enum", () => {
+        expect(apiPropertyOf(dtos.typeFacets.TransactionTypeFacetDto.prototype, "type")).toEqual(
+            expect.objectContaining({ type: "string", enum: ["income", "expense", "transfer"] }),
+        );
     });
 });
