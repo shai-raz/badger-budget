@@ -5,6 +5,7 @@ import { accountRowSubtitle, getBalanceDisplay } from "~/utils/accountBalance";
 import { formatCurrency } from "~/utils/currency";
 import { formatTimeAgoCompact, isStale } from "~/utils/relativeTime";
 import { accountFallbackIcon } from "~/utils/avatarIcons";
+import { accountTransactionsLink } from "~/utils/transactionFilterQuery";
 
 /**
  * One account row, mobile. Overview and the Accounts page share it. An account with no balance
@@ -39,7 +40,9 @@ const handleMenu = (event: Event) => emit("menuToggle", { account: props.account
 </script>
 
 <template>
-    <div class="flex flex-col gap-2 px-4 py-3">
+    <div
+        class="relative flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-surface-50 active:bg-surface-100 dark:hover:bg-surface-800 dark:active:bg-surface-700 has-[a:focus-visible]:outline has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-primary"
+    >
         <div class="flex items-center gap-3">
             <SharedEntityAvatar
                 :icon="account.icon"
@@ -47,7 +50,14 @@ const handleMenu = (event: Event) => emit("menuToggle", { account: props.account
                 :fallback="accountFallbackIcon(account.type)"
             />
             <div class="min-w-0 flex-1">
-                <p class="truncate font-semibold">{{ account.name }}</p>
+                <p class="truncate font-semibold">
+                    <!-- Stretched link: its ::after covers the whole row, so ⋮ and Update sit above it (z-10). -->
+                    <NuxtLink
+                        :to="accountTransactionsLink(account.id)"
+                        class="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
+                        >{{ account.name }}</NuxtLink
+                    >
+                </p>
                 <p class="truncate text-xs text-muted-color">{{ subtitle }}</p>
             </div>
             <div
@@ -84,10 +94,15 @@ const handleMenu = (event: Event) => emit("menuToggle", { account: props.account
                     icon="pi pi-pencil"
                     size="small"
                     text
-                    class="-mr-2"
+                    class="relative z-10 -mr-2"
                     @click="emit('updateCash')"
                 />
             </div>
+            <i
+                v-if="!manageable"
+                class="pi pi-chevron-right text-xs text-muted-color"
+                aria-hidden="true"
+            ></i>
             <Button
                 v-if="manageable"
                 icon="pi pi-ellipsis-v"
@@ -95,7 +110,7 @@ const handleMenu = (event: Event) => emit("menuToggle", { account: props.account
                 rounded
                 size="small"
                 aria-label="Account actions"
-                class="shrink-0 text-muted-color"
+                class="relative z-10 shrink-0 text-muted-color"
                 @click="handleMenu"
             />
         </div>

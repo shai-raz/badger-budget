@@ -2,7 +2,7 @@
  * The transactions list's filter state, kept in the URL query. Defaults are omitted, so a bare `/transactions` stays
  * clean. Reading is forgiving: an unknown or malformed value reads as its default, and reading never writes the URL.
  */
-import type { LocationQueryRaw } from "vue-router";
+import type { LocationQueryRaw, RouteLocationRaw } from "vue-router";
 import { isTransactionType, TRANSACTION_TYPES, type TransactionType } from "@badger/shared-data";
 
 export type TransactionSortOption = "newest" | "oldest" | "amount-desc" | "amount-asc" | "name";
@@ -108,6 +108,14 @@ export function withTransactionFilters(
         : TRANSACTION_FILTER_KEYS;
     const kept = Object.entries(query).filter(([key]) => !owned.includes(key));
     return { ...Object.fromEntries(kept), ...serializeTransactionFilters(state) };
+}
+
+/**
+ * The transactions list filtered to one account. No period keys, so the list opens on this month. An account tile or
+ * row links here.
+ */
+export function accountTransactionsLink(accountId: string): RouteLocationRaw {
+    return { path: "/transactions", query: { accounts: accountId } };
 }
 
 /** Whether two filter states would produce the same URL. */
