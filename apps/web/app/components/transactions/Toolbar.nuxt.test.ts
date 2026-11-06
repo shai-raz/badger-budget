@@ -1,15 +1,16 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockNuxtImport, mountSuspended } from "@nuxt/test-utils/runtime";
-import type { VueWrapper } from "@vue/test-utils";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { ref } from "vue";
 import Toolbar from "./Toolbar.vue";
 import { currentMonthSelection } from "~/utils/monthRange";
 import type { FilterOption } from "~/utils/filterOptions";
 
 // Toggled per test to cover the md+ and below-md layouts.
-const layout = vi.hoisted(() => ({ desktop: true }));
+const layout = vi.hoisted(() => ({ desktop: true, full: true }));
 
 mockNuxtImport("useIsDesktop", () => () => ref(layout.desktop));
+mockNuxtImport("useMediaQuery", () => () => ref(layout.full));
 
 const mounted: VueWrapper[] = [];
 
@@ -39,6 +40,7 @@ const typeOptions: FilterOption<"income" | "expense" | "transfer">[] = [
 
 afterEach(() => {
     mounted.splice(0).forEach((wrapper) => wrapper.unmount());
+    layout.full = true;
 });
 
 const mountToolbar = async (props: { activeFilterCount?: number; drawerFilterCount?: number } = {}) => {
@@ -109,5 +111,49 @@ describe("Toolbar below md", () => {
 
         expect(buttonByText(wrapper, "Clear all")).toBeUndefined();
         expect(wrapper.find('[aria-label="Clear categories filter"]').exists()).toBe(false);
+    });
+});
+
+describe("Toolbar narrow desktop", () => {
+    beforeEach(() => {
+        layout.desktop = true;
+        layout.full = false;
+    });
+
+    it("shows a Filters button whose badge counts the drawer filters, not the period", async () => {
+        const wrapper = await mountToolbar({ drawerFilterCount: 1, activeFilterCount: 2 });
+
+        const filters = wrapper.find('[aria-label="Filters, 1 active"]');
+        expect(filters.exists()).toBe(true);
+        expect(filters.find(".p-badge").text()).toBe("1");
+    });
+
+    it("shows a plain Filters button with no badge when no drawer filter is active", async () => {
+        const wrapper = await mountToolbar({ drawerFilterCount: 0, activeFilterCount: 1 });
+
+        expect(wrapper.find('[aria-label="Filters"]').exists()).toBe(true);
+        expect(wrapper.find(".p-badge").exists()).toBe(false);
+    });
+
+    it("puts the period and every picker in the scrolling row", async () => {
+        const wrapper = await mountToolbar({ drawerFilterCount: 1 });
+
+        const row = wrapper.find('[aria-label="Quick filters"]');
+        expect(row.exists()).toBe(true);
+        // The period picker plus the categories, accounts and type pickers.
+        expect(row.findAll('[aria-haspopup="dialog"]')).toHaveLength(4);
+        expect(buttonByText(wrapper, "Clear all")).toBeDefined();
+    });
+
+    it("opens the drawer with its sections expanded when Filters is clicked", async () => {
+        const wrapper = await mountToolbar({ drawerFilterCount: 1 });
+        expect(document.body.querySelectorAll(".p-drawer button[aria-expanded]")).toHaveLength(0);
+
+        await wrapper.find('[aria-label="Filters, 1 active"]').trigger("click");
+        await flushPromises();
+
+        // The drawer teleports to the body, so its section headers are read from the document.
+        const headers = Array.from(document.body.querySelectorAll(".p-drawer button[aria-expanded]"));
+        expect(headers.map((button) => button.getAttribute("aria-expanded"))).toEqual(["true", "true", "true"]);
     });
 });

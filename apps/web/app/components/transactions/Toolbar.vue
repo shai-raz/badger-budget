@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TransactionType } from "@badger/shared-data";
 import { TRANSACTIONS_PRESETS, type PeriodSelection } from "~/utils/monthRange";
+import { TRANSACTIONS_TOOLBAR_FULL } from "~/utils/breakpoints";
 import type { FilterOption } from "~/utils/filterOptions";
 
 // Desktop-only inputs default to empty, so the mobile instance (which renders only search, period and the Filters
@@ -37,6 +38,11 @@ const filtersOpen = defineModel<boolean>("filtersOpen", { default: false });
 // in the page header's second row (LayoutPageHeader's toolbar slot).
 const isDesktop = useIsDesktop();
 
+// Between md and the full-toolbar width the drawer filters move behind a Filters button, and the quick pickers
+// scroll sideways beside it. The drawer belongs to this toolbar, so it closes when the layout changes.
+const fullToolbar = useMediaQuery(TRANSACTIONS_TOOLBAR_FULL);
+const drawerOpen = ref(false);
+
 // OverlayBadge always renders its Badge, and a Badge with no value degrades to
 // a bare dot — so with no active filters the badge is hidden outright through
 // the Badge passthrough rather than by dropping the wrapper.
@@ -50,7 +56,7 @@ const filtersBadgePt = computed(() => ({
         <!-- Desktop toolbar: search, then the period and one picker per filter, then show hidden and Clear all. The
              search box shrinks first; everything else keeps its size. -->
         <div
-            v-if="isDesktop"
+            v-if="isDesktop && fullToolbar"
             class="flex flex-wrap items-center gap-2"
         >
             <IconField class="min-w-[10rem] max-w-[340px] flex-1">
@@ -102,6 +108,98 @@ const filtersBadgePt = computed(() => ({
                 class="shrink-0"
                 :class="{ invisible: activeFilterCount < 2 }"
                 @click="emit('clear-all')"
+            />
+        </div>
+
+        <!-- Narrow desktop (md up to the full-toolbar width): search and a Filters button, then the quick pickers in one
+             row that scrolls sideways. The pickers sit inside the scroll row, but their popovers are appended to the body,
+             so the row never clips them. -->
+        <div
+            v-else-if="isDesktop"
+            class="flex items-center gap-2"
+        >
+            <IconField class="w-[14rem] shrink-0">
+                <InputIcon class="pi pi-search" />
+                <InputText
+                    v-model="searchQuery"
+                    placeholder="Search transactions"
+                    class="w-full"
+                />
+            </IconField>
+
+            <!-- The badge counts the drawer filters only. The period has its own picker in the row. -->
+            <Button
+                label="Filters"
+                icon="pi pi-sliders-h"
+                size="small"
+                severity="secondary"
+                outlined
+                class="shrink-0"
+                :badge="drawerFilterCount > 0 ? String(drawerFilterCount) : undefined"
+                badge-severity="info"
+                :aria-label="drawerFilterCount > 0 ? `Filters, ${drawerFilterCount} active` : 'Filters'"
+                aria-haspopup="dialog"
+                :aria-expanded="drawerOpen"
+                @click="drawerOpen = true"
+            />
+
+            <SharedScrollRow
+                class="min-w-0 flex-1"
+                label="Quick filters"
+            >
+                <SharedPeriodPicker
+                    v-model="period"
+                    class="shrink-0"
+                    :presets="TRANSACTIONS_PRESETS"
+                    resettable
+                />
+
+                <TransactionsFilterPicker
+                    v-model:selected="selectedCategoryIds"
+                    class="shrink-0"
+                    noun="categories"
+                    :options="categoryOptions"
+                />
+                <TransactionsFilterPicker
+                    v-model:selected="selectedAccountIds"
+                    class="shrink-0"
+                    noun="accounts"
+                    :options="accountOptions"
+                />
+                <TransactionsFilterPicker
+                    v-model:selected="selectedTypes"
+                    class="shrink-0"
+                    noun="types"
+                    :options="typeOptions"
+                />
+
+                <TransactionsShowHiddenToggle
+                    v-model="showHidden"
+                    class="shrink-0"
+                />
+
+                <!-- Last in the row, mounted and hidden like the full toolbar's, so its width holds. -->
+                <Button
+                    label="Clear all"
+                    text
+                    size="small"
+                    class="shrink-0"
+                    :class="{ invisible: activeFilterCount < 2 }"
+                    @click="emit('clear-all')"
+                />
+            </SharedScrollRow>
+
+            <TransactionsFiltersDrawer
+                v-model:visible="drawerOpen"
+                v-model:selected-types="selectedTypes"
+                v-model:selected-account-ids="selectedAccountIds"
+                v-model:selected-category-ids="selectedCategoryIds"
+                v-model:show-hidden="showHidden"
+                :type-options="typeOptions"
+                :account-options="accountOptions"
+                :category-options="categoryOptions"
+                :active-filter-count="activeFilterCount"
+                @clear-all="emit('clear-all')"
             />
         </div>
 
