@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { nextTick } from "vue";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import type { DOMWrapper, VueWrapper } from "@vue/test-utils";
 import FilterOptionList from "./FilterOptionList.vue";
@@ -107,6 +108,32 @@ describe("TransactionsFilterOptionList selection", () => {
         await row(wrapper, "Travel card, 0 transactions").trigger("click");
 
         expect(lastEmit(wrapper)).toEqual([[]]);
+    });
+
+    it("keeps a row's native checkbox checked after a Space press, which dispatches a click on the input", async () => {
+        const wrapper: VueWrapper = await mountSuspended(FilterOptionList, {
+            props: {
+                options,
+                allLabel: "All accounts",
+                selected: [],
+                "onUpdate:selected": (next: string[]) => void wrapper.setProps({ selected: next }),
+            },
+        });
+        mounted.push(wrapper);
+        const chequing = row(wrapper, "Chequing, 5 transactions");
+        const input = chequing.find("input").element as HTMLInputElement;
+        const before = input.checked;
+        const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+
+        input.dispatchEvent(event);
+        // A browser flushes Vue's update before it undoes a cancelled native toggle, and happy-dom never undoes one,
+        // so emulate that order here.
+        await nextTick();
+        if (event.defaultPrevented) input.checked = before;
+        await new Promise((resolve) => setTimeout(resolve));
+
+        expect(lastEmit(wrapper)).toEqual([["a"]]);
+        expect(checked(chequing)).toBe(true);
     });
 
     it("keeps a collapsed row's checkbox in step with the unchanged selection", async () => {

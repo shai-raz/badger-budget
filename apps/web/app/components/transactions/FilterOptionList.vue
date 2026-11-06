@@ -34,6 +34,16 @@ const { canInvert, isAllActive, isSelected, toggle, selectAll, invert } = useFil
     () => props.options,
 );
 
+/**
+ * A Space press clicks the row's checkbox input. The label cancels that native toggle, and the browser undoes a cancelled
+ * toggle only after the click listeners return, so the input would stay unchecked under a ticked box. Set it once that
+ * undo has run, so assistive tech reads the same state as the box.
+ */
+const syncNativeAfter = (event: Event, checked: () => boolean) => {
+    const input = (event.currentTarget as HTMLElement | null)?.querySelector("input");
+    if (input) setTimeout(() => (input.checked = checked()));
+};
+
 const ROW_BASE =
     "flex w-full cursor-pointer select-none items-center gap-2.5 rounded-md px-2 text-left text-sm text-surface-900 hover:bg-surface-100 dark:text-surface-0 dark:hover:bg-surface-800";
 const ROW_HEIGHT = computed(() => (props.dense ? "min-h-11" : "min-h-9"));
@@ -87,7 +97,10 @@ const allInputPt = computed(() => (props.autofocusFirst ? { input: { autofocus: 
             -->
             <label
                 :class="[ROW_BASE, ROW_HEIGHT, isAllActive && 'font-semibold']"
-                @click.prevent="selectAll()"
+                @click.prevent="
+                    selectAll();
+                    syncNativeAfter($event, () => isAllActive);
+                "
             >
                 <Checkbox
                     binary
@@ -113,7 +126,10 @@ const allInputPt = computed(() => (props.autofocusFirst ? { input: { autofocus: 
                     isSelected(option.value) && 'font-semibold',
                     option.stale && 'opacity-60',
                 ]"
-                @click.prevent="toggle(option.value)"
+                @click.prevent="
+                    toggle(option.value);
+                    syncNativeAfter($event, () => isSelected(option.value));
+                "
             >
                 <Checkbox
                     binary
