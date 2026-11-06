@@ -134,4 +134,17 @@ describe("TransactionsFilterPicker focus", () => {
 
         expect(document.activeElement).toBe(triggerButton);
     });
+
+    it("sends focus to the trigger when the clear button is activated from the keyboard", async () => {
+        const wrapper = await mountPicker("accounts", accounts, ["a"], true);
+        const triggerButton = trigger(wrapper).element;
+        const clearEl = clearButton(wrapper).element as HTMLElement;
+
+        // Focus the × first, as a Tab would, so clearing it has to move focus rather than leave it on a dropped node.
+        clearEl.focus();
+        await clearButton(wrapper).trigger("click");
+        await flushPromises();
+
+        expect(document.activeElement).toBe(triggerButton);
+    });
 });

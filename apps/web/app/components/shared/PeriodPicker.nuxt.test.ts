@@ -16,9 +16,11 @@ mockNuxtImport("useIsDesktop", () => () => ref(layout.desktop));
 const mounted: { unmount: () => void }[] = [];
 
 // The real Transition runs here: the Popover emits show and hide from its enter and leave hooks.
-const mountPicker = async (modelValue: PeriodSelection, resettable = false) => {
+// Focus only moves to elements in the document, so a test about focus mounts the picker attached to it.
+const mountPicker = async (modelValue: PeriodSelection, resettable = false, attach = false) => {
     const wrapper = await mountSuspended(PeriodPicker, {
         props: { modelValue, presets: TRANSACTIONS_PRESETS, resettable },
+        attachTo: attach ? document.body : undefined,
         global: { stubs: { transition: false } },
     });
     mounted.push(wrapper);
@@ -299,6 +301,19 @@ describe("PeriodPicker", () => {
         await resetButton(wrapper).trigger("click");
 
         expect(lastEmit(wrapper)).toEqual({ kind: "range", from: "2026-10", to: "2026-10" });
+    });
+
+    it("keeps focus on the label when the × is activated from the keyboard", async () => {
+        const wrapper = await mountPicker({ kind: "range", from: "2026-08", to: "2026-09" }, true, true);
+        const labelEl = labelButton(wrapper).element;
+        const resetEl = resetButton(wrapper).element as HTMLElement;
+
+        // Focus the × first, as a Tab would, so clearing it has to move focus rather than leave it on a dropped node.
+        resetEl.focus();
+        await resetButton(wrapper).trigger("click");
+        await nextTick();
+
+        expect(document.activeElement).toBe(labelEl);
     });
 
     it("keeps the × at the stacked height below md", async () => {
