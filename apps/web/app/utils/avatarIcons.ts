@@ -1,6 +1,9 @@
 import type { Component } from "vue";
 import {
     Apple,
+    ArrowDownLeft,
+    ArrowLeftRight,
+    ArrowUpRight,
     Baby,
     Banknote,
     Bike,
@@ -74,7 +77,7 @@ import {
     BookOpen,
     Palette,
 } from "@lucide/vue";
-import { isAvatarIconName, type AccountType, type AvatarIconName } from "@badger/shared-data";
+import { isAvatarIconName, type AccountType, type AvatarIconName, type TransactionType } from "@badger/shared-data";
 
 /**
  * Lucide component for each stored avatar icon name. Named imports only, so the
@@ -155,6 +158,13 @@ export const AVATAR_ICONS: Record<AvatarIconName, Component> = {
     repeat: Repeat,
     tag: Tag,
     "circle-help": CircleQuestionMark,
+};
+
+/** Avatar glyph and colour for each transaction type, from the amount tokens the totals use (transfer stays neutral). */
+export const TRANSACTION_TYPE_AVATARS: Record<TransactionType, { icon: Component; color: string }> = {
+    income: { icon: ArrowDownLeft, color: "var(--p-amount-income)" },
+    expense: { icon: ArrowUpRight, color: "var(--p-amount-expense)" },
+    transfer: { icon: ArrowLeftRight, color: "var(--p-text-muted-color)" },
 };
 
 export type AvatarSize = "xs" | "sm" | "md" | "lg";

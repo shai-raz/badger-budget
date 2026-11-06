@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { TransactionTypeFilter } from "../../composables/transactions/useTransactionFilters";
-import { useCategoryToggle } from "../../composables/transactions/useCategoryToggle";
-import { transactionCountLabel, type CategoryFilterOption } from "~/utils/categoryFilterOptions";
+import type { TransactionType } from "@badger/shared-data";
+import { useFilterToggle } from "../../composables/transactions/useFilterToggle";
+import { transactionCountLabel, type FilterOption, UNCATEGORIZED_COLOR } from "~/utils/filterOptions";
 
 const props = defineProps<{
     /** Categories in the current view (plus stale selections) to offer. */
-    categoryOptions: CategoryFilterOption[];
+    categoryOptions: FilterOption[];
 }>();
 
 const emit = defineEmits<{ (event: "clear-all"): void }>();
@@ -14,12 +14,19 @@ const emit = defineEmits<{ (event: "clear-all"): void }>();
 // merely closes the sheet.
 const visible = defineModel<boolean>("visible", { default: false });
 
-const typeFilter = defineModel<TransactionTypeFilter>("typeFilter", { required: true });
+const selectedTypes = defineModel<TransactionType[]>("selectedTypes", { required: true });
+// SelectButton is single-select: "All" is the empty selection, and a single type is the one selected.
+const typeChoice = computed<TransactionType | "all">({
+    get: () => (selectedTypes.value.length === 1 ? (selectedTypes.value[0] ?? "all") : "all"),
+    set: (choice) => {
+        selectedTypes.value = choice === "all" ? [] : [choice];
+    },
+});
 // Empty array === all categories included (no filter param sent).
 const selectedCategoryIds = defineModel<string[]>("selectedCategoryIds", { required: true });
 const showHidden = defineModel<boolean>("showHidden", { required: true });
 
-const typeOptions: Array<{ label: string; value: TransactionTypeFilter }> = [
+const typeOptions: Array<{ label: string; value: TransactionType | "all" }> = [
     { label: "All", value: "all" },
     { label: "Income", value: "income" },
     { label: "Expenses", value: "expense" },
@@ -27,9 +34,12 @@ const typeOptions: Array<{ label: string; value: TransactionTypeFilter }> = [
 ];
 
 // Category selection math is shared with the desktop inline panel.
-const { isAllActive, canInvert, countLabel, isSelected, toggle, selectAll, invert } = useCategoryToggle(
+const { allValues, isAllActive, canInvert, selectedValues, isSelected, toggle, selectAll, invert } = useFilterToggle(
     selectedCategoryIds,
     () => props.categoryOptions,
+);
+const countLabel = computed(() =>
+    isAllActive.value ? "All categories" : `${selectedValues.value.length} of ${allValues.value.length} selected`,
 );
 
 // Drag-to-dismiss on the handle. The gesture itself lives in a generic
@@ -44,6 +54,11 @@ useDragToDismiss(handleEl, () => (handleEl.value?.closest("[data-filters-sheet]"
         visible.value = false;
     },
 });
+// Interim: the dot still reads a colour. An entity option carries it on its avatar; a type option has none and falls back
+// to the neutral grey.
+function dotColor(option: FilterOption): string {
+    return option.avatar.kind === "entity" ? (option.avatar.color ?? UNCATEGORIZED_COLOR) : UNCATEGORIZED_COLOR;
+}
 </script>
 
 <template>
@@ -87,7 +102,7 @@ useDragToDismiss(handleEl, () => (handleEl.value?.closest("[data-filters-sheet]"
             </span>
             <!-- Full-width on mobile: stretch the SelectButton root and its toggles. -->
             <SelectButton
-                v-model="typeFilter"
+                v-model="typeChoice"
                 :options="typeOptions"
                 option-label="label"
                 option-value="value"
@@ -155,7 +170,7 @@ useDragToDismiss(handleEl, () => (handleEl.value?.closest("[data-filters-sheet]"
                     <span
                         class="h-2.5 w-2.5 shrink-0 rounded-full"
                         :class="isSelected(option.value) ? 'opacity-100' : 'opacity-45'"
-                        :style="{ backgroundColor: option.color }"
+                        :style="{ backgroundColor: dotColor(option) }"
                     ></span>
                     <span
                         class="flex-1 text-sm"

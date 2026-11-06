@@ -2,14 +2,43 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import type { VueWrapper } from "@vue/test-utils";
 import FiltersPanel from "./FiltersPanel.vue";
-import type { CategoryFilterOption } from "~/utils/categoryFilterOptions";
+import type { FilterOption } from "~/utils/filterOptions";
 
-const options: CategoryFilterOption[] = [
-    { value: "uncategorized", label: "Uncategorized", color: "#9CA3AF", count: 2, stale: false },
-    { value: "c1", label: "Groceries", color: "#22c55e", count: 14, stale: false },
-    { value: "c2", label: "Travel", color: "#3b82f6", count: 0, stale: true },
-    { value: "c3", label: "Rent", color: "#f97316", count: 1, stale: false },
-    { value: "c4", label: "Misc", color: "#a855f7", stale: false },
+const options: FilterOption[] = [
+    {
+        value: "uncategorized",
+        label: "Uncategorized",
+        avatar: { kind: "entity", icon: null, color: "#9CA3AF", fallback: "tag" },
+        count: 2,
+        stale: false,
+    },
+    {
+        value: "c1",
+        label: "Groceries",
+        avatar: { kind: "entity", icon: null, color: "#22c55e", fallback: "tag" },
+        count: 14,
+        stale: false,
+    },
+    {
+        value: "c2",
+        label: "Travel",
+        avatar: { kind: "entity", icon: null, color: "#3b82f6", fallback: "tag" },
+        count: 0,
+        stale: true,
+    },
+    {
+        value: "c3",
+        label: "Rent",
+        avatar: { kind: "entity", icon: null, color: "#f97316", fallback: "tag" },
+        count: 1,
+        stale: false,
+    },
+    {
+        value: "c4",
+        label: "Misc",
+        avatar: { kind: "entity", icon: null, color: "#a855f7", fallback: "tag" },
+        stale: false,
+    },
 ];
 
 const mounted: VueWrapper[] = [];
@@ -18,7 +47,7 @@ const mountPanel = async (selectedCategoryIds: string[] = ["c2"]) => {
     const wrapper = await mountSuspended(FiltersPanel, {
         props: {
             categoryOptions: options,
-            typeFilter: "all",
+            selectedTypes: [],
             selectedCategoryIds,
             showHidden: false,
         },
@@ -96,5 +125,49 @@ describe("FiltersPanel category chips", () => {
         await chip(wrapper, "Travel, 0 transactions").trigger("click");
 
         expect(wrapper.emitted("update:selectedCategoryIds")?.at(-1)).toEqual([[]]);
+    });
+});
+
+describe("FiltersPanel type control", () => {
+    afterEach(() => {
+        mounted.splice(0).forEach((wrapper) => wrapper.unmount());
+    });
+
+    const typeButton = (wrapper: VueWrapper, label: string) => {
+        const button = wrapper.findAll("button").find((element) => element.text() === label);
+        if (!button) throw new Error(`no type option labelled ${label}`);
+        return button;
+    };
+
+    it("presses the one selected type", async () => {
+        const wrapper = await mountSuspended(FiltersPanel, {
+            props: { categoryOptions: options, selectedTypes: ["expense"], selectedCategoryIds: [], showHidden: false },
+        });
+        mounted.push(wrapper);
+
+        expect(typeButton(wrapper, "Expenses").attributes("aria-pressed")).toBe("true");
+        expect(typeButton(wrapper, "All").attributes("aria-pressed")).toBe("false");
+    });
+
+    it("presses All when no type is selected", async () => {
+        const wrapper = await mountSuspended(FiltersPanel, {
+            props: { categoryOptions: options, selectedTypes: [], selectedCategoryIds: [], showHidden: false },
+        });
+        mounted.push(wrapper);
+
+        expect(typeButton(wrapper, "All").attributes("aria-pressed")).toBe("true");
+    });
+
+    it("emits the chosen type as a single-item selection, and All as an empty one", async () => {
+        const wrapper = await mountSuspended(FiltersPanel, {
+            props: { categoryOptions: options, selectedTypes: [], selectedCategoryIds: [], showHidden: false },
+        });
+        mounted.push(wrapper);
+
+        await typeButton(wrapper, "Income").trigger("click");
+        expect(wrapper.emitted("update:selectedTypes")?.at(-1)).toEqual([["income"]]);
+
+        await typeButton(wrapper, "All").trigger("click");
+        expect(wrapper.emitted("update:selectedTypes")?.at(-1)).toEqual([[]]);
     });
 });

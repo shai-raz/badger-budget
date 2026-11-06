@@ -1,22 +1,29 @@
 <script setup lang="ts">
-import type { TransactionTypeFilter } from "../../composables/transactions/useTransactionFilters";
-import { useCategoryToggle } from "../../composables/transactions/useCategoryToggle";
-import { transactionCountLabel, type CategoryFilterOption } from "~/utils/categoryFilterOptions";
+import type { TransactionType } from "@badger/shared-data";
+import { useFilterToggle } from "../../composables/transactions/useFilterToggle";
+import { transactionCountLabel, type FilterOption, UNCATEGORIZED_COLOR } from "~/utils/filterOptions";
 import { hexToRgba } from "~/utils/color";
 
 const props = defineProps<{
     /** Categories in the current view (plus stale selections) to offer. */
-    categoryOptions: CategoryFilterOption[];
+    categoryOptions: FilterOption[];
 }>();
 
 const emit = defineEmits<{ (event: "clear-all"): void }>();
 
-const typeFilter = defineModel<TransactionTypeFilter>("typeFilter", { required: true });
+const selectedTypes = defineModel<TransactionType[]>("selectedTypes", { required: true });
+// SelectButton is single-select: "All" is the empty selection, and a single type is the one selected.
+const typeChoice = computed<TransactionType | "all">({
+    get: () => (selectedTypes.value.length === 1 ? (selectedTypes.value[0] ?? "all") : "all"),
+    set: (choice) => {
+        selectedTypes.value = choice === "all" ? [] : [choice];
+    },
+});
 // Empty array === all categories included (no filter param sent).
 const selectedCategoryIds = defineModel<string[]>("selectedCategoryIds", { required: true });
 const showHidden = defineModel<boolean>("showHidden", { required: true });
 
-const typeOptions: Array<{ label: string; value: TransactionTypeFilter }> = [
+const typeOptions: Array<{ label: string; value: TransactionType | "all" }> = [
     { label: "All", value: "all" },
     { label: "Income", value: "income" },
     { label: "Expenses", value: "expense" },
@@ -24,9 +31,12 @@ const typeOptions: Array<{ label: string; value: TransactionTypeFilter }> = [
 ];
 
 // Category selection math is shared with the mobile bottom sheet.
-const { isAllActive, canInvert, countLabel, isSelected, toggle, selectAll, invert } = useCategoryToggle(
+const { allValues, isAllActive, canInvert, selectedValues, isSelected, toggle, selectAll, invert } = useFilterToggle(
     selectedCategoryIds,
     () => props.categoryOptions,
+);
+const countLabel = computed(() =>
+    isAllActive.value ? "All categories" : `${selectedValues.value.length} of ${allValues.value.length} selected`,
 );
 
 // PrimeVue 4's Chip has no outlined variant, so the chip frame is ours: every
@@ -48,6 +58,12 @@ const CHIP_ALL_ACTIVE =
 // pair has to be inline — it comes from user data, not from a theme token.
 function chipStyle(color: string) {
     return { backgroundColor: hexToRgba(color, 0.13), borderColor: color };
+}
+
+// Interim: the dot and chip tint still read a colour. An entity option carries it on its avatar; a type option has none
+// and falls back to the neutral grey.
+function dotColor(option: FilterOption): string {
+    return option.avatar.kind === "entity" ? (option.avatar.color ?? UNCATEGORIZED_COLOR) : UNCATEGORIZED_COLOR;
 }
 </script>
 
@@ -72,7 +88,7 @@ function chipStyle(color: string) {
                     Type
                 </span>
                 <SelectButton
-                    v-model="typeFilter"
+                    v-model="typeChoice"
                     :options="typeOptions"
                     option-label="label"
                     option-value="value"
@@ -155,7 +171,7 @@ function chipStyle(color: string) {
                             isSelected(option.value) ? 'text-surface-900 dark:text-surface-0' : CHIP_IDLE,
                             option.stale && 'opacity-60',
                         ]"
-                        :style="isSelected(option.value) ? chipStyle(option.color) : undefined"
+                        :style="isSelected(option.value) ? chipStyle(dotColor(option)) : undefined"
                         role="button"
                         tabindex="0"
                         :aria-pressed="isSelected(option.value)"
@@ -167,7 +183,7 @@ function chipStyle(color: string) {
                         <span
                             class="h-2 w-2 shrink-0 rounded-full"
                             :class="isSelected(option.value) ? 'opacity-100' : 'opacity-45'"
-                            :style="{ backgroundColor: option.color }"
+                            :style="{ backgroundColor: dotColor(option) }"
                         ></span>
                         <span class="text-[12.5px]">{{ option.label }}</span>
                         <!-- Mounted in every state with a constant weight, so only its colour changes on toggle. -->

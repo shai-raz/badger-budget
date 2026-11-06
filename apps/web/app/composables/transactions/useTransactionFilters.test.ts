@@ -3,7 +3,7 @@ import { computed, effectScope, nextTick, reactive, ref, toValue, watch, type Ef
 import { refDebounced } from "@vueuse/core";
 
 import { useTransactionFilters, type UseTransactionFiltersOptions } from "./useTransactionFilters";
-import { useCategoryToggle } from "./useCategoryToggle";
+import { useFilterToggle } from "./useFilterToggle";
 import { endEditRun, writeQuery } from "../../utils/queryHistory";
 
 // Spy on the real writer, so each test can assert which QueryWrite kind a control chose.
@@ -202,18 +202,31 @@ describe("useTransactionFilters search", () => {
 });
 
 describe("useTransactionFilters filter writes", () => {
-    it("pushes a type change, keeping create and from", () => {
+    it("writes a type change as an edit, keeping create and from", () => {
         route.query = { create: "expense", from: "2026-08" };
-        const { typeFilter } = mountFilters();
+        const { selectedTypes } = mountFilters();
 
-        typeFilter.value = "expense";
+        selectedTypes.value = ["expense"];
 
         expect(writeQuery).toHaveBeenCalledWith(
             router,
-            { create: "expense", from: "2026-08", type: "expense" },
-            { kind: "push" },
+            { create: "expense", from: "2026-08", types: "expense" },
+            { kind: "edit", control: "types" },
         );
         expect(push).toHaveBeenCalledTimes(1);
+    });
+
+    it("writes an account change as an edit, keeping create and from", () => {
+        route.query = { create: "expense", from: "2026-08" };
+        const { selectedAccountIds } = mountFilters();
+
+        selectedAccountIds.value = ["acc-a"];
+
+        expect(writeQuery).toHaveBeenCalledWith(
+            router,
+            { create: "expense", from: "2026-08", accounts: "acc-a" },
+            { kind: "edit", control: "accounts" },
+        );
     });
 
     it("pushes a sort change, keeping create and from", () => {
@@ -251,7 +264,7 @@ describe("useTransactionFilters filter writes", () => {
     });
 
     it("pushes a type chip clear, keeping create", () => {
-        route.query = { type: "income", create: "expense" };
+        route.query = { types: "income", create: "expense" };
         const { activeChips } = mountFilters();
 
         activeChips.value.find((chip) => chip.key === "type")!.clear();
@@ -259,26 +272,41 @@ describe("useTransactionFilters filter writes", () => {
         expect(writeQuery).toHaveBeenLastCalledWith(router, { create: "expense" }, { kind: "push" });
     });
 
-    it("clearAllFilters resets type, categories and hidden, and keeps search, sort, period and create", () => {
+    it("clearAllFilters resets types, accounts, categories, hidden and the period in one push, keeping search, sort and create", () => {
         route.query = {
-            type: "income",
+            types: "income",
+            accounts: "acc-a",
             categories: "a",
             hidden: "1",
             q: "rent",
             sort: "oldest",
             create: "expense",
             from: "2026-08",
+            to: "2026-08",
         };
         const { clearAllFilters } = mountFilters();
 
         clearAllFilters();
 
+        expect(writeQuery).toHaveBeenCalledTimes(1);
         expect(writeQuery).toHaveBeenLastCalledWith(
             router,
-            { q: "rent", sort: "oldest", create: "expense", from: "2026-08" },
+            { q: "rent", sort: "oldest", create: "expense" },
             { kind: "push" },
         );
-        expect(route.query).toEqual({ q: "rent", sort: "oldest", create: "expense", from: "2026-08" });
+        expect(push).toHaveBeenCalledTimes(1);
+        expect(route.query).toEqual({ q: "rent", sort: "oldest", create: "expense" });
+    });
+
+    it("resetPeriod returns the period to this month", () => {
+        route.query = { from: "2026-08", to: "2026-08" };
+        const { resetPeriod, isDefaultPeriod } = mountFilters();
+
+        expect(isDefaultPeriod.value).toBe(false);
+
+        resetPeriod();
+
+        expect(isDefaultPeriod.value).toBe(true);
     });
 });
 
@@ -339,7 +367,7 @@ describe("useTransactionFilters writes made in the same task", () => {
                 filters.selectedCategoryIds.value = ids;
             },
         });
-        const toggles = useCategoryToggle(model, CATEGORY_OPTIONS);
+        const toggles = useFilterToggle(model, CATEGORY_OPTIONS);
         const render = () => {
             rendered.value = filters.selectedCategoryIds.value;
         };
@@ -427,53 +455,71 @@ describe("useTransactionFilters writes made in the same task", () => {
     });
 });
 
-describe("useTransactionFilters facetParams", () => {
+describe("useTransactionFilters categoryFacetParams", () => {
     it("keeps the same values through a category toggle, so the facet key does not change", async () => {
         const filters = mountFilters({ knownCategoryIds: ["a", "b"] });
-        const before = filters.facetParams.value;
+        const before = filters.categoryFacetParams.value;
 
         filters.selectedCategoryIds.value = ["a"];
         await nextTick();
 
-        expect(filters.facetParams.value).toEqual(before);
-        expect(filters.facetParams.value).not.toHaveProperty("categoryIds");
+        expect(filters.categoryFacetParams.value).toEqual(before);
+        expect(filters.categoryFacetParams.value).not.toHaveProperty("categoryIds");
     });
 
-    it("follows the search, type, period and show-hidden filters", () => {
+    it("follows the search, type, account, period and show-hidden filters", () => {
         const filters = mountFilters();
 
-        expect(filters.facetParams.value).toEqual({
+        expect(filters.categoryFacetParams.value).toEqual({
             includeHidden: false,
             startDate: "2026-10-01",
             endDate: "2026-10-31",
         });
 
         route.query = { ...route.query, q: "rent" };
-        expect(filters.facetParams.value.search).toBe("rent");
+        expect(filters.categoryFacetParams.value.search).toBe("rent");
 
-        route.query = { ...route.query, type: "expense" };
-        expect(filters.facetParams.value.types).toEqual(["expense"]);
+        route.query = { ...route.query, types: "expense" };
+        expect(filters.categoryFacetParams.value.types).toEqual(["expense"]);
+
+        route.query = { ...route.query, accounts: "acc-a" };
+        expect(filters.categoryFacetParams.value.accountIds).toEqual(["acc-a"]);
 
         route.query = { ...route.query, from: "2026-08", to: "2026-08" };
-        expect(filters.facetParams.value).toMatchObject({ startDate: "2026-08-01", endDate: "2026-08-31" });
+        expect(filters.categoryFacetParams.value).toMatchObject({ startDate: "2026-08-01", endDate: "2026-08-31" });
 
         route.query = { ...route.query, hidden: "1" };
-        expect(filters.facetParams.value.includeHidden).toBe(true);
+        expect(filters.categoryFacetParams.value.includeHidden).toBe(true);
     });
 
     it("never carries the list-only keys", () => {
         route.query = { categories: "a", sort: "name" };
-        const { facetParams } = mountFilters({ knownCategoryIds: ["a", "b"] });
+        const { categoryFacetParams } = mountFilters({ knownCategoryIds: ["a", "b"] });
 
         for (const key of ["categoryIds", "limit", "sortBy", "sortOrder"]) {
-            expect(facetParams.value).not.toHaveProperty(key);
+            expect(categoryFacetParams.value).not.toHaveProperty(key);
         }
     });
 });
 
+describe("useTransactionFilters per-facet params", () => {
+    it("omits only its own selection from each facet", () => {
+        route.query = { types: "expense", accounts: "acc-a", categories: "cat-a" };
+        const { categoryFacetParams, accountFacetParams, typeFacetParams } = mountFilters();
+
+        expect(categoryFacetParams.value).toMatchObject({ types: ["expense"], accountIds: ["acc-a"] });
+        expect(categoryFacetParams.value).not.toHaveProperty("categoryIds");
+
+        expect(accountFacetParams.value).toMatchObject({ types: ["expense"], categoryIds: ["cat-a"] });
+        expect(accountFacetParams.value).not.toHaveProperty("accountIds");
+
+        expect(typeFacetParams.value).toMatchObject({ accountIds: ["acc-a"], categoryIds: ["cat-a"] });
+        expect(typeFacetParams.value).not.toHaveProperty("types");
+    });
+});
 describe("useTransactionFilters list and summary params", () => {
-    it("send the type filter as a types array, never the legacy type key", () => {
-        route.query = { type: "expense" };
+    it("send the type filter as a types array", () => {
+        route.query = { types: "expense" };
         const { listParams, summaryParams } = mountFilters();
 
         expect(listParams.value.types).toEqual(["expense"]);
@@ -489,5 +535,126 @@ describe("useTransactionFilters list and summary params", () => {
         expect(listParams.value).not.toHaveProperty("type");
         expect(summaryParams.value).not.toHaveProperty("types");
         expect(summaryParams.value).not.toHaveProperty("type");
+    });
+});
+
+describe("useTransactionFilters type selection", () => {
+    it("reads a selection of every type as none, and sends no types param", () => {
+        route.query = { types: "income,expense,transfer" };
+        const { selectedTypes, listParams, summaryParams, drawerFilterCount } = mountFilters();
+
+        expect(selectedTypes.value).toEqual([]);
+        expect(listParams.value).not.toHaveProperty("types");
+        expect(summaryParams.value).not.toHaveProperty("types");
+        expect(drawerFilterCount.value).toBe(0);
+    });
+
+    it("sends the selected types in canonical order", () => {
+        route.query = { types: "transfer,income" };
+        const { selectedTypes, listParams } = mountFilters();
+
+        expect(selectedTypes.value).toEqual(["income", "transfer"]);
+        expect(listParams.value.types).toEqual(["income", "transfer"]);
+    });
+});
+
+describe("useTransactionFilters account selection", () => {
+    it("keeps every requested id while the known accounts are still loading", () => {
+        route.query = { accounts: "a,zzz" };
+        const known = ref<string[] | undefined>(undefined);
+        const { selectedAccountIds } = mountFilters({ knownAccountIds: known });
+
+        expect(selectedAccountIds.value).toEqual(["a", "zzz"]);
+    });
+
+    it("drops ids the user no longer has once the accounts load", () => {
+        route.query = { accounts: "a,zzz" };
+        const known = ref<string[] | undefined>(undefined);
+        const { selectedAccountIds } = mountFilters({ knownAccountIds: known });
+
+        known.value = ["a", "b"];
+
+        expect(selectedAccountIds.value).toEqual(["a"]);
+    });
+
+    it("reads a selection of every known account as none, and sends no account param", () => {
+        route.query = { accounts: "a,b" };
+        const known = ref<string[] | undefined>(["a", "b"]);
+        const { selectedAccountIds, listParams, summaryParams } = mountFilters({ knownAccountIds: known });
+
+        expect(selectedAccountIds.value).toEqual([]);
+        expect(listParams.value).not.toHaveProperty("accountIds");
+        expect(summaryParams.value).not.toHaveProperty("accountIds");
+    });
+
+    it("sends the selected accounts in the list and summary params", () => {
+        route.query = { accounts: "acc-a,acc-b" };
+        const { listParams, summaryParams } = mountFilters();
+
+        expect(listParams.value.accountIds).toEqual(["acc-a", "acc-b"]);
+        expect(summaryParams.value.accountIds).toEqual(["acc-a", "acc-b"]);
+    });
+});
+
+describe("useTransactionFilters counts", () => {
+    it("counts each drawer selection once, and leaves search out of both counts", () => {
+        route.query = { types: "expense,income", accounts: "acc-a", categories: "cat-a", hidden: "1", q: "rent" };
+        const { drawerFilterCount, activeFilterCount } = mountFilters();
+
+        expect(drawerFilterCount.value).toBe(4);
+        expect(activeFilterCount.value).toBe(4);
+    });
+
+    it("counts a period other than this month in the active count only", () => {
+        route.query = { from: "2026-08", to: "2026-08", types: "expense" };
+        const { drawerFilterCount, activeFilterCount, isDefaultPeriod } = mountFilters();
+
+        expect(isDefaultPeriod.value).toBe(false);
+        expect(drawerFilterCount.value).toBe(1);
+        expect(activeFilterCount.value).toBe(2);
+    });
+
+    it("counts nothing for a bare page at this month", () => {
+        const { drawerFilterCount, activeFilterCount, isDefaultPeriod } = mountFilters();
+
+        expect(isDefaultPeriod.value).toBe(true);
+        expect(drawerFilterCount.value).toBe(0);
+        expect(activeFilterCount.value).toBe(0);
+    });
+});
+
+describe("useTransactionFilters chips", () => {
+    it("labels the type chip with the selected types in canonical order", () => {
+        route.query = { types: "transfer,income" };
+        const { activeChips } = mountFilters();
+
+        expect(activeChips.value.find((chip) => chip.key === "type")!.label).toBe("Income + Transfer");
+    });
+
+    it("labels the account chip by count", () => {
+        route.query = { accounts: "acc-a" };
+        const { activeChips } = mountFilters();
+        expect(activeChips.value.find((chip) => chip.key === "accounts")!.label).toBe("1 account");
+
+        route.query = { accounts: "acc-a,acc-b" };
+        expect(activeChips.value.find((chip) => chip.key === "accounts")!.label).toBe("2 accounts");
+    });
+
+    it("labels the category chip by count", () => {
+        route.query = { categories: "cat-a" };
+        const { activeChips } = mountFilters();
+        expect(activeChips.value.find((chip) => chip.key === "categories")!.label).toBe("1 category");
+
+        route.query = { categories: "cat-a,cat-b" };
+        expect(activeChips.value.find((chip) => chip.key === "categories")!.label).toBe("2 categories");
+    });
+
+    it("clears the account chip as one push, keeping other keys", () => {
+        route.query = { accounts: "acc-a", create: "expense" };
+        const { activeChips } = mountFilters();
+
+        activeChips.value.find((chip) => chip.key === "accounts")!.clear();
+
+        expect(writeQuery).toHaveBeenLastCalledWith(router, { create: "expense" }, { kind: "push" });
     });
 });

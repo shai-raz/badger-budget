@@ -1,6 +1,12 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/vue-query";
 import type { MaybeRefOrGetter } from "vue";
-import type { ITransactionCategoryFacetParams, ITransactionListParams, ITransactionSummaryParams } from "@badger/types";
+import type {
+    ITransactionAccountFacetParams,
+    ITransactionCategoryFacetParams,
+    ITransactionListParams,
+    ITransactionSummaryParams,
+    ITransactionTypeFacetParams,
+} from "@badger/types";
 import { useApiClient } from "../useApiClient";
 import { accountKeys } from "../accounts/accountKeys";
 import { reportKeys } from "../reports/useSpendingReport";
@@ -15,6 +21,9 @@ export const transactionKeys = {
     summary: (params: ITransactionSummaryParams) => [...transactionKeys.all, "summary", params] as const,
     categoryFacets: (params: ITransactionCategoryFacetParams) =>
         [...transactionKeys.all, "categoryFacets", params] as const,
+    accountFacets: (params: ITransactionAccountFacetParams) =>
+        [...transactionKeys.all, "accountFacets", params] as const,
+    typeFacets: (params: ITransactionTypeFacetParams) => [...transactionKeys.all, "typeFacets", params] as const,
     details: () => [...transactionKeys.all, "detail"] as const,
     detail: (id: string) => [...transactionKeys.details(), id] as const,
 };
@@ -97,6 +106,34 @@ export function useTransactionCategoryFacets(params: Ref<ITransactionCategoryFac
     return useQuery({
         queryKey: computed(() => transactionKeys.categoryFacets(params.value)),
         queryFn: () => apiClient.getTransactionCategoryFacets(params.value),
+        placeholderData: keepPreviousData,
+    });
+}
+
+/**
+ * Per-account transaction counts for the current filters, so the account picker only offers accounts present in the
+ * view. Keyed under the root so every transaction invalidation refreshes it.
+ */
+export function useTransactionAccountFacets(params: Ref<ITransactionAccountFacetParams>) {
+    const apiClient = useApiClient();
+
+    return useQuery({
+        queryKey: computed(() => transactionKeys.accountFacets(params.value)),
+        queryFn: () => apiClient.getTransactionAccountFacets(params.value),
+        placeholderData: keepPreviousData,
+    });
+}
+
+/**
+ * Per-type transaction counts for the current filters, so the type picker only offers types present in the view.
+ * Keyed under the root so every transaction invalidation refreshes it.
+ */
+export function useTransactionTypeFacets(params: Ref<ITransactionTypeFacetParams>) {
+    const apiClient = useApiClient();
+
+    return useQuery({
+        queryKey: computed(() => transactionKeys.typeFacets(params.value)),
+        queryFn: () => apiClient.getTransactionTypeFacets(params.value),
         placeholderData: keepPreviousData,
     });
 }
