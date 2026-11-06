@@ -1,55 +1,60 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import type { VueWrapper } from "@vue/test-utils";
 import FiltersSheet from "./FiltersSheet.vue";
 import type { FilterOption } from "~/utils/filterOptions";
+import type { TransactionType } from "@badger/shared-data";
 
-const options: FilterOption[] = [
+const typeOptions: FilterOption<TransactionType>[] = [
+    { value: "income", label: "Income", avatar: { kind: "type", type: "income" }, count: 3, stale: false },
+    { value: "expense", label: "Expense", avatar: { kind: "type", type: "expense" }, count: 9, stale: false },
+];
+
+const accountOptions: FilterOption[] = [
     {
-        value: "uncategorized",
-        label: "Uncategorized",
-        avatar: { kind: "entity", icon: null, color: "#9CA3AF", fallback: "tag" },
-        count: 2,
-        stale: false,
-    },
-    {
-        value: "c1",
-        label: "Groceries",
-        avatar: { kind: "entity", icon: null, color: "#22c55e", fallback: "tag" },
-        count: 14,
-        stale: false,
-    },
-    {
-        value: "c2",
-        label: "Travel",
+        value: "a1",
+        label: "Checking",
         avatar: { kind: "entity", icon: null, color: "#3b82f6", fallback: "tag" },
-        count: 0,
-        stale: true,
-    },
-    {
-        value: "c3",
-        label: "Rent",
-        avatar: { kind: "entity", icon: null, color: "#f97316", fallback: "tag" },
-        count: 1,
+        count: 4,
         stale: false,
     },
     {
-        value: "c4",
-        label: "Misc",
-        avatar: { kind: "entity", icon: null, color: "#a855f7", fallback: "tag" },
+        value: "a2",
+        label: "Savings",
+        avatar: { kind: "entity", icon: null, color: "#22c55e", fallback: "tag" },
+        count: 2,
         stale: false,
     },
 ];
 
+const categoryOptions: FilterOption[] = [
+    {
+        value: "c1",
+        label: "Groceries",
+        avatar: { kind: "entity", icon: null, color: "#f97316", fallback: "tag" },
+        count: 7,
+        stale: false,
+    },
+];
+
+interface MountProps {
+    activeFilterCount?: number;
+    selectedAccountIds?: string[];
+}
+
 const mounted: VueWrapper[] = [];
 
-const mountSheet = async (selectedCategoryIds: string[] = ["c2"]) => {
+const mountSheet = async ({ activeFilterCount = 0, selectedAccountIds = [] }: MountProps = {}) => {
     const wrapper = await mountSuspended(FiltersSheet, {
         props: {
             visible: true,
-            categoryOptions: options,
+            typeOptions,
+            accountOptions,
+            categoryOptions,
+            activeFilterCount,
             selectedTypes: [],
-            selectedCategoryIds,
+            selectedAccountIds,
+            selectedCategoryIds: [],
             showHidden: false,
         },
     });
@@ -57,68 +62,72 @@ const mountSheet = async (selectedCategoryIds: string[] = ["c2"]) => {
     return wrapper;
 };
 
-// The sheet teleports to <body>, so its rows are read from the document.
-const row = (label: string): HTMLButtonElement => {
-    const button = document.body.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
-    if (!button) throw new Error(`no row labelled ${label}`);
-    return button;
+// The sheet teleports to <body>, so everything is read from the document.
+const sheet = () => document.body.querySelector<HTMLElement>("[data-bottom-sheet]");
+const sectionHeaders = () => Array.from(sheet()?.querySelectorAll<HTMLButtonElement>("button[aria-expanded]") ?? []);
+const sectionHeader = (title: string) => {
+    const match = sectionHeaders().find((button) => button.textContent?.startsWith(title));
+    if (!match) throw new Error(`no section header for ${title}`);
+    return match;
+};
+const sheetButton = (text: string) => {
+    const match = Array.from(sheet()?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
+        (button) => button.textContent?.trim() === text,
+    );
+    if (!match) throw new Error(`no ${text} button`);
+    return match;
+};
+const row = (label: string) => {
+    const match = sheet()?.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+    if (!match) throw new Error(`no row labelled ${label}`);
+    return match;
 };
 
-const check = (label: string): HTMLElement => {
-    const icon = row(label).querySelector<HTMLElement>(".pi-check");
-    if (!icon) throw new Error(`no check icon in ${label}`);
-    return icon;
-};
-
-describe("FiltersSheet category rows", () => {
+describe("FiltersSheet", () => {
     afterEach(() => {
         mounted.splice(0).forEach((wrapper) => wrapper.unmount());
     });
 
-    it("names each category row with its transaction count", async () => {
+    it("opens with every section collapsed", async () => {
         await mountSheet();
 
-        expect(row("Groceries, 14 transactions").textContent).toContain("14");
-        expect(row("Rent, 1 transaction").textContent).toContain("1");
+        await vi.waitFor(() => expect(sectionHeaders()).toHaveLength(3));
+        expect(sectionHeaders().map((button) => button.getAttribute("aria-expanded"))).toEqual([
+            "false",
+            "false",
+            "false",
+        ]);
     });
 
-    it("keeps a check icon mounted in every row and hides it when unselected", async () => {
-        await mountSheet(["c2"]);
+    it("expands Accounts and writes the account picked", async () => {
+        const wrapper = await mountSheet();
+        await vi.waitFor(() => expect(sectionHeaders()).toHaveLength(3));
 
-        expect(check("Groceries, 14 transactions").classList).toContain("invisible");
-        expect(check("Rent, 1 transaction").classList).toContain("invisible");
+        sectionHeader("Accounts").click();
+        await vi.waitFor(() => expect(row("Checking, 4 transactions")).toBeTruthy());
+        row("Checking, 4 transactions").click();
+
+        expect(wrapper.emitted("update:selectedAccountIds")?.at(-1)).toEqual([["a1"]]);
     });
 
-    it("shows the check icon on a selected row", async () => {
-        await mountSheet(["c2"]);
+    it("disables Clear all when nothing is active", async () => {
+        await mountSheet({ activeFilterCount: 0 });
 
-        expect(check("Travel, 0 transactions").classList).not.toContain("invisible");
+        await vi.waitFor(() => expect(sheetButton("Clear all").disabled).toBe(true));
     });
 
-    it("dims only the stale row", async () => {
-        await mountSheet(["c2"]);
+    it("enables Clear all when only the period is non-default", async () => {
+        await mountSheet({ activeFilterCount: 1 });
 
-        expect(row("Travel, 0 transactions").classList).toContain("opacity-60");
-        expect(row("Groceries, 14 transactions").classList).not.toContain("opacity-60");
+        await vi.waitFor(() => expect(sheetButton("Clear all").disabled).toBe(false));
     });
 
-    it("keeps the touch target at py-3", async () => {
-        await mountSheet();
+    it("closes the sheet from Show results", async () => {
+        const wrapper = await mountSheet();
+        await vi.waitFor(() => expect(sheetButton("Show results")).toBeTruthy());
 
-        expect(row("Groceries, 14 transactions").classList).toContain("py-3");
-    });
+        sheetButton("Show results").click();
 
-    it("renders no count and labels only the name when the count is unknown", async () => {
-        await mountSheet();
-
-        expect(row("Misc").textContent?.trim()).toBe("Misc");
-    });
-
-    it("emits the selection without a stale option when it is tapped", async () => {
-        const wrapper = await mountSheet(["c2"]);
-
-        row("Travel, 0 transactions").click();
-
-        expect(wrapper.emitted("update:selectedCategoryIds")?.at(-1)).toEqual([[]]);
+        expect(wrapper.emitted("update:visible")?.at(-1)).toEqual([false]);
     });
 });

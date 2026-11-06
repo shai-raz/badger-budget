@@ -365,9 +365,13 @@ const handleTransactionClick = (transaction: ITransactionResponse) => {
                 v-if="!isDesktop"
                 v-model:visible="mobileFiltersOpen"
                 v-model:selected-types="selectedTypes"
+                v-model:selected-account-ids="selectedAccountIds"
                 v-model:selected-category-ids="selectedCategoryIds"
                 v-model:show-hidden="showHidden"
+                :type-options="typeOptions"
+                :account-options="accountOptions"
                 :category-options="categoryOptions"
+                :active-filter-count="activeFilterCount"
                 @clear-all="clearAllFilters"
             />
 
