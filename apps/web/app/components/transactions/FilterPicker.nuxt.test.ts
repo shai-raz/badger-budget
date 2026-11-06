@@ -176,11 +176,26 @@ const sheetButton = (text: string) =>
     );
 
 describe("TransactionsFilterPicker pill", () => {
-    it("shows the selected option's label with no clear button", async () => {
+    it("shows the selected option's label and a clear button", async () => {
         const wrapper = await mountPill("accounts", accounts, ["b"]);
 
         expect(trigger(wrapper).text()).toBe("Savings");
+        expect(clearButton(wrapper).exists()).toBe(true);
+    });
+
+    it("has no clear button while nothing is selected", async () => {
+        const wrapper = await mountPill("accounts", accounts, []);
+
         expect(clearButton(wrapper).exists()).toBe(false);
+    });
+
+    it("clears its selection from the ×, without opening the sheet", async () => {
+        const wrapper = await mountPill("accounts", accounts, ["b"]);
+
+        await clearButton(wrapper).trigger("click");
+
+        expect(wrapper.emitted("update:selected")?.at(-1)).toEqual([[]]);
+        expect(sheet()).toBeNull();
     });
 
     it("is 36px tall with the button radius, not a chip", async () => {

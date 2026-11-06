@@ -295,13 +295,13 @@ describe("Toolbar below md", () => {
         expect(document.body.querySelector("[data-bottom-sheet]")?.getAttribute("aria-label")).toBe("Categories");
     });
 
-    it("shows a selected pill with its name and no clear button", async () => {
+    it("shows a selected pill with its name and a clear button", async () => {
         desktop.value = false;
         const wrapper = await mountToolbar({ selectedCategoryIds: ["c1"] });
 
         const row = wrapper.find('[aria-label="Quick filters"]');
         expect(row.findAll("button").some((b) => b.text() === "Groceries")).toBe(true);
-        expect(row.find('[aria-label="Clear categories filter"]').exists()).toBe(false);
+        expect(row.find('[aria-label="Clear categories filter"]').exists()).toBe(true);
     });
 
     it("has no Clear all", async () => {
