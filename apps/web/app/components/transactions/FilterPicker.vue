@@ -41,6 +41,12 @@ function onHide() {
     const active = document.activeElement;
     if (!active || active === document.body || shownPanel?.contains(active)) triggerEl.value?.$el.focus();
 }
+
+// The × unmounts once the selection empties, taking its focus with it; send focus to the trigger instead.
+function clear() {
+    selected.value = [];
+    nextTick(() => triggerEl.value?.$el.focus());
+}
 </script>
 
 <template>
@@ -71,7 +77,7 @@ function onHide() {
             icon="pi pi-times"
             size="small"
             :aria-label="`Clear ${noun} filter`"
-            @click="selected = []"
+            @click="clear"
         />
 
         <Popover

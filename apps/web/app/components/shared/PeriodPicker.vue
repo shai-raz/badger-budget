@@ -43,6 +43,13 @@ const step = (dir: -1 | 1) => {
 };
 
 const popover = ref<{ toggle: (event: Event) => void; hide: () => void } | null>(null);
+const labelEl = ref<{ $el: HTMLElement } | null>(null);
+
+// The × unmounts once the period is back on this month, taking its focus with it; send focus to the label instead.
+const resetToThisMonth = () => {
+    sel.value = currentMonthSelection(now.value);
+    nextTick(() => labelEl.value?.$el.focus());
+};
 
 // md+ opens the popover anchored to the label; below md the label opens the bottom sheet.
 const onLabelClick = (event: Event) => {
@@ -97,6 +104,7 @@ const sheetPt = {
                 @click="step(-1)"
             />
             <Button
+                ref="labelEl"
                 :severity="resetActive ? undefined : 'secondary'"
                 :outlined="!resetActive"
                 aria-haspopup="dialog"
@@ -129,7 +137,7 @@ const sheetPt = {
                 icon="pi pi-times"
                 :class="isDesktop ? 'h-9 w-9 shrink-0' : 'h-8 w-8 shrink-0'"
                 aria-label="Back to this month"
-                @click="sel = currentMonthSelection(now)"
+                @click="resetToThisMonth"
             />
         </ButtonGroup>
 
