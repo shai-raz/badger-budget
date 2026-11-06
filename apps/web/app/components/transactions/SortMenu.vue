@@ -101,6 +101,11 @@ function pick(value: TransactionSortOption) {
 watch(sheetOpen, (isOpen, wasOpen) => {
     if (wasOpen && !isOpen) nextTick(() => triggerEl.value?.$el.focus());
 });
+
+// Crossing md with the sheet open would leave its modal mask over the desktop layout, so close it.
+watch(isDesktop, () => {
+    sheetOpen.value = false;
+});
 </script>
 
 <template>

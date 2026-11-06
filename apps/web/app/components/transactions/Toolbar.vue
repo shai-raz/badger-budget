@@ -259,7 +259,7 @@ watch([isDesktop, fullToolbar], () => {
                     class="-mr-4 min-w-0 flex-1"
                     label="Quick filters"
                 >
-                    <!-- A wide custom range label can run out of room: the picker shrinks and truncates its label. -->
+                    <!-- The picker never shrinks in this scrolling row, so a wide custom range label truncates at its own max width. -->
                     <SharedPeriodPicker
                         v-model="period"
                         class="shrink-0"
@@ -292,6 +292,7 @@ watch([isDesktop, fullToolbar], () => {
                     <TransactionsShowHiddenToggle
                         v-model="showHidden"
                         class="shrink-0"
+                        variant="pill"
                     />
 
                     <div

@@ -131,6 +131,19 @@ describe("SortMenu below md", () => {
         await vi.waitFor(() => expect(sheet()).toBeNull());
     });
 
+    it("closes the sheet when the layout crosses md, so its mask does not cover the desktop layout", async () => {
+        const wrapper = await mountSortMenu({ modelValue: "newest" });
+        await trigger(wrapper).trigger("click");
+        await flushPromises();
+        expect(sheet()).not.toBeNull();
+
+        desktop.value = true;
+        await flushPromises();
+
+        await vi.waitFor(() => expect(sheet()).toBeNull());
+        expect(wrapper.emitted("update:modelValue")).toBeUndefined();
+    });
+
     it("Done closes the sheet without changing the sort", async () => {
         const wrapper = await mountSortMenu({ modelValue: "newest" });
         await trigger(wrapper).trigger("click");
