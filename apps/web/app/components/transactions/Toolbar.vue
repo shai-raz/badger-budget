@@ -63,10 +63,12 @@ watch(isDesktop, () => {
                 />
             </IconField>
 
-            <!-- The badge counts the drawer filters only. The period has its own picker in the row. -->
+            <!-- The badge counts the drawer filters only. The period has its own picker in the row. The toolbar sits on
+                 the page scroller, so the badge's cut-out ring takes the page colour rather than the header's. -->
             <TransactionsFiltersButton
                 :count="drawerFilterCount"
                 :expanded="drawerOpen"
+                ring-class="outline-surface-50 dark:outline-surface-950"
                 @click="drawerOpen = true"
             />
 

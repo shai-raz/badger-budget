@@ -99,6 +99,14 @@ describe("Toolbar desktop", () => {
         expect(wrapper.find('.p-overlaybadge [aria-label="Filters, 1 active"]').exists()).toBe(true);
     });
 
+    it("draws the badge ring in the page colour, since the desktop toolbar sits on the page scroller", async () => {
+        desktop.value = true;
+        const wrapper = await mountToolbar({ drawerFilterCount: 1 });
+
+        expect(wrapper.find(".p-overlaybadge .p-badge").classes()).toContain("outline-surface-50");
+        expect(wrapper.find(".p-overlaybadge .p-badge").classes()).toContain("dark:outline-surface-950");
+    });
+
     it("puts a divider between the Filters button and the quick filters row", async () => {
         for (const drawerFilterCount of [0, 2]) {
             desktop.value = true;
@@ -226,6 +234,13 @@ describe("Toolbar below md", () => {
         expect(badge.exists()).toBe(true);
         expect(badge.text()).toBe("3");
         expect(wrapper.find('.p-overlaybadge [aria-label="Filters, 3 active"]').exists()).toBe(true);
+    });
+
+    it("keeps the theme's header ring on the mobile badge", async () => {
+        desktop.value = false;
+        const wrapper = await mountToolbar({ drawerFilterCount: 3, activeFilterCount: 4 });
+
+        expect(wrapper.find(".p-overlaybadge .p-badge").classes()).not.toContain("outline-surface-50");
     });
 
     it("shows a plain Filters button with no count when no drawer filter is active", async () => {

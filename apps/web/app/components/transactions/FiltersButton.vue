@@ -6,12 +6,27 @@ import { computed } from "vue";
  * filter is active, the count shows as a circular info badge on its top-right corner (OverlayBadge, decorative); the
  * aria-label carries the count.
  */
-const props = defineProps<{
-    /** Active drawer filters (types, accounts, categories, hidden); the period is not counted. */
-    count: number;
-    /** Whether the drawer or sheet it opens is open. */
-    expanded: boolean;
-}>();
+const props = withDefaults(
+    defineProps<{
+        /** Active drawer filters (types, accounts, categories, hidden); the period is not counted. */
+        count: number;
+        /** Whether the drawer or sheet it opens is open. */
+        expanded: boolean;
+        /** Tailwind outline colour class for the badge's cut-out ring. Empty keeps the theme's surface-0 ring, which
+         *  matches the mobile page header; a caller on another background passes its own colour. */
+        ringClass?: string;
+    }>(),
+    { ringClass: "" },
+);
+
+const badgePt = computed(() => ({
+    pcBadge: {
+        root: {
+            class: ["rounded-full px-1", props.ringClass].filter(Boolean).join(" "),
+            "aria-hidden": "true",
+        },
+    },
+}));
 
 const emit = defineEmits<{ (event: "click"): void }>();
 
@@ -34,7 +49,7 @@ const buttonProps = computed(() => ({
         severity="info"
         size="small"
         class="flex shrink-0"
-        :pt="{ pcBadge: { root: { class: 'rounded-full px-1', 'aria-hidden': 'true' } } }"
+        :pt="badgePt"
     >
         <Button
             v-bind="buttonProps"

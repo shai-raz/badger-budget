@@ -5,8 +5,8 @@ import FiltersButton from "./FiltersButton.vue";
 
 const mounted: VueWrapper[] = [];
 
-const mountButton = async (count: number, expanded = false) => {
-    const wrapper = await mountSuspended(FiltersButton, { props: { count, expanded } });
+const mountButton = async (count: number, expanded = false, ringClass = "") => {
+    const wrapper = await mountSuspended(FiltersButton, { props: { count, expanded, ringClass } });
     mounted.push(wrapper);
     return wrapper;
 };
@@ -47,6 +47,19 @@ describe("TransactionsFiltersButton", () => {
         expect(button.text()).toBe("");
         expect(button.classes()).toContain("h-9");
         expect(button.classes()).toContain("w-9");
+    });
+
+    it("puts the caller's ring colour on the badge, and keeps the theme ring by default", async () => {
+        const ringed = await mountButton(2, false, "outline-surface-50 dark:outline-surface-950");
+        const ringedBadge = ringed.find(".p-overlaybadge .p-badge");
+        expect(ringedBadge.classes()).toContain("outline-surface-50");
+        expect(ringedBadge.classes()).toContain("dark:outline-surface-950");
+        expect(ringedBadge.classes()).toContain("rounded-full");
+
+        const themed = await mountButton(2);
+        const themedBadge = themed.find(".p-overlaybadge .p-badge");
+        expect(themedBadge.classes()).not.toContain("outline-surface-50");
+        expect(themedBadge.classes()).toContain("rounded-full");
     });
 
     it("reflects the expanded state in aria-expanded", async () => {
