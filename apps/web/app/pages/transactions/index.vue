@@ -144,28 +144,18 @@ const isDesktop = useIsDesktop();
 const mobileFiltersOpen = ref(false);
 
 // Server-driven, paginated list.
-const { data, error, isLoading, isFetching, isFetchingNextPage, hasNextPage, fetchNextPage } =
+const { data, error, isLoading, isFetchingNextPage, isPlaceholderData, hasNextPage, fetchNextPage } =
     useInfiniteTransactions(listParams);
 
-// True from the moment listParams changes (a filter/search/timeframe/sort
-// edit) until the resulting fetch settles — latched explicitly rather than
-// inferred from fetch state, because isFetching alone can't tell a listParams
-// change apart from a mutation's invalidateQueries refetch (hide, edit
-// category, mark transfer, sync, etc. all invalidate the same query key). The
-// latch is set by the watch(listParams, ...) below and cleared here once
-// isFetching drops, so a mutation-triggered refetch never fades the list —
-// its optimistic update (see useUpdateTransaction.mutation.ts) already gives
-// instant feedback, and dimming the whole list on every row action would be
-// wrong. Also excluded: the first load (handled by the spinner, isLoading)
-// and an infinite-scroll next-page append (isFetchingNextPage). Drives the
-// list fade so a filter change reads as "results updating" instead of a
-// frozen UI that then swaps abruptly. `keepPreviousData` keeps the old rows
-// mounted underneath, so the fade cross-dissolves old → new.
-const paramsChanging = ref(false);
-watch(isFetching, (fetching) => {
-    if (!fetching) paramsChanging.value = false;
-});
-const isRefetching = computed(() => paramsChanging.value && !isFetchingNextPage.value && !isLoading.value);
+// Drives the list fade so a filter change reads as "results updating" instead of a frozen UI that then swaps abruptly.
+// isPlaceholderData is true only while the previous key's rows are shown under keepPreviousData (see
+// useInfiniteTransactions), so it covers the fetch for a new key and clears as soon as that key's data is served, even
+// from cache with no fetch. A mutation's invalidateQueries refetch keeps the same key, so it never fades the list: its
+// optimistic update (see useUpdateTransaction.mutation.ts) already gives instant feedback, and dimming the whole list on
+// every row action would be wrong. Also excluded: the first load (handled by the spinner, isLoading) and an
+// infinite-scroll next-page append (isFetchingNextPage). `keepPreviousData` keeps the old rows mounted underneath, so
+// the fade cross-dissolves old → new.
+const isRefetching = computed(() => isPlaceholderData.value && !isFetchingNextPage.value && !isLoading.value);
 
 // Aggregate totals for the active filters (always excludes hidden rows, so the
 // metrics never react to the show-hidden toggle).
@@ -205,12 +195,8 @@ const listRows = ref<InstanceType<typeof TransactionsListRows> | null>(null);
 // the new bottom (landing the user mid-list) and the sentinel from firing a
 // spurious extra fetchNextPage() the moment the shorter list lands. The
 // computed returns a fresh object each time it re-evaluates, so identity
-// comparison alone is enough to fire this — no `deep` needed. This is also
-// the one place that knows listParams (rather than any background fetch)
-// changed, so it doubles as the trigger for the isRefetching fade latch
-// above — both effects fire off the same event, so they share one watcher.
+// comparison alone is enough to fire this — no `deep` needed.
 watch(listParams, () => {
-    paramsChanging.value = true;
     listRows.value?.scrollToTop();
 });
 
