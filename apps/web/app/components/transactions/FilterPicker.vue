@@ -24,11 +24,22 @@ const severity = computed(() => (active.value ? undefined : "secondary"));
 
 const open = ref(false);
 const popover = ref<{ toggle: (event: Event) => void; hide: () => void } | null>(null);
+const triggerEl = ref<{ $el: HTMLElement } | null>(null);
+const panelEl = ref<HTMLElement | null>(null);
+
+// A close from outside the popover (a click on its non-focusable padding, or PrimeVue's Escape) can leave focus on
+// <body>, where the next Escape reaches no handler. Hand focus back to the trigger.
+function onHide() {
+    open.value = false;
+    const active = document.activeElement;
+    if (!active || active === document.body || panelEl.value?.contains(active)) triggerEl.value?.$el.focus();
+}
 </script>
 
 <template>
     <ButtonGroup class="min-w-0">
         <Button
+            ref="triggerEl"
             size="small"
             :severity="severity"
             :outlined="!active"
@@ -60,13 +71,17 @@ const popover = ref<{ toggle: (event: Event) => void; hide: () => void } | null>
             ref="popover"
             :pt="{ content: { class: 'p-1.5' } }"
             @show="open = true"
-            @hide="open = false"
+            @hide="onHide"
         >
-            <div class="w-72">
+            <div
+                ref="panelEl"
+                class="w-72"
+            >
                 <TransactionsFilterOptionList
                     v-model:selected="selected"
                     :options="options"
                     :all-label="FILTER_COPY[noun].allLabel"
+                    autofocus-first
                 />
             </div>
         </Popover>

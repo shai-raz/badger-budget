@@ -14,7 +14,7 @@ import type {
 import { accountFallbackIcon } from "./avatarIcons";
 
 export const UNCATEGORIZED_VALUE = "uncategorized";
-// Kept as hex: FiltersPanel's chipStyle parses it with hexToRgba, which a var() would break.
+// Kept as hex: EntityAvatar runs the colour through hexToRgba, which a var() would break.
 export const UNCATEGORIZED_COLOR = "#9CA3AF";
 
 const UNCATEGORIZED_LABEL = "Uncategorized";

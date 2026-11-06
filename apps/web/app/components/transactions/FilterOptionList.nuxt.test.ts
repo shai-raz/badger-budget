@@ -118,6 +118,30 @@ describe("TransactionsFilterOptionList selection", () => {
     });
 });
 
+describe("TransactionsFilterOptionList focus and markup", () => {
+    afterEach(() => {
+        mounted.splice(0).forEach((wrapper) => wrapper.unmount());
+    });
+
+    it("autofocuses the All row when autofocusFirst is set", async () => {
+        const wrapper = await mountList([], { autofocusFirst: true });
+
+        expect(button(wrapper, "All accounts").element.hasAttribute("autofocus")).toBe(true);
+    });
+
+    it("does not autofocus by default", async () => {
+        const wrapper = await mountList();
+
+        expect(button(wrapper, "All accounts").element.hasAttribute("autofocus")).toBe(false);
+    });
+
+    it("draws option boxes without a nested input", async () => {
+        const wrapper = await mountList(["a"]);
+
+        expect(wrapper.find("button input").exists()).toBe(false);
+    });
+});
+
 describe("TransactionsFilterOptionList placement", () => {
     afterEach(() => {
         mounted.splice(0).forEach((wrapper) => wrapper.unmount());

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
-import type { VueWrapper } from "@vue/test-utils";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import FilterPicker from "./FilterPicker.vue";
 import type { FilterOption } from "~/utils/filterOptions";
 
@@ -101,5 +101,16 @@ describe("TransactionsFilterPicker trigger", () => {
         const wrapper = await mountPicker("accounts", accounts, []);
 
         expect(trigger(wrapper).attributes("aria-expanded")).toBe("false");
+    });
+});
+
+describe("TransactionsFilterPicker focus", () => {
+    it("autofocuses the first option when the popover opens", async () => {
+        const wrapper = await mountPicker("accounts", accounts, []);
+
+        await trigger(wrapper).trigger("click");
+        await flushPromises();
+
+        expect(document.body.querySelector("button[autofocus]")).not.toBeNull();
     });
 });

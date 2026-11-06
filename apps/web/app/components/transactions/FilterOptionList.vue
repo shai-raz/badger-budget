@@ -16,12 +16,15 @@ interface Props {
     title?: string;
     /** Sheet rows are taller touch targets. */
     dense?: boolean;
+    /** Focus the All row when the list mounts, so a popover's keyboard focus starts inside the list. */
+    autofocusFirst?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     actionsPlacement: "footer",
     title: undefined,
     dense: false,
+    autofocusFirst: false,
 });
 
 const selected = defineModel<T[]>("selected", { required: true });
@@ -34,6 +37,8 @@ const { canInvert, isAllActive, isSelected, toggle, selectAll, invert } = useFil
 const ROW_BASE =
     "flex w-full items-center gap-2.5 rounded-md px-2 text-left text-sm text-surface-900 hover:bg-surface-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-surface-0 dark:hover:bg-surface-800";
 const ROW_HEIGHT = computed(() => (props.dense ? "min-h-11" : "min-h-9"));
+// Set only when asked, so the default markup carries no autofocus attribute at all.
+const ALL_ROW_ATTRS = computed(() => (props.autofocusFirst ? { autofocus: true } : {}));
 </script>
 
 <template>
@@ -69,6 +74,7 @@ const ROW_HEIGHT = computed(() => (props.dense ? "min-h-11" : "min-h-9"));
         <div class="max-h-[300px] overflow-y-auto p-0.5">
             <button
                 type="button"
+                v-bind="ALL_ROW_ATTRS"
                 :class="[ROW_BASE, ROW_HEIGHT, isAllActive && 'font-semibold']"
                 :aria-pressed="isAllActive"
                 @click="selectAll()"
@@ -100,15 +106,18 @@ const ROW_HEIGHT = computed(() => (props.dense ? "min-h-11" : "min-h-9"));
                 :aria-label="transactionCountLabel(option.label, option.count)"
                 @click="toggle(option.value)"
             >
-                <!-- Purely visual: the button's aria-label carries the state and count. -->
-                <Checkbox
-                    :model-value="isSelected(option.value)"
-                    :binary="true"
-                    :readonly="true"
-                    :tabindex="-1"
+                <!-- Purely visual: the button's aria-label carries the state and count. A span rather than a
+                     Checkbox, because an input cannot sit inside a button. -->
+                <span
+                    class="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-surface-300 text-xs dark:border-surface-600"
+                    :class="isSelected(option.value) && 'border-primary bg-primary text-primary-contrast'"
                     aria-hidden="true"
-                    class="pointer-events-none shrink-0"
-                />
+                >
+                    <i
+                        v-if="isSelected(option.value)"
+                        class="pi pi-check"
+                    ></i>
+                </span>
                 <TransactionsFilterOptionAvatar
                     :avatar="option.avatar"
                     size="xs"
