@@ -4,8 +4,8 @@ import { ListTransactionsQueryDto } from "./list-transactions-query.dto";
 /**
  * Query params for `GET /transactions/category-facets`.
  *
- * Reuses the list endpoint's filters (search, type, date range, legacy
- * accountId/budgetId) but drops the params that don't apply to per-category counts:
+ * Reuses the list endpoint's filters (search, types, accountIds, date range,
+ * legacy budgetId) but drops the params that don't apply to per-category counts:
  * - `page` / `limit` — the counts cover ALL matching rows, not a page.
  * - `sortBy` / `sortOrder` — ordering is meaningless for counts.
  * - `categoryIds` / `categoryId` — the counts ignore the category selection, so

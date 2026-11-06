@@ -7,6 +7,7 @@ describe("SearchTransactionsTool", () => {
     const tool = new SearchTransactionsTool({ searchLean, aggregate } as never);
     const registry = new ToolRegistry([tool]);
     const uuid = "123e4567-e89b-42d3-a456-426614174000";
+    const uuid2 = "223e4567-e89b-42d3-a456-426614174000";
 
     const row = (i = 0, description = "Coffee") => ({
         id: `t${i}`,
@@ -161,26 +162,36 @@ describe("SearchTransactionsTool", () => {
         expect((await run({ groupBy: "year" })).ok).toBe(false);
         expect((await run({ page: 1, pageSize: 501 })).ok).toBe(false);
         expect((await run({ startDate: "2026-03-10", endDate: "2026-03-01" })).ok).toBe(false);
-        expect((await run({ accountId: "nope" })).ok).toBe(false);
+        expect((await run({ accountIds: ["nope"] })).ok).toBe(false);
+        expect((await run({ type: "expense" })).ok).toBe(false);
         expect((await run({ unknown: 1 })).ok).toBe(false);
         expect(searchLean).not.toHaveBeenCalled();
+    });
+
+    it("treats empty type, account and category arrays as no filter", async () => {
+        await data({ types: [], accountIds: [], categoryIds: [] });
+        expect(searchLean).toHaveBeenCalledWith(
+            "user-1",
+            expect.objectContaining({ types: [], accountIds: [], categoryIds: [] }),
+            expect.anything(),
+        );
     });
 
     it("passes filters and the caller's userId", async () => {
         await data({
             search: "cof",
-            type: "expense",
+            types: ["expense", "transfer"],
             categoryIds: [uuid, "uncategorized"],
-            accountId: uuid,
+            accountIds: [uuid, uuid2],
             budgetId: uuid,
         });
         expect(searchLean).toHaveBeenCalledWith(
             "user-1",
             expect.objectContaining({
                 search: "cof",
-                type: "expense",
+                types: ["expense", "transfer"],
                 categoryIds: [uuid, "uncategorized"],
-                accountId: uuid,
+                accountIds: [uuid, uuid2],
                 budgetId: uuid,
             }),
             expect.anything(),

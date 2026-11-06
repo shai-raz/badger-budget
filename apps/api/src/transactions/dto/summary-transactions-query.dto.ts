@@ -4,8 +4,8 @@ import { ListTransactionsQueryDto } from "./list-transactions-query.dto";
 /**
  * Query params for `GET /transactions/summary`.
  *
- * Reuses the list endpoint's filters (search, type, categoryIds, date range,
- * legacy accountId/categoryId/budgetId) but drops the params that don't apply
+ * Reuses the list endpoint's filters (search, types, categoryIds, accountIds,
+ * date range, legacy categoryId/budgetId) but drops the params that don't apply
  * to an aggregate:
  * - `page` / `limit` — the summary covers ALL matching rows, not a page.
  * - `sortBy` / `sortOrder` — ordering is meaningless for totals.

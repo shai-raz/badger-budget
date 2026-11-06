@@ -452,7 +452,7 @@ describe("useTransactionFilters facetParams", () => {
         expect(filters.facetParams.value.search).toBe("rent");
 
         route.query = { ...route.query, type: "expense" };
-        expect(filters.facetParams.value.type).toBe("expense");
+        expect(filters.facetParams.value.types).toEqual(["expense"]);
 
         route.query = { ...route.query, from: "2026-08", to: "2026-08" };
         expect(filters.facetParams.value).toMatchObject({ startDate: "2026-08-01", endDate: "2026-08-31" });
@@ -468,5 +468,26 @@ describe("useTransactionFilters facetParams", () => {
         for (const key of ["categoryIds", "limit", "sortBy", "sortOrder"]) {
             expect(facetParams.value).not.toHaveProperty(key);
         }
+    });
+});
+
+describe("useTransactionFilters list and summary params", () => {
+    it("send the type filter as a types array, never the legacy type key", () => {
+        route.query = { type: "expense" };
+        const { listParams, summaryParams } = mountFilters();
+
+        expect(listParams.value.types).toEqual(["expense"]);
+        expect(listParams.value).not.toHaveProperty("type");
+        expect(summaryParams.value.types).toEqual(["expense"]);
+        expect(summaryParams.value).not.toHaveProperty("type");
+    });
+
+    it("omit types when no type is selected", () => {
+        const { listParams, summaryParams } = mountFilters();
+
+        expect(listParams.value).not.toHaveProperty("types");
+        expect(listParams.value).not.toHaveProperty("type");
+        expect(summaryParams.value).not.toHaveProperty("types");
+        expect(summaryParams.value).not.toHaveProperty("type");
     });
 });

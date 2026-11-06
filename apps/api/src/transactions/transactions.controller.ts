@@ -47,7 +47,7 @@ export class TransactionsController {
         summary: "List transactions with optional filters, pagination, search and sorting",
         description:
             "When the `page` query param is present the response is a paginated envelope " +
-            "(`PaginatedTransactionsResponseDto`) and all filters (search, categoryIds, type, " +
+            "(`PaginatedTransactionsResponseDto`) and all filters (search, categoryIds, accountIds, types, " +
             "includeHidden, date range, sort) apply. When `page` is absent the endpoint returns the " +
             "legacy unpaginated `TransactionResponseDto[]` array with no hidden filtering — this " +
             "unpaginated array shape is deprecated; new clients should send `page`.",
@@ -77,7 +77,7 @@ export class TransactionsController {
     @ApiOperation({
         summary: "Aggregate totals (income/expenses/net/transferred/available) for the filtered list",
         description:
-            "Applies the same filters as `GET /transactions` (search, type, categoryIds, date range) but " +
+            "Applies the same filters as `GET /transactions` (search, types, categoryIds, accountIds, date range) but " +
             "ALWAYS excludes hidden transactions. Amounts are naive single-currency sums with NO FX " +
             "conversion; `currencyCode` is a display hint from the most recent matching transaction " +
             "(fallback 'ILS').",
@@ -98,8 +98,8 @@ export class TransactionsController {
     @ApiOperation({
         summary: "Per-category transaction counts for the current filters, ignoring the category filter",
         description:
-            "Applies the same filters as `GET /transactions` (search, type, date range, includeHidden, " +
-            "legacy accountId/budgetId) but ignores `categoryIds`/`categoryId`, so every category with rows " +
+            "Applies the same filters as `GET /transactions` (search, types, accountIds, date range, includeHidden, " +
+            "legacy budgetId) but ignores `categoryIds`/`categoryId`, so every category with rows " +
             "in the rest of the view is listed. A `null` categoryId counts uncategorized transactions.",
     })
     @ApiResponse({
