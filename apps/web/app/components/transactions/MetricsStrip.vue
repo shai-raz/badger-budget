@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ITransactionsSummaryResponse } from "@badger/types";
-import { formatCurrency } from "~/utils/currency";
+import { summaryMetrics, type MetricCell } from "~/utils/summaryMetrics";
 
 interface Props {
     /** Aggregate totals for the active filters. Undefined while loading or on error. */
@@ -20,60 +20,8 @@ const props = withDefaults(defineProps<Props>(), {
     mobileSurface: "recessed",
 });
 
-const POSITIVE_CLASS = "text-income";
-const NEGATIVE_CLASS = "text-expense";
-const NEUTRAL_CLASS = "text-surface-600 dark:text-surface-300";
-
-interface MetricCell {
-    key: string;
-    label: string;
-    /** Fully formatted, sign-prefixed value; empty string when no summary. */
-    display: string;
-    colorClass: string;
-}
-
-// Colors and sign conventions follow the app's income/expense convention
-// (income/positive = teal, expense/negative = rose).
-// A typed object (not an index-keyed record) keeps the mobile variant's
-// named lookups — net / income / expenses — safely non-nullable.
-const metrics = computed(() => {
-    const summary = props.summary;
-    const code = summary?.currencyCode;
-    const signed = (value: number) => (value >= 0 ? "+" : "") + formatCurrency(value, code);
-
-    return {
-        income: {
-            key: "income",
-            label: "Income",
-            display: summary ? `+${formatCurrency(summary.income, code)}` : "",
-            colorClass: POSITIVE_CLASS,
-        },
-        expenses: {
-            key: "expenses",
-            label: "Expenses",
-            display: summary ? `-${formatCurrency(summary.expenses, code)}` : "",
-            colorClass: NEGATIVE_CLASS,
-        },
-        net: {
-            key: "net",
-            label: "Net",
-            display: summary ? signed(summary.net) : "",
-            colorClass: summary && summary.net < 0 ? NEGATIVE_CLASS : POSITIVE_CLASS,
-        },
-        transferred: {
-            key: "transferred",
-            label: "Transferred",
-            display: summary ? formatCurrency(summary.transferred, code) : "",
-            colorClass: NEUTRAL_CLASS,
-        },
-        available: {
-            key: "available",
-            label: "Available",
-            display: summary ? signed(summary.available) : "",
-            colorClass: summary && summary.available < 0 ? NEGATIVE_CLASS : POSITIVE_CLASS,
-        },
-    } satisfies Record<string, MetricCell>;
-});
+// Colors and sign conventions live in summaryMetrics, shared with the mobile totals card.
+const metrics = computed(() => summaryMetrics(props.summary));
 
 // Desktop: all five cells in order. Mobile expanded grid: everything but Net
 // (which lives in the collapsed bar).
