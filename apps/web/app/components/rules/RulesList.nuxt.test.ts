@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockNuxtImport, mountSuspended } from "@nuxt/test-utils/runtime";
 import { flushPromises, type DOMWrapper, type VueWrapper } from "@vue/test-utils";
-import { ref } from "vue";
+import { h, ref } from "vue";
 import type { IRule } from "@badger/types";
 import type { RuleDisplayContext } from "~/utils/ruleSentence";
 import RulesList from "./RulesList.vue";
@@ -54,6 +54,8 @@ const clickButton = async (wrapper: VueWrapper, text: string) => {
 const moveDownButtons = (wrapper: VueWrapper) => wrapper.findAll('button[aria-label="Move down"]');
 
 const grips = (wrapper: VueWrapper): DOMWrapper<Element>[] => wrapper.findAll(".rule-grip");
+
+const fallbackSlots = { fallback: () => h("div", { "data-test": "fallback" }, "Unmatched imports") };
 
 describe("RulesList on phone", () => {
     beforeEach(() => {
@@ -237,5 +239,50 @@ describe("RulesList opening and creating", () => {
         await clickButton(wrapper, "New rule");
 
         expect(wrapper.emitted("create")).toHaveLength(1);
+    });
+});
+
+describe("RulesList fallback slot", () => {
+    beforeEach(() => {
+        layout.desktop = false;
+        apiClient.reorderRules.mockReset();
+        apiClient.reorderRules.mockResolvedValue(undefined);
+    });
+
+    it("renders above the first rule and outside the sortable list element", async () => {
+        const wrapper = await mountSuspended(RulesList, { props: { rules, context }, slots: fallbackSlots });
+
+        const fallback = wrapper.find('[data-test="fallback"]');
+        const firstRule = at(wrapper.findAll("span.truncate"), 0);
+
+        expect(fallback.exists()).toBe(true);
+        expect(
+            fallback.element.compareDocumentPosition(firstRule.element) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy();
+        expect(fallback.element.closest(".divide-y")).toBeNull();
+    });
+
+    it("is hidden while the search query is non-empty", async () => {
+        const wrapper = await mountSuspended(RulesList, { props: { rules, context }, slots: fallbackSlots });
+
+        await wrapper.find('input[aria-label="Search rules"]').setValue("Alpha");
+
+        expect(wrapper.find('[data-test="fallback"]').exists()).toBe(false);
+    });
+
+    it("is hidden in phone reorder mode", async () => {
+        layout.desktop = false;
+        const wrapper = await mountSuspended(RulesList, { props: { rules, context }, slots: fallbackSlots });
+
+        await clickButton(wrapper, "Reorder");
+
+        expect(wrapper.find('[data-test="fallback"]').exists()).toBe(false);
+    });
+
+    it("renders above the empty state when there are no rules", async () => {
+        const wrapper = await mountSuspended(RulesList, { props: { rules: [], context }, slots: fallbackSlots });
+
+        expect(wrapper.find('[data-test="fallback"]').exists()).toBe(true);
+        expect(wrapper.text()).toContain("No rules yet");
     });
 });
