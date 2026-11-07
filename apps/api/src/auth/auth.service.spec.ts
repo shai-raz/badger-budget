@@ -871,7 +871,7 @@ describe("AuthService", () => {
                 expect(sql).toContain("settings || ");
                 expect(sql).toContain("octet_length");
                 expect(sql).toContain("RETURNING settings");
-                expect(sql).toContain("updated_at = now()");
+                expect(sql).toContain("updated_at = (now() AT TIME ZONE 'UTC')");
                 expect(values).toEqual(
                     expect.arrayContaining([
                         JSON.stringify({ unmatchedImportCategory: "uncategorized" }),

@@ -220,7 +220,7 @@ export class AuthService {
         }
         const json = JSON.stringify(patch);
         const rows = await this.prisma.$queryRaw<{ settings: Prisma.JsonValue }[]>`
-            UPDATE users SET settings = settings || ${json}::jsonb, updated_at = now()
+            UPDATE users SET settings = settings || ${json}::jsonb, updated_at = (now() AT TIME ZONE 'UTC')
             WHERE id = ${user.id}::uuid
               AND octet_length((settings || ${json}::jsonb)::text) <= ${USER_SETTINGS_MAX_BYTES}
             RETURNING settings`;
