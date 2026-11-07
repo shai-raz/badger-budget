@@ -42,3 +42,4 @@ export {
     useReorderRulesMutation,
     useDeleteRuleMutation,
 } from "./rules/useRules";
+export { useUserSettingsQuery, useUpdateUserSettingsMutation } from "./settings/useUserSettings";
