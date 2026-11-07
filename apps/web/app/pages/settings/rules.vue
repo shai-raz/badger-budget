@@ -3,10 +3,13 @@ import type { Category, IRule } from "@badger/types";
 import type { MenuItem } from "primevue/menuitem";
 import { useConfirm } from "primevue/useconfirm";
 import { useToast } from "primevue/usetoast";
+import { useAuthStore } from "~/stores/auth";
 import { getApiErrorMessage } from "~/utils/apiError";
 import type { RuleDisplayContext } from "~/utils/ruleSentence";
 import ApplyRuleDialog from "../../components/rules/ApplyRuleDialog.vue";
 import RulesList from "../../components/rules/RulesList.vue";
+import UnmatchedImportDialog from "../../components/rules/UnmatchedImportDialog.vue";
+import UnmatchedImportRow from "../../components/rules/UnmatchedImportRow.vue";
 
 // fullBleed: below md the band runs edge to edge, as on Overview (see layouts/app.vue).
 definePageMeta({
@@ -22,6 +25,11 @@ const { data: accounts, isLoading: accountsLoading } = useGetAccounts();
 const { data: categories, isLoading: categoriesLoading } = useGetCategoriesQuery();
 const { mutate: setActive } = useSetRuleActiveMutation();
 const { mutate: deleteRule } = useDeleteRuleMutation();
+// Settings failures stay out of isBandLoading: a failed settings load must not hide the rules list.
+const { data: settings, isLoading: settingsLoading, error: settingsError } = useUserSettingsQuery();
+const authStore = useAuthStore();
+const isDemo = computed(() => authStore.user?.isDemo === true);
+const unmatchedImportOpen = ref(false);
 
 const menu = ref();
 const selectedRule = ref<IRule | null>(null);
@@ -145,7 +153,17 @@ const confirmDelete = (rule: IRule) => {
             @actions="openMenu"
             @edit="openEdit"
             @create="openCreate"
-        />
+        >
+            <template #fallback>
+                <UnmatchedImportRow
+                    :mode="settings?.unmatchedImportCategory"
+                    :loading="settingsLoading"
+                    :error="settingsError"
+                    :disabled="isDemo"
+                    @open="unmatchedImportOpen = true"
+                />
+            </template>
+        </RulesList>
 
         <Menu
             ref="menu"
@@ -157,6 +175,12 @@ const confirmDelete = (rule: IRule) => {
             :visible="applyOpen"
             :rule="applyRule"
             @update:visible="applyOpen = $event"
+        />
+
+        <UnmatchedImportDialog
+            v-if="settings"
+            v-model:visible="unmatchedImportOpen"
+            :mode="settings.unmatchedImportCategory"
         />
     </div>
 </template>
