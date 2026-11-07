@@ -54,6 +54,8 @@ import type {
     IAuthResponse,
     IAuthUser,
     IUpdateMeRequest,
+    IUserSettings,
+    IUpdateUserSettingsRequest,
     IRule,
     CreateRuleDto,
     UpdateRuleDto,
@@ -251,6 +253,16 @@ export class ApiClient {
 
     async updateMe(data: IUpdateMeRequest): Promise<IAuthUser> {
         const response = await this.client.patch<IAuthUser>("/auth/me", data);
+        return response.data;
+    }
+
+    async getMySettings(): Promise<IUserSettings> {
+        const response = await this.client.get<IUserSettings>("/auth/me/settings");
+        return response.data;
+    }
+
+    async updateMySettings(patch: IUpdateUserSettingsRequest): Promise<IUserSettings> {
+        const response = await this.client.patch<IUserSettings>("/auth/me/settings", patch);
         return response.data;
     }
 

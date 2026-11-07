@@ -18,6 +18,7 @@ NestJS 11 REST API under the global prefix `/api/v1` (Swagger at `/api/docs`). P
 - Secrets (`JWT_SECRET`, `JWT_REFRESH_SECRET`, `CREDENTIAL_ENCRYPTION_PEPPER`) come from env, else `DATA_DIR/secrets/<NAME>`, else are generated there on first boot (`config/secrets.ts`). There are no hardcoded fallbacks.
 - **One-shot data backfills**: `data_backfills` holds one marker row per backfill. Claim the marker in the same transaction as the work, so a failure retries on the next boot (example: `categories/category-icon-backfill.service.ts`). Use a new marker name per backfill; never reuse one.
 - Imports from banks and Google Sheets both land through `transactions/transaction-import.service.ts`.
+- `User.settings` is one JSONB blob capped at `USER_SETTINGS_MAX_BYTES`. It is read only through `auth/user-settings.ts` (defaults filled, unknown or invalid values ignored) and written only by `AuthService.updateSettings`' single-statement `settings || patch` merge. Past roughly 20 keys, or once a setting becomes a list or object, split settings into a key/value table.
 
 ## Attachment storage (`transactions/attachments`)
 

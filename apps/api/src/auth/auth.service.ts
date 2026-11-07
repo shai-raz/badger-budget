@@ -1,4 +1,5 @@
 import {
+    BadRequestException,
     Injectable,
     Logger,
     NotFoundException,
@@ -15,6 +16,8 @@ import * as bcrypt from "bcrypt";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { UpdateMeDto } from "./dto/update-me.dto";
+import { UpdateUserSettingsDto } from "./dto/update-user-settings.dto";
+import { loadUserSettings, parseUserSettings } from "./user-settings";
 import { JwtPayload } from "./interfaces/jwt-payload.interface";
 import { AuthResponse } from "./interfaces/auth-response.interface";
 import { AUTH_USER_SELECT, toAuthUser, type AuthUser } from "./auth-user";
@@ -22,7 +25,8 @@ import { isGoogleAuthConfigured } from "./google-auth.config";
 import { RegistrationPolicyService } from "./registration-policy.service";
 import { OAuth2Client } from "google-auth-library";
 import axios from "axios";
-import { DEFAULT_CURRENCY_CODE } from "@badger/shared-data";
+import { DEFAULT_CURRENCY_CODE, USER_SETTINGS_MAX_BYTES } from "@badger/shared-data";
+import type { IUserSettings } from "@badger/types";
 import type { Prisma } from "@prisma/client";
 
 @Injectable()
@@ -181,7 +185,10 @@ export class AuthService {
         }
     }
 
-    /** The demo account is shared, so its preference is never saved: one visitor's theme would change it for everyone. */
+    /**
+     * The demo account is shared, so its preferences and settings are never saved: one visitor's theme or import
+     * setting would change it for everyone.
+     */
     async updateMe(user: AuthUser, dto: UpdateMeDto): Promise<AuthUser> {
         if (user.isDemo || dto.colorTheme === undefined) {
             return user;
@@ -192,6 +199,35 @@ export class AuthService {
             select: AUTH_USER_SELECT,
         });
         return toAuthUser(row);
+    }
+
+    async getSettings(userId: string): Promise<IUserSettings> {
+        return loadUserSettings(this.prisma, userId);
+    }
+
+    /**
+     * Merges the defined keys into User.settings in a single statement, so concurrent PATCHes of different keys both
+     * persist. The raw UPDATE bypasses @updatedAt, so updated_at is set here. No retry loop on purpose: a size-cap
+     * miss is a client error, and a lost race is not worth a read-modify-write loop.
+     */
+    async updateSettings(user: AuthUser, dto: UpdateUserSettingsDto): Promise<IUserSettings> {
+        const patch: Partial<IUserSettings> = {};
+        if (dto.unmatchedImportCategory !== undefined) {
+            patch.unmatchedImportCategory = dto.unmatchedImportCategory;
+        }
+        if (user.isDemo || Object.keys(patch).length === 0) {
+            return this.getSettings(user.id);
+        }
+        const json = JSON.stringify(patch);
+        const rows = await this.prisma.$queryRaw<{ settings: Prisma.JsonValue }[]>`
+            UPDATE users SET settings = settings || ${json}::jsonb, updated_at = now()
+            WHERE id = ${user.id}::uuid
+              AND octet_length((settings || ${json}::jsonb)::text) <= ${USER_SETTINGS_MAX_BYTES}
+            RETURNING settings`;
+        if (rows.length === 0) {
+            throw new BadRequestException("Settings exceed the size limit");
+        }
+        return parseUserSettings(rows[0].settings);
     }
 
     async logout(userId: string, refreshToken: string): Promise<void> {
