@@ -4,10 +4,11 @@ import { CardPayoffPatternsService } from "../card-payoff-patterns/card-payoff-p
 import { SyncResultDto } from "../google-sheets/dto";
 import { Decimal } from "@prisma/client/runtime/library";
 import { runRules } from "@badger/utils";
-import { DEFAULT_CURRENCY_CODE, DEFAULT_UNMATCHED_IMPORT_CATEGORY, defaultCategoryIcon } from "@badger/shared-data";
+import { DEFAULT_CURRENCY_CODE, defaultCategoryIcon } from "@badger/shared-data";
 import { resolveCategoryId } from "../google-sheets/category-resolution";
 import { resolveDefaultAccountCurrencyId } from "../accounts/default-account-currency";
 import { loadMatchableRules } from "../rules/rule-mapping";
+import { loadUserSettings } from "../auth/user-settings";
 
 export interface ImportCandidate {
     externalId: string;
@@ -150,6 +151,8 @@ export class TransactionImportService {
 
             // Loaded once for the whole import: every row runs the same rule set.
             const rules = await loadMatchableRules(this.prisma, userId);
+            // Loaded once per import, like the rules: sync jobs have no JWT, so the mode is read here, not per request.
+            const { unmatchedImportCategory } = await loadUserSettings(this.prisma, userId);
 
             const createdCategoryNames = new Set<string>();
             const createdAccountNumbers = new Set<string>();
@@ -283,7 +286,7 @@ export class TransactionImportService {
                             },
                             rules,
                         ).categoryId,
-                    mode: DEFAULT_UNMATCHED_IMPORT_CATEGORY,
+                    mode: unmatchedImportCategory,
                     createCategory: () =>
                         this.prisma.category.create({
                             data: {

@@ -36,6 +36,9 @@ describe("TransactionImportService", () => {
         rule: {
             findMany: jest.fn(),
         },
+        user: {
+            findUnique: jest.fn(),
+        },
     };
 
     const mockCardPayoffPatternsService = {
@@ -84,6 +87,7 @@ describe("TransactionImportService", () => {
             { id: "cur-ils", code: "ILS", symbol: "₪" },
         ]);
         mockPrismaService.rule.findMany.mockResolvedValue([]);
+        mockPrismaService.user.findUnique.mockResolvedValue({ settings: {} });
     });
 
     afterEach(() => {
@@ -180,6 +184,20 @@ describe("TransactionImportService", () => {
             expect(runRules).toHaveBeenCalledTimes(3);
         });
 
+        it("loads the user's settings once per import, not once per row", async () => {
+            await service.importTransactions(
+                "user-1",
+                [
+                    makeCandidate({ externalId: "ext-1", description: "A" }),
+                    makeCandidate({ externalId: "ext-2", description: "B" }),
+                    makeCandidate({ externalId: "ext-3", description: "C" }),
+                ],
+                "ILS",
+            );
+
+            expect(mockPrismaService.user.findUnique).toHaveBeenCalledTimes(1);
+        });
+
         it("runs the rules on each new row with its description, category, amount, account and type", async () => {
             mockPrismaService.rule.findMany.mockResolvedValue([storedRule]);
             mockPrismaService.category.create.mockResolvedValueOnce({ id: "new-category" });
@@ -228,6 +246,105 @@ describe("TransactionImportService", () => {
             expect(row.categoryId).toBeNull();
             expect(mockPrismaService.category.create).not.toHaveBeenCalled();
         });
+    });
+
+    describe("unmatched import category mode", () => {
+        const setMode = (unmatchedImportCategory: string) =>
+            mockPrismaService.user.findUnique.mockResolvedValue({ settings: { unmatchedImportCategory } });
+        const rowsCreated = () => mockPrismaService.transaction.createMany.mock.calls[0][0].data;
+
+        beforeEach(() => {
+            mockCardPayoffPatternsService.checkDescription.mockResolvedValue(false);
+            mockPrismaService.category.findMany.mockResolvedValue([{ id: "cat-food", name: "Food" }]);
+        });
+
+        it("reuse_only assigns an existing category and leaves an unknown one uncategorized", async () => {
+            setMode("reuse_only");
+
+            const result = await service.importTransactions(
+                "user-1",
+                [
+                    makeCandidate({ externalId: "ext-1", originalCategory: "Food" }),
+                    makeCandidate({ externalId: "ext-2", originalCategory: "Missing" }),
+                ],
+                "ILS",
+            );
+
+            const rows = rowsCreated();
+            expect(rows[0].categoryId).toBe("cat-food");
+            expect(rows[1].categoryId).toBeNull();
+            expect(mockPrismaService.category.create).not.toHaveBeenCalled();
+            expect(result.categoriesCreated).toBe(0);
+        });
+
+        it("uncategorized leaves a candidate uncategorized even when its category exists", async () => {
+            setMode("uncategorized");
+
+            await service.importTransactions("user-1", [makeCandidate({ originalCategory: "Food" })], "ILS");
+
+            const row = await importedRow();
+            expect(row.categoryId).toBeNull();
+            expect(mockPrismaService.category.create).not.toHaveBeenCalled();
+        });
+
+        it("create_or_reuse reuses an existing category and creates a missing one", async () => {
+            setMode("create_or_reuse");
+            mockPrismaService.category.create.mockResolvedValueOnce({ id: "new-category" });
+
+            const result = await service.importTransactions(
+                "user-1",
+                [
+                    makeCandidate({ externalId: "ext-1", originalCategory: "Food" }),
+                    makeCandidate({ externalId: "ext-2", originalCategory: "Groceries" }),
+                ],
+                "ILS",
+            );
+
+            const rows = rowsCreated();
+            expect(rows[0].categoryId).toBe("cat-food");
+            expect(rows[1].categoryId).toBe("new-category");
+            expect(mockPrismaService.category.create).toHaveBeenCalledTimes(1);
+            expect(result.categoriesCreated).toBe(1);
+        });
+
+        it("creates a missing category when no mode is stored", async () => {
+            mockPrismaService.category.create.mockResolvedValueOnce({ id: "new-category" });
+
+            const result = await service.importTransactions(
+                "user-1",
+                [makeCandidate({ originalCategory: "Groceries" })],
+                "ILS",
+            );
+
+            expect((await importedRow()).categoryId).toBe("new-category");
+            expect(result.categoriesCreated).toBe(1);
+        });
+
+        it.each(["reuse_only", "uncategorized"] as const)(
+            "a matching rule still sets its category in %s mode",
+            async (mode) => {
+                setMode(mode);
+                (runRules as jest.Mock).mockReturnValueOnce({
+                    categoryId: "rule-category",
+                    matchedRuleIds: ["rule-1"],
+                });
+
+                await service.importTransactions("user-1", [makeCandidate({ originalCategory: "Food" })], "ILS");
+
+                expect((await importedRow()).categoryId).toBe("rule-category");
+            },
+        );
+
+        it.each(["create_or_reuse", "reuse_only", "uncategorized"] as const)(
+            "keeps originalCategory on the imported row in %s mode",
+            async (mode) => {
+                setMode(mode);
+
+                await service.importTransactions("user-1", [makeCandidate({ originalCategory: "Food" })], "ILS");
+
+                expect((await importedRow()).originalCategory).toBe("Food");
+            },
+        );
     });
 
     describe("date self-heal", () => {
