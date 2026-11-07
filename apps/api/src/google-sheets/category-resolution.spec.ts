@@ -60,44 +60,6 @@ describe("resolveCategoryId", () => {
         expect(createCategory).not.toHaveBeenCalled();
     });
 
-    it("falls back to existing category when no mapping rule matches", async () => {
-        const createCategory = jest.fn();
-
-        const result = await resolveCategoryId({
-            categoryName: "Fuel",
-            categoryByName: new Map([["Fuel", "fuel-category-id"]]),
-            createdCategoryNames: new Set<string>(),
-            result: makeSyncResult(),
-            matchCategoryByRules: jest.fn().mockReturnValue(null),
-            createCategory,
-            mode: "create_or_reuse",
-        });
-
-        expect(result).toBe("fuel-category-id");
-        expect(createCategory).not.toHaveBeenCalled();
-    });
-
-    it("creates a new category when no rule matches and no existing category exists", async () => {
-        const categoryByName = new Map<string, string>();
-        const createdCategoryNames = new Set<string>();
-        const syncResult = makeSyncResult();
-
-        const result = await resolveCategoryId({
-            categoryName: "Unexpected Vendor",
-            categoryByName,
-            createdCategoryNames,
-            result: syncResult,
-            matchCategoryByRules: jest.fn().mockReturnValue(null),
-            createCategory: jest.fn().mockResolvedValue({ id: "new-category-id" }),
-            mode: "create_or_reuse",
-        });
-
-        expect(result).toBe("new-category-id");
-        expect(categoryByName.get("Unexpected Vendor")).toBe("new-category-id");
-        expect(createdCategoryNames.has("Unexpected Vendor")).toBe(true);
-        expect(syncResult.categoriesCreated).toBe(1);
-    });
-
     describe("unmatchedImportCategory mode", () => {
         it("create_or_reuse reuses an existing category without creating one", async () => {
             const createCategory = jest.fn();
@@ -120,13 +82,14 @@ describe("resolveCategoryId", () => {
 
         it("create_or_reuse creates a missing category and counts it", async () => {
             const categoryByName = new Map<string, string>();
+            const createdCategoryNames = new Set<string>();
             const syncResult = makeSyncResult();
             const createCategory = jest.fn().mockResolvedValue({ id: "new-category-id" });
 
             const result = await resolveCategoryId({
                 categoryName: "Unexpected Vendor",
                 categoryByName,
-                createdCategoryNames: new Set<string>(),
+                createdCategoryNames,
                 result: syncResult,
                 matchCategoryByRules: jest.fn().mockReturnValue(null),
                 createCategory,
@@ -136,6 +99,7 @@ describe("resolveCategoryId", () => {
             expect(result).toBe("new-category-id");
             expect(createCategory).toHaveBeenCalledTimes(1);
             expect(categoryByName.get("Unexpected Vendor")).toBe("new-category-id");
+            expect(createdCategoryNames.has("Unexpected Vendor")).toBe(true);
             expect(syncResult.categoriesCreated).toBe(1);
         });
 

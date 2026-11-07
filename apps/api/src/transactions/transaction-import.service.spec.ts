@@ -4,6 +4,7 @@ import { TransactionImportService, ImportCandidate } from "./transaction-import.
 import { PrismaService } from "../prisma/prisma.service";
 import { CardPayoffPatternsService } from "../card-payoff-patterns/card-payoff-patterns.service";
 import { runRules } from "@badger/utils";
+import type { UnmatchedImportCategoryMode } from "@badger/shared-data";
 
 // Mocked to isolate the unit under test: the matcher has its own spec.
 jest.mock("@badger/utils", () => ({
@@ -249,7 +250,7 @@ describe("TransactionImportService", () => {
     });
 
     describe("unmatched import category mode", () => {
-        const setMode = (unmatchedImportCategory: string) =>
+        const setMode = (unmatchedImportCategory: UnmatchedImportCategoryMode) =>
             mockPrismaService.user.findUnique.mockResolvedValue({ settings: { unmatchedImportCategory } });
         const rowsCreated = () => mockPrismaService.transaction.createMany.mock.calls[0][0].data;
 
