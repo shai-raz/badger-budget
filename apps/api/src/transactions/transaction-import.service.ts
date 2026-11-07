@@ -4,7 +4,7 @@ import { CardPayoffPatternsService } from "../card-payoff-patterns/card-payoff-p
 import { SyncResultDto } from "../google-sheets/dto";
 import { Decimal } from "@prisma/client/runtime/library";
 import { runRules } from "@badger/utils";
-import { DEFAULT_CURRENCY_CODE, defaultCategoryIcon } from "@badger/shared-data";
+import { DEFAULT_CURRENCY_CODE, DEFAULT_UNMATCHED_IMPORT_CATEGORY, defaultCategoryIcon } from "@badger/shared-data";
 import { resolveCategoryId } from "../google-sheets/category-resolution";
 import { resolveDefaultAccountCurrencyId } from "../accounts/default-account-currency";
 import { loadMatchableRules } from "../rules/rule-mapping";
@@ -283,6 +283,7 @@ export class TransactionImportService {
                             },
                             rules,
                         ).categoryId,
+                    mode: DEFAULT_UNMATCHED_IMPORT_CATEGORY,
                     createCategory: () =>
                         this.prisma.category.create({
                             data: {
