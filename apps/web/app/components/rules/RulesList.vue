@@ -3,6 +3,9 @@
  * The "Your rules" band: search, the rule rows and reordering. Desktop rows drag by their grip, or move
  * from the keyboard, and each drop saves. Below md, reorder mode moves rows locally and saves once, on
  * Done. The page owns the toggle and the ⋮ menu; this list only reports them.
+ *
+ * The page fills the `fallback` slot (the unmatched-import row). It sits above the rules, outside the
+ * sortable list, and is hidden while searching or reordering. With no rules it shows above the empty state.
  */
 import type { IRule } from "@badger/types";
 import { moveArrayElement, useSortable } from "@vueuse/integrations/useSortable";
@@ -57,6 +60,7 @@ const visibleRules = computed(() =>
     orderedRules.value.filter((rule) => ruleMatchesSearch(rule, query.value, props.context)),
 );
 const phoneReordering = computed(() => reorderMode.value && !isDesktop.value);
+const showFallback = computed(() => trimmedQuery.value === "" && !phoneReordering.value);
 const dragEnabled = computed(() => phoneReordering.value || (isDesktop.value && trimmedQuery.value === ""));
 const canStartReorder = computed(() => !isDesktop.value && trimmedQuery.value === "" && savedIds.value.length >= 2);
 const meta = computed(() => {
@@ -268,6 +272,12 @@ watch(trimmedQuery, cancelKeyboardPick);
         </template>
 
         <template #empty>
+            <div
+                v-if="$slots.fallback"
+                class="pb-3 md:px-0"
+            >
+                <slot name="fallback" />
+            </div>
             <SharedEmptyState
                 icon="pi-bolt"
                 title="No rules yet"
@@ -304,6 +314,13 @@ watch(trimmedQuery, cancelKeyboardPick);
                     class="w-full"
                 />
             </IconField>
+        </div>
+
+        <div
+            v-if="showFallback && $slots.fallback"
+            class="pb-3 md:px-0"
+        >
+            <slot name="fallback" />
         </div>
 
         <p
