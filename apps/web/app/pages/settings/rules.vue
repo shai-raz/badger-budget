@@ -158,7 +158,7 @@ const confirmDelete = (rule: IRule) => {
                 <UnmatchedImportRow
                     :mode="settings?.unmatchedImportCategory"
                     :loading="settingsLoading"
-                    :error="settingsError"
+                    :error="settings ? null : settingsError"
                     :disabled="isDemo"
                     @open="unmatchedImportOpen = true"
                 />
