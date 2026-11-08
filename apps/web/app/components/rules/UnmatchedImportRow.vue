@@ -2,7 +2,7 @@
 /**
  * The "When no rule matches" row at the top of the Rules page's "Your rules" band. It shows the saved mode and
  * reports an open; the page owns the dialog. Below md the whole row is one button, the way a phone rule row opens.
- * A full-row control needs row semantics, as on the Settings hub, so it is a plain button with an aria-label.
+ * A full-row control needs row semantics, as on the Settings hub, so it is a plain button named by its visible text.
  * Demo accounts and a failed load keep the row visible but disable it.
  */
 import type { UnmatchedImportCategoryMode } from "@badger/shared-data";
@@ -24,7 +24,6 @@ const isDesktop = useIsDesktop();
 
 const option = computed(() => (props.mode ? UNMATCHED_IMPORT_CATEGORY_OPTIONS[props.mode] : undefined));
 const isUnavailable = computed(() => !!props.disabled || !!props.loading || !!props.error);
-const ariaLabel = computed(() => `When no rule matches: ${option.value?.label ?? ""}. Change`);
 </script>
 
 <template>
@@ -80,7 +79,6 @@ const ariaLabel = computed(() => `When no rule matches: ${option.value?.label ??
         type="button"
         class="flex w-full items-center gap-3 bg-surface-50 px-4 py-3 text-left disabled:opacity-60 dark:bg-surface-950"
         :disabled="isUnavailable"
-        :aria-label="ariaLabel"
         @click="emit('open')"
     >
         <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-200 dark:bg-surface-700">
@@ -118,5 +116,6 @@ const ariaLabel = computed(() => `When no rule matches: ${option.value?.label ??
                 aria-hidden="true"
             />
         </span>
+        <span class="sr-only">Change</span>
     </button>
 </template>

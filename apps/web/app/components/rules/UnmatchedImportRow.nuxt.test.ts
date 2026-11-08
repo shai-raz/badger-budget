@@ -72,7 +72,30 @@ describe("UnmatchedImportRow on mobile", () => {
         expect(wrapper.findAll("button")).toHaveLength(1);
         expect(button.find(".pi-chevron-right").exists()).toBe(true);
         expect(changeButton(wrapper)).toBeUndefined();
-        expect(button.attributes("aria-label")).toBe("When no rule matches: Bank's category, if it exists. Change");
+        expect(button.attributes("aria-label")).toBeUndefined();
+        expect(button.text()).toContain("When no rule matches");
+        expect(button.text()).toContain("Bank's category, if it exists");
+        expect(button.text()).toContain("Change");
+    });
+
+    it("keeps the demo note in the button's accessible name", async () => {
+        const wrapper = await mountRow({ disabled: true });
+
+        expect(wrapper.get("button").text()).toContain("The demo account can't change this.");
+    });
+
+    it("keeps the error note in the button's accessible name", async () => {
+        const wrapper = await mountRow({ error: new Error("network") });
+
+        expect(wrapper.get("button").text()).toContain("Couldn't load this setting.");
+    });
+
+    it("names the button without a mode while loading", async () => {
+        const wrapper = await mountRow({ loading: true });
+
+        expect(wrapper.get("button").text()).toContain("When no rule matches");
+        expect(wrapper.get("button").text()).toContain("Change");
+        expect(wrapper.get("button").attributes("aria-label")).toBeUndefined();
     });
 
     it("emits open when the row is tapped", async () => {
