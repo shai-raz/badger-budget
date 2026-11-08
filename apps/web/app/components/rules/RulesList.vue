@@ -274,7 +274,7 @@ watch(trimmedQuery, cancelKeyboardPick);
         <template #empty>
             <div
                 v-if="$slots.fallback"
-                class="px-4 pb-3 md:px-0"
+                class="pb-3 md:px-0"
             >
                 <slot name="fallback" />
             </div>
@@ -318,7 +318,7 @@ watch(trimmedQuery, cancelKeyboardPick);
 
         <div
             v-if="showFallback && $slots.fallback"
-            class="px-4 pb-3 md:px-0"
+            class="pb-3 md:px-0"
         >
             <slot name="fallback" />
         </div>
