@@ -5,6 +5,8 @@ import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { UpdateMeDto } from "./dto/update-me.dto";
+import { UpdateUserSettingsDto } from "./dto/update-user-settings.dto";
+import { UserSettingsResponseDto } from "./dto/user-settings-response.dto";
 import { LocalAuthGuard } from "./guards/local-auth.guard";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { GoogleAuthGuard } from "./guards/google-auth.guard";
@@ -73,6 +75,27 @@ export class AuthController {
     @ApiResponse({ status: 401, description: "Unauthorized" })
     updateMe(@CurrentUser() user: AuthUser, @Body() dto: UpdateMeDto) {
         return this.authService.updateMe(user, dto);
+    }
+
+    @Get("me/settings")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: "Get the current user's settings" })
+    @ApiResponse({ status: 200, description: "Settings with defaults filled in", type: UserSettingsResponseDto })
+    @ApiResponse({ status: 401, description: "Unauthorized" })
+    getSettings(@CurrentUser() user: AuthUser) {
+        return this.authService.getSettings(user.id);
+    }
+
+    @Patch("me/settings")
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: "Update the current user's settings" })
+    @ApiResponse({ status: 200, description: "Updated settings", type: UserSettingsResponseDto })
+    @ApiResponse({ status: 400, description: "Unknown setting value, unexpected field or settings too large" })
+    @ApiResponse({ status: 401, description: "Unauthorized" })
+    updateSettings(@CurrentUser() user: AuthUser, @Body() dto: UpdateUserSettingsDto) {
+        return this.authService.updateSettings(user, dto);
     }
 
     @Get("google")

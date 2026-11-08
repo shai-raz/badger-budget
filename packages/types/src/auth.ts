@@ -1,4 +1,4 @@
-import type { ColorThemeName } from "@badger/shared-data";
+import type { ColorThemeName, UnmatchedImportCategoryMode } from "@badger/shared-data";
 
 /** Application role of a user. ADMIN is granted by the backfill and the create rule (see api auth). */
 export type UserRole = "USER" | "ADMIN";
@@ -20,6 +20,15 @@ export interface IAuthUser {
 export interface IUpdateMeRequest {
     colorTheme?: ColorThemeName | null;
 }
+
+/** Per-user settings. Always fully resolved (defaults filled) by the API. */
+export interface IUserSettings {
+    /** How an import's unmatched category is resolved: create or reuse one, reuse only, or leave uncategorized. */
+    unmatchedImportCategory: UnmatchedImportCategoryMode;
+}
+
+/** Body of PATCH /auth/me/settings. Omitted fields are left unchanged. */
+export type IUpdateUserSettingsRequest = Partial<IUserSettings>;
 
 /** Login, register and refresh responses. */
 export interface IAuthResponse {

@@ -2,6 +2,7 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { JwtService } from "@nestjs/jwt";
 import { UserRole } from "@prisma/client";
 import {
+    BadRequestException,
     Logger,
     NotFoundException,
     UnauthorizedException,
@@ -17,6 +18,7 @@ import * as bcrypt from "bcrypt";
 import { isGoogleAuthConfigured } from "./google-auth.config";
 import { RegistrationPolicyService } from "./registration-policy.service";
 import { AUTH_USER_SELECT } from "./auth-user";
+import { USER_SETTINGS_MAX_BYTES } from "@badger/shared-data";
 
 jest.mock("bcrypt");
 jest.mock("./google-auth.config", () => ({ isGoogleAuthConfigured: jest.fn() }));
@@ -42,6 +44,7 @@ describe("AuthService", () => {
             create: jest.fn(),
         },
         $transaction: jest.fn(),
+        $queryRaw: jest.fn(),
     };
 
     const mockJwtService = {
@@ -820,6 +823,100 @@ describe("AuthService", () => {
 
             expect(mockPrismaService.user.update).not.toHaveBeenCalled();
             expect(result).toBe(authUser);
+        });
+    });
+
+    describe("settings", () => {
+        const defaults = { unmatchedImportCategory: "create_or_reuse" };
+        const settingsUser = {
+            id: "user-id",
+            email: "test@example.com",
+            firstName: "John",
+            lastName: "Doe",
+            role: UserRole.USER,
+            colorTheme: null,
+            isDemo: false,
+        };
+
+        describe("getSettings", () => {
+            it("returns the defaults for a user who never saved settings", async () => {
+                mockPrismaService.user.findUnique.mockResolvedValueOnce({ settings: {} });
+
+                expect(await service.getSettings("user-id")).toEqual(defaults);
+            });
+
+            it("drops unknown keys and invalid values back to the defaults", async () => {
+                mockPrismaService.user.findUnique.mockResolvedValueOnce({
+                    settings: { unmatchedImportCategory: "x", junk: 1 },
+                });
+
+                expect(await service.getSettings("user-id")).toEqual(defaults);
+            });
+        });
+
+        describe("updateSettings", () => {
+            it("merges the patch in one raw statement and returns the stored settings", async () => {
+                mockPrismaService.$queryRaw.mockResolvedValueOnce([
+                    { settings: { unmatchedImportCategory: "uncategorized" } },
+                ]);
+
+                const result = await service.updateSettings(settingsUser, {
+                    unmatchedImportCategory: "uncategorized",
+                });
+
+                expect(result).toEqual({ unmatchedImportCategory: "uncategorized" });
+                expect(mockPrismaService.$queryRaw).toHaveBeenCalledTimes(1);
+                const [strings, ...values] = mockPrismaService.$queryRaw.mock.calls[0];
+                const sql = (strings as TemplateStringsArray).join("");
+                expect(sql).toContain("settings || ");
+                expect(sql).toContain("octet_length");
+                expect(sql).toContain("RETURNING settings");
+                expect(sql).toContain("updated_at = (now() AT TIME ZONE 'UTC')");
+                expect(values).toEqual(
+                    expect.arrayContaining([
+                        JSON.stringify({ unmatchedImportCategory: "uncategorized" }),
+                        USER_SETTINGS_MAX_BYTES,
+                    ]),
+                );
+            });
+
+            it("never reads or rewrites the whole user row", async () => {
+                mockPrismaService.$queryRaw.mockResolvedValueOnce([{ settings: defaults }]);
+
+                await service.updateSettings(settingsUser, { unmatchedImportCategory: "reuse_only" });
+
+                expect(mockPrismaService.user.update).not.toHaveBeenCalled();
+                expect(mockPrismaService.user.findUnique).not.toHaveBeenCalled();
+            });
+
+            it("rejects with a bad request when the merge matches no row (over the size cap)", async () => {
+                mockPrismaService.$queryRaw.mockResolvedValueOnce([]);
+
+                await expect(
+                    service.updateSettings(settingsUser, { unmatchedImportCategory: "reuse_only" }),
+                ).rejects.toThrow(BadRequestException);
+            });
+
+            it("leaves the shared demo account unchanged and saves nothing", async () => {
+                mockPrismaService.user.findUnique.mockResolvedValueOnce({
+                    settings: { unmatchedImportCategory: "uncategorized" },
+                });
+                const demoUser = { ...settingsUser, email: DEMO_EMAIL, isDemo: true };
+
+                const result = await service.updateSettings(demoUser, { unmatchedImportCategory: "reuse_only" });
+
+                expect(mockPrismaService.$queryRaw).not.toHaveBeenCalled();
+                expect(result).toEqual({ unmatchedImportCategory: "uncategorized" });
+            });
+
+            it("saves nothing and returns the current settings when the patch is empty", async () => {
+                mockPrismaService.user.findUnique.mockResolvedValueOnce({ settings: {} });
+
+                const result = await service.updateSettings(settingsUser, {});
+
+                expect(mockPrismaService.$queryRaw).not.toHaveBeenCalled();
+                expect(result).toEqual(defaults);
+            });
         });
     });
 });

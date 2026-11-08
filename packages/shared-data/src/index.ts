@@ -9,4 +9,5 @@ export * from "./account-types";
 export * from "./attachments";
 export * from "./demo";
 export * from "./color-themes";
+export * from "./user-settings";
 export * from "./sync-errors";

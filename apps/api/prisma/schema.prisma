@@ -27,6 +27,8 @@ model User {
   lastSeenVersion      String?   @map("last_seen_version") @db.VarChar(64)
   // Web colour theme name (COLOR_THEMES in @badger/shared-data); null = default. Not an enum so adding a theme needs no migration.
   colorTheme           String?   @map("color_theme") @db.VarChar(32)
+  // Per-user settings (shape: IUserSettings / @badger/shared-data user-settings). Read only through auth/user-settings.ts; written only by AuthService.updateSettings' atomic merge; capped at USER_SETTINGS_MAX_BYTES.
+  settings             Json     @default("{}")
   // Backfill (migration 20261026120000_user_role) and the create rule (first real user, see auth) keep exactly one
   // live non-demo ADMIN; the demo user is never ADMIN.
   role                 UserRole  @default(USER)
