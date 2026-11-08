@@ -1,3 +1,4 @@
+import type { UnmatchedImportCategoryMode } from "@badger/shared-data";
 import { SyncResultDto } from "./dto";
 
 export interface ResolveCategoryParams {
@@ -7,10 +8,12 @@ export interface ResolveCategoryParams {
     result: SyncResultDto;
     matchCategoryByRules: () => string | null;
     createCategory: () => Promise<{ id: string }>;
+    mode: UnmatchedImportCategoryMode;
 }
 
 export async function resolveCategoryId(params: ResolveCategoryParams): Promise<string | null> {
-    const { categoryName, categoryByName, createdCategoryNames, result, matchCategoryByRules, createCategory } = params;
+    const { categoryName, categoryByName, createdCategoryNames, result, matchCategoryByRules, createCategory, mode } =
+        params;
 
     // Rules run on every row, including rows with no original category.
     const matchedCategory = matchCategoryByRules();
@@ -22,8 +25,18 @@ export async function resolveCategoryId(params: ResolveCategoryParams): Promise<
         return null;
     }
 
+    // "uncategorized" leaves unmatched rows without a category, even when one with the same name exists.
+    if (mode === "uncategorized") {
+        return null;
+    }
+
     if (categoryByName.has(categoryName)) {
         return categoryByName.get(categoryName)!;
+    }
+
+    // "reuse_only" never creates a category, so an unknown name stays uncategorized.
+    if (mode === "reuse_only") {
+        return null;
     }
 
     if (createdCategoryNames.has(categoryName)) {
