@@ -79,7 +79,7 @@ const save = () => {
         </div>
 
         <p class="text-xs text-muted-color">
-            Applies to new imports from bank sync and Google Sheets. Transactions you already have keep their category.
+            Applies to new transactions you sync. Transactions you already have keep their category.
         </p>
     </SharedFormDialog>
 </template>
