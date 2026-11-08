@@ -1,6 +1,33 @@
 {
     "releases": [
         {
+            "version": "0.15.0",
+            "date": "2026-11-08",
+            "items": [
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "per-user settings store with GET/PATCH /auth/me/settings",
+                    "pr": 118
+                },
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "honour unmatchedImportCategory when importing",
+                    "pr": 119
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "\"When no rule matches\" row and dialog on the Rules page",
+                    "pr": 120
+                }
+            ]
+        },
+        {
             "version": "0.14.1",
             "date": "2026-11-06",
             "items": [
