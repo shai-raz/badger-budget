@@ -5,9 +5,9 @@
     "license": "AGPL-3.0-only",
     "type": "module",
     "scripts": {
-        "build": "nuxt build",
+        "build": "nuxt build && node scripts/check-sw-output.mjs",
         "dev": "nuxt dev",
-        "generate": "nuxt generate",
+        "generate": "nuxt generate && node scripts/check-sw-output.mjs",
         "preview": "nuxt preview",
         "lint": "eslint . --max-warnings 0",
         "check-types": "nuxt typecheck && tsc -p sw/tsconfig.json",
