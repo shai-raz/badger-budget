@@ -71,8 +71,21 @@ describe("resolveSecrets", () => {
 
         expect(result.generated).toEqual([...MANAGED_SECRETS]);
         const values = MANAGED_SECRETS.map((name) => env[name]);
-        values.forEach((v) => expect(v).toMatch(/^[A-Za-z0-9_-]{64}$/));
+        MANAGED_SECRETS.filter((name) => name !== "VAPID_PRIVATE_KEY").forEach((name) =>
+            expect(env[name]).toMatch(/^[A-Za-z0-9_-]{64}$/),
+        );
         expect(new Set(values).size).toBe(MANAGED_SECRETS.length);
+    });
+
+    it("generates VAPID_PRIVATE_KEY as a P-256 scalar: 43 base64url characters that decode to 32 bytes", () => {
+        const { fs } = createMemoryFs();
+        const env: NodeJS.ProcessEnv = {};
+
+        resolveSecrets({ env, dataDir: DATA_DIR, fs });
+
+        const key = env.VAPID_PRIVATE_KEY as string;
+        expect(key).toMatch(/^[A-Za-z0-9_-]{43}$/);
+        expect(Buffer.from(key, "base64url")).toHaveLength(32);
     });
 
     it("writes generated secrets with flag wx and mode 0o600, creating the dir with 0o700", () => {
@@ -166,6 +179,7 @@ describe("resolveSecrets", () => {
         const message = logger.warn.mock.calls[0][0] as string;
         expect(message).toContain(join(SECRETS_DIR, "CREDENTIAL_ENCRYPTION_PEPPER"));
         expect(message).toMatch(/back up/i);
+        expect(message).toContain("losing VAPID_PRIVATE_KEY breaks every push notification subscription");
         MANAGED_SECRETS.forEach((name) => expect(message).not.toContain(env[name] as string));
     });
 
@@ -176,6 +190,7 @@ describe("resolveSecrets", () => {
             JWT_SECRET: "a",
             JWT_REFRESH_SECRET: "b",
             CREDENTIAL_ENCRYPTION_PEPPER: "c",
+            VAPID_PRIVATE_KEY: "d",
         };
 
         resolveSecrets({ env, dataDir: DATA_DIR, fs, logger });
