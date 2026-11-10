@@ -14,8 +14,13 @@ const INVALID_KEY_MESSAGE =
 /** Hostnames that cannot be a real public origin, so they fall back to the project subject. */
 const LOCAL_HOSTNAME = /^(localhost|127\.0\.0\.1|\[::1\])$|\.(localhost|local)$/;
 
+/** web-push accepts only unpadded URL-safe base64 of 32 bytes (43 characters), so the guard matches that exactly. */
+const PRIVATE_KEY_FORMAT = /^[A-Za-z0-9_-]{43}$/;
+
 /** Derives the uncompressed P-256 public key (base64url, 65 bytes) that matches a base64url private key. */
 export function deriveVapidPublicKey(privateKey: string): string {
+    if (!PRIVATE_KEY_FORMAT.test(privateKey)) throw new Error(INVALID_KEY_MESSAGE);
+
     const bytes = Buffer.from(privateKey, "base64url");
     if (bytes.length !== 32) throw new Error(INVALID_KEY_MESSAGE);
 

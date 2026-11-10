@@ -4,6 +4,8 @@ import { DEFAULT_VAPID_SUBJECT, deriveVapidPublicKey, resolveVapidConfig, resolv
 const INVALID_KEY = /VAPID_PRIVATE_KEY is not a valid P-256 private key/;
 
 describe("deriveVapidPublicKey", () => {
+    const validPrivateKey = generateVAPIDKeys().privateKey;
+
     it("matches the public key web-push generates for the same private key", () => {
         const { publicKey, privateKey } = generateVAPIDKeys();
 
@@ -25,6 +27,10 @@ describe("deriveVapidPublicKey", () => {
         ["empty", ""],
         ["31 bytes", Buffer.alloc(31, 7).toString("base64url")],
         ["33 bytes", Buffer.alloc(33, 7).toString("base64url")],
+        ["a padded key", `${validPrivateKey}=`],
+        ["a standard-base64 key", Buffer.from(validPrivateKey, "base64url").toString("base64")],
+        ["a key with a + character", `+${validPrivateKey.slice(1)}`],
+        ["a key with a / character", `/${validPrivateKey.slice(1)}`],
     ])("rejects a %s key without echoing it", (_label, key) => {
         expect(() => deriveVapidPublicKey(key)).toThrow(INVALID_KEY);
         try {
