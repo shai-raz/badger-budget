@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ThrottlerModule } from "@nestjs/throttler";
 import { NOTIFICATION_TYPE_REGISTRY } from "@badger/shared-data";
 import { AuthModule } from "../auth/auth.module";
+import { NotificationPreferencesController } from "./notification-preferences.controller";
 import { NotificationPreferencesService } from "./notification-preferences.service";
 import { PushController } from "./push.controller";
 import { PushService } from "./push.service";
@@ -13,7 +14,7 @@ import { resolveVapidConfig } from "./vapid";
 @Module({
     // The throttler is not global; PushThrottlerGuard resolves its storage from this import.
     imports: [AuthModule, ThrottlerModule.forRoot([{ ttl: 60000, limit: 10 }])],
-    controllers: [PushController],
+    controllers: [PushController, NotificationPreferencesController],
     providers: [
         // Throws at boot when VAPID_PRIVATE_KEY is invalid (main.ts resolves secrets into process.env first).
         { provide: VAPID_CONFIG, useFactory: () => resolveVapidConfig(process.env) },

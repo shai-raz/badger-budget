@@ -56,6 +56,13 @@ import type {
     IUpdateMeRequest,
     IUserSettings,
     IUpdateUserSettingsRequest,
+    IVapidPublicKeyResponse,
+    IRegisterPushSubscriptionRequest,
+    IPushSubscription,
+    IUnregisterPushSubscriptionRequest,
+    IPushTestResponse,
+    INotificationPreference,
+    IUpdateNotificationPreferencesRequest,
     IRule,
     CreateRuleDto,
     UpdateRuleDto,
@@ -263,6 +270,48 @@ export class ApiClient {
 
     async updateMySettings(patch: IUpdateUserSettingsRequest): Promise<IUserSettings> {
         const response = await this.client.patch<IUserSettings>("/auth/me/settings", patch);
+        return response.data;
+    }
+
+    // Notifications (Web Push)
+    async getVapidPublicKey(): Promise<IVapidPublicKeyResponse> {
+        const response = await this.client.get<IVapidPublicKeyResponse>("/push/vapid-public-key");
+        return response.data;
+    }
+
+    async registerPushSubscription(data: IRegisterPushSubscriptionRequest): Promise<IPushSubscription> {
+        const response = await this.client.post<IPushSubscription>("/push/subscriptions", data);
+        return response.data;
+    }
+
+    async getPushSubscriptions(): Promise<IPushSubscription[]> {
+        const response = await this.client.get<IPushSubscription[]>("/push/subscriptions");
+        return response.data;
+    }
+
+    async deletePushSubscription(id: string): Promise<void> {
+        await this.client.delete(`/push/subscriptions/${id}`);
+    }
+
+    async unregisterPushSubscription(endpoint: string): Promise<void> {
+        const data: IUnregisterPushSubscriptionRequest = { endpoint };
+        await this.client.post("/push/subscriptions/unregister", data);
+    }
+
+    async sendTestNotification(): Promise<IPushTestResponse> {
+        const response = await this.client.post<IPushTestResponse>("/push/test");
+        return response.data;
+    }
+
+    async getNotificationPreferences(): Promise<INotificationPreference[]> {
+        const response = await this.client.get<INotificationPreference[]>("/notifications/preferences");
+        return response.data;
+    }
+
+    async updateNotificationPreferences(
+        data: IUpdateNotificationPreferencesRequest,
+    ): Promise<INotificationPreference[]> {
+        const response = await this.client.patch<INotificationPreference[]>("/notifications/preferences", data);
         return response.data;
     }
 
