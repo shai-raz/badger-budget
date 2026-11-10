@@ -54,6 +54,8 @@ model User {
   oauthAuthorizationRequests OAuthAuthorizationRequest[]
   oauthGrants          OAuthGrant[]
   reimbursementAllocations ReimbursementAllocation[]
+  pushSubscriptions    PushSubscription[]
+  notificationPreferences NotificationPreference[]
 
   @@index([email])
   @@index([googleId])
@@ -470,6 +472,36 @@ model SyncPasskey {
 
   @@index([userId])
   @@map("sync_passkeys")
+}
+
+model PushSubscription {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  endpoint       String    @unique @db.VarChar(2048)
+  p256dh         String    @db.VarChar(255)
+  auth           String    @db.VarChar(255)
+  deviceLabel    String    @map("device_label") @db.VarChar(100)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  lastSeenAt     DateTime  @default(now()) @map("last_seen_at") @db.Timestamp(6)
+  lastAcceptedAt DateTime? @map("last_accepted_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+model NotificationPreference {
+  userId    String   @map("user_id") @db.Uuid
+  type      String   @db.VarChar(64)
+  enabled   Boolean
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, type])
+  @@index([type, enabled])
+  @@map("notification_preferences")
 }
 
 model ScraperConnection {

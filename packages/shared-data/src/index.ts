@@ -11,3 +11,4 @@ export * from "./demo";
 export * from "./color-themes";
 export * from "./user-settings";
 export * from "./sync-errors";
+export * from "./notifications";
