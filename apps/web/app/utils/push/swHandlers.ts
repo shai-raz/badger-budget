@@ -1,0 +1,235 @@
+import {
+    NOTIFICATION_ACTIONS,
+    isNotificationActionId,
+    isNotificationType,
+    type NotificationActionId,
+    type NotificationActionLink,
+    type NotificationType,
+    type PushMessage,
+} from "@badger/shared-data";
+
+// Pure push and click logic for the service worker. Structural interfaces stand in for the DOM and
+// WebWorker globals so this compiles under both libs and runs under node tests (see reloadToNewBuild.ts).
+
+/** NotificationOptions plus `actions`, which the DOM lib typings omit. */
+export interface ShowOptions extends NotificationOptions {
+    actions?: { action: string; title: string }[];
+}
+
+/** Stored in notification.data so a click can route without re-reading the push payload. */
+export interface NotificationTarget {
+    url: string;
+    actions: Partial<Record<NotificationActionId, string>>;
+}
+
+export interface SwWindowClient {
+    url: string;
+    navigate(url: string): Promise<unknown>;
+    focus(): Promise<unknown>;
+}
+
+export interface SwClients {
+    matchAll(options: { type: "window"; includeUncontrolled: boolean }): Promise<readonly SwWindowClient[]>;
+    openWindow(url: string): Promise<unknown>;
+}
+
+export interface PushDeps {
+    showNotification(title: string, options: ShowOptions): Promise<void>;
+    fetch: typeof fetch;
+}
+
+export type PushTypeHandler = (
+    message: PushMessage,
+    deps: PushDeps,
+) => Promise<{ title: string; options: ShowOptions }>;
+
+const ICON = "/pwa-192x192.png";
+
+export const FALLBACK_NOTIFICATION = {
+    title: "Badger Budget",
+    body: "You have a new notification.",
+    url: "/",
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Parses the action list; absent means none, any malformed entry rejects the whole message. */
+function parseActions(value: unknown): NotificationActionLink[] | null {
+    if (value === undefined) return [];
+    if (!Array.isArray(value)) return null;
+    const actions: NotificationActionLink[] = [];
+    for (const entry of value) {
+        if (!isRecord(entry)) return null;
+        const { id, title, url } = entry;
+        if (!isNotificationActionId(id) || typeof title !== "string" || typeof url !== "string") return null;
+        actions.push({ id, title, url });
+    }
+    return actions;
+}
+
+/** Returns the typed message, or null for bad JSON or any missing or mistyped field. */
+export function parsePushMessage(text: string | null): PushMessage | null {
+    if (text === null) return null;
+    let raw: unknown;
+    try {
+        raw = JSON.parse(text);
+    } catch {
+        return null;
+    }
+    if (!isRecord(raw)) return null;
+    const { type, title, body, url, tag, data } = raw;
+    if (!isNotificationType(type) || typeof title !== "string" || typeof body !== "string") return null;
+    if (typeof url !== "string" || typeof tag !== "string" || !isRecord(data)) return null;
+    const actions = parseActions(raw.actions);
+    if (actions === null) return null;
+
+    const base = { title, body, url, tag, actions };
+    switch (type) {
+        case "system.update-available":
+            return typeof data.version === "string" ? { ...base, type, data: { version: data.version } } : null;
+        case "system.test":
+            return { ...base, type, data: {} };
+    }
+}
+
+/** Same-origin absolute or relative URLs become a path; anything else (other origins, schemes) becomes "/". */
+export function safeAppPath(url: unknown, origin: string): string {
+    if (typeof url !== "string") return "/";
+    try {
+        const parsed = new URL(url, origin);
+        if (parsed.origin !== new URL(origin).origin) return "/";
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    } catch {
+        return "/";
+    }
+}
+
+/** Shared by every v1 type until a type needs its own handler. */
+export function defaultHandler(message: PushMessage): { title: string; options: ShowOptions } {
+    const actionUrls: Partial<Record<NotificationActionId, string>> = {};
+    for (const action of message.actions ?? []) actionUrls[action.id] = action.url;
+    const target: NotificationTarget = { url: message.url, actions: actionUrls };
+    return {
+        title: message.title,
+        options: {
+            body: message.body,
+            tag: message.tag,
+            icon: ICON,
+            badge: ICON,
+            actions: message.actions?.map((action) => ({ action: action.id, title: action.title })),
+            data: target,
+        },
+    };
+}
+
+export const PUSH_TYPE_HANDLERS: Record<NotificationType, PushTypeHandler> = {
+    "system.update-available": (message) => Promise.resolve(defaultHandler(message)),
+    "system.test": (message) => Promise.resolve(defaultHandler(message)),
+};
+
+function fallbackOptions(url: string, tag: string): { title: string; options: ShowOptions } {
+    return {
+        title: FALLBACK_NOTIFICATION.title,
+        options: {
+            body: FALLBACK_NOTIFICATION.body,
+            tag,
+            icon: ICON,
+            badge: ICON,
+            data: { url, actions: {} } satisfies NotificationTarget,
+        },
+    };
+}
+
+/** Every URL in the message goes through safeAppPath before any handler sees it. */
+function sanitizeMessage(message: PushMessage, origin: string): PushMessage {
+    return {
+        ...message,
+        url: safeAppPath(message.url, origin),
+        actions: message.actions?.map((action) => ({ ...action, url: safeAppPath(action.url, origin) })),
+    };
+}
+
+/**
+ * Shows exactly one notification for a push payload. Unparseable or unknown payloads, and handlers that throw,
+ * show a fallback so the user still sees that something arrived.
+ */
+export async function handlePush(
+    text: string | null,
+    deps: PushDeps & { origin: string },
+    handlers: Record<NotificationType, PushTypeHandler> = PUSH_TYPE_HANDLERS,
+): Promise<void> {
+    const parsed = parsePushMessage(text);
+    let shown: { title: string; options: ShowOptions };
+    if (!parsed) {
+        shown = fallbackOptions(FALLBACK_NOTIFICATION.url, "fallback");
+    } else {
+        const message = sanitizeMessage(parsed, deps.origin);
+        try {
+            shown = await handlers[message.type](message, deps);
+        } catch {
+            shown = fallbackOptions(message.url, message.tag);
+        }
+    }
+    await deps.showNotification(shown.title, shown.options);
+}
+
+/** Reads the stored target, falling back to "/" when the shape is wrong. */
+function readTarget(data: unknown): NotificationTarget {
+    if (!isRecord(data) || typeof data.url !== "string" || !isRecord(data.actions)) {
+        return { url: "/", actions: {} };
+    }
+    const actions: Partial<Record<NotificationActionId, string>> = {};
+    for (const id of NOTIFICATION_ACTIONS) {
+        const url = data.actions[id];
+        if (typeof url === "string") actions[id] = url;
+    }
+    return { url: data.url, actions };
+}
+
+/**
+ * Focuses an existing app window and navigates it to the target, or opens a new one. Navigation must happen even
+ * when focus is refused, since focus() can reject without user activation (e.g. synthetic events in E2E).
+ */
+export async function handleNotificationClick(
+    input: { action: string; data: unknown },
+    deps: { clients: SwClients; origin: string },
+): Promise<void> {
+    const { clients, origin } = deps;
+    const target = readTarget(input.data);
+    const actionUrl = isNotificationActionId(input.action) ? target.actions[input.action] : undefined;
+    const absolute = new URL(safeAppPath(actionUrl ?? target.url, origin), origin).href;
+
+    const openNew = async () => {
+        try {
+            await clients.openWindow(absolute);
+        } catch {
+            // No window can be opened (e.g. blocked); nothing more to do from the worker.
+        }
+    };
+
+    let windows: readonly SwWindowClient[];
+    try {
+        windows = await clients.matchAll({ type: "window", includeUncontrolled: true });
+    } catch {
+        windows = [];
+    }
+    const client = windows.find((candidate) => candidate.url.startsWith(`${origin}/`));
+    if (!client) {
+        await openNew();
+        return;
+    }
+
+    try {
+        await client.navigate(absolute);
+    } catch {
+        await openNew();
+        return;
+    }
+    try {
+        await client.focus();
+    } catch {
+        // Focus is best effort; the navigation already happened.
+    }
+}
