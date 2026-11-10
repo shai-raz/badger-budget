@@ -1,7 +1,9 @@
 import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { isApiOrWellKnownPath, resolveWebDistDir } from "./spa";
+import express from "express";
+import request from "supertest";
+import { createSpaHandlers, isApiOrWellKnownPath, resolveWebDistDir } from "./spa";
 
 describe("resolveWebDistDir", () => {
     let dist: string;
@@ -41,4 +43,24 @@ describe("isApiOrWellKnownPath", () => {
             expect(isApiOrWellKnownPath(path)).toBe(false);
         },
     );
+});
+
+describe("createSpaHandlers cache headers", () => {
+    let dist: string;
+    beforeAll(() => {
+        dist = mkdtempSync(join(tmpdir(), "spa-cache-spec-"));
+        writeFileSync(join(dist, "index.html"), "<html></html>");
+        writeFileSync(join(dist, "sw.js"), "importScripts('sw-push.js');");
+        writeFileSync(join(dist, "sw-push.js"), "self.addEventListener('push', () => {});");
+    });
+    afterAll(() => {
+        rmSync(dist, { recursive: true, force: true });
+    });
+
+    it.each(["/sw.js", "/sw-push.js"])("revalidates %s instead of caching it", async (path) => {
+        const app = express();
+        app.use(createSpaHandlers(dist));
+        const res = await request(app).get(path).expect(200);
+        expect(res.headers["cache-control"]).toBe("no-cache");
+    });
 });

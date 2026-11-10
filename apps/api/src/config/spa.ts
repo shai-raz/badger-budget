@@ -30,7 +30,7 @@ export function frameHeadersMiddleware(): RequestHandler {
 /** Nuxt content-hashes everything under /_nuxt/, so those files can be cached forever. */
 const IMMUTABLE_PREFIX = "_nuxt/";
 /** Entry documents and service-worker files must always be revalidated. */
-const NO_CACHE_FILE = /^(sw\.js|workbox-.*\.js|manifest\.webmanifest)$/;
+const NO_CACHE_FILE = /^(sw\.js|sw-push\.js|workbox-.*\.js|manifest\.webmanifest)$/;
 /** Build output and any file-like path (has an extension in its last segment) is never a client route. */
 const isAssetPath = (path: string): boolean => path.startsWith("/_nuxt/") || /\.[^/]+$/.test(path);
 

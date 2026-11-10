@@ -10,7 +10,7 @@
         "generate": "nuxt generate",
         "preview": "nuxt preview",
         "lint": "eslint . --max-warnings 0",
-        "check-types": "nuxt typecheck",
+        "check-types": "nuxt typecheck && tsc -p sw/tsconfig.json",
         "test": "vitest run",
         "postinstall": "node scripts/build-shared-data.mjs && nuxt prepare"
     },
@@ -47,6 +47,7 @@
         "@types/sortablejs": "^1.15.9",
         "@vite-pwa/nuxt": "^1.1.1",
         "@vue/test-utils": "^2.4.6",
+        "esbuild": "0.28.2",
         "eslint": "^9.39.1",
         "happy-dom": "^20",
         "sass": "^1.82.0",

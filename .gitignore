@@ -56,3 +56,10 @@ apps/api/debug-artifacts/
 
 # Database dumps written by the self-host backup service (docker-compose.yml)
 backups/
+
+# Generated service-worker push script (apps/web/modules/sw-push.ts) and Playwright outputs
+apps/web/.sw-push/
+e2e/.builds/
+e2e/.data/
+playwright-report/
+test-results/
