@@ -99,6 +99,8 @@ describe("PushController", () => {
                 { userId: USER.id },
                 expect.objectContaining({
                     type: "system.test",
+                    title: "Test notification",
+                    body: "Push notifications work on this device",
                     url: "/settings/notifications",
                     data: {},
                 }),

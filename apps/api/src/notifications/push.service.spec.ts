@@ -53,7 +53,7 @@ describe("PushService", () => {
     let service: PushService;
     let prisma: {
         user: { findFirst: jest.Mock };
-        pushSubscription: { findUnique: jest.Mock; findMany: jest.Mock; update: jest.Mock; deleteMany: jest.Mock };
+        pushSubscription: { findUnique: jest.Mock; findMany: jest.Mock; updateMany: jest.Mock; deleteMany: jest.Mock };
         notificationPreference: { findUnique: jest.Mock };
     };
     let sender: jest.Mock<Promise<void>, [PushSendTarget, string, PushSendOptions]>;
@@ -82,7 +82,7 @@ describe("PushService", () => {
             pushSubscription: {
                 findUnique: jest.fn().mockResolvedValue(subscription("sub-1")),
                 findMany: jest.fn().mockResolvedValue([subscription("sub-1")]),
-                update: jest.fn().mockResolvedValue({}),
+                updateMany: jest.fn().mockResolvedValue({ count: 1 }),
                 deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
             },
             notificationPreference: { findUnique: jest.fn().mockResolvedValue(null) },
@@ -206,11 +206,20 @@ describe("PushService", () => {
             const results = await service.send({ userId: USER.id }, contentOf("fixture.normal"));
 
             expect(results).toEqual([{ subscriptionId: "sub-1", outcome: "accepted" }]);
-            const update = prisma.pushSubscription.update.mock.calls[0][0];
+            const update = prisma.pushSubscription.updateMany.mock.calls[0][0];
             expect(update.where).toEqual({ id: "sub-1" });
             expect(update.data.lastAcceptedAt).toBeInstanceOf(Date);
             expect(update.data.lastAcceptedAt.getTime()).toBeGreaterThanOrEqual(before);
             expect(prisma.pushSubscription.deleteMany).not.toHaveBeenCalled();
+        });
+
+        it("still reports accepted when the row was removed while the push was in flight", async () => {
+            prisma.pushSubscription.updateMany.mockResolvedValue({ count: 0 });
+
+            const results = await service.send({ userId: USER.id }, contentOf("fixture.normal"));
+
+            expect(results).toEqual([{ subscriptionId: "sub-1", outcome: "accepted" }]);
+            expect(warn).not.toHaveBeenCalled();
         });
 
         it.each([404, 410])("removes the subscription on %i", async (statusCode) => {
@@ -220,7 +229,7 @@ describe("PushService", () => {
 
             expect(results).toEqual([{ subscriptionId: "sub-1", outcome: "gone", statusCode }]);
             expect(prisma.pushSubscription.deleteMany).toHaveBeenCalledWith({ where: { id: "sub-1" } });
-            expect(prisma.pushSubscription.update).not.toHaveBeenCalled();
+            expect(prisma.pushSubscription.updateMany).not.toHaveBeenCalled();
         });
 
         it.each([403, 413, 429, 500, 503])("keeps the subscription and reports failed on %i", async (statusCode) => {
@@ -232,7 +241,7 @@ describe("PushService", () => {
 
             expect(results).toEqual([{ subscriptionId: "sub-1", outcome: "failed", statusCode }]);
             expect(prisma.pushSubscription.deleteMany).not.toHaveBeenCalled();
-            expect(prisma.pushSubscription.update).not.toHaveBeenCalled();
+            expect(prisma.pushSubscription.updateMany).not.toHaveBeenCalled();
         });
 
         it("keeps the subscription and reports failed on a network error", async () => {
@@ -292,7 +301,7 @@ describe("PushService", () => {
         });
 
         it("reports failed when the bookkeeping write itself throws", async () => {
-            prisma.pushSubscription.update.mockRejectedValue(new Error("db down"));
+            prisma.pushSubscription.updateMany.mockRejectedValue(new Error("db down"));
 
             await expect(service.send({ userId: USER.id }, contentOf("fixture.normal"))).resolves.toEqual([
                 { subscriptionId: "sub-1", outcome: "failed" },

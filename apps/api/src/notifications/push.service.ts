@@ -94,7 +94,8 @@ export class PushService {
             return this.handleRejection(sub.id, pushErrorStatus(err));
         }
 
-        await this.prisma.pushSubscription.update({
+        // updateMany: a row deleted mid-send is a no-op here, not a P2025 that would report an accepted push as failed.
+        await this.prisma.pushSubscription.updateMany({
             where: { id: sub.id },
             data: { lastAcceptedAt: new Date() },
         });

@@ -95,7 +95,7 @@ export class PushController {
             {
                 type: "system.test",
                 title: "Test notification",
-                body: "Notifications from Badger Budget work on this device.",
+                body: "Push notifications work on this device",
                 url: "/settings/notifications",
                 data: {},
             },
