@@ -1,6 +1,40 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsNotEmpty, IsString, IsUrl, MaxLength, ValidateNested } from "class-validator";
+import { IsNotEmpty, IsString, MaxLength, ValidateBy, ValidateNested, ValidationOptions } from "class-validator";
+
+/** Hosts of the browser push services. The API POSTs to the endpoint, so anything else would let a user reach internal hosts. */
+const PUSH_SERVICE_HOSTS = [
+    /^fcm\.googleapis\.com$/,
+    /\.push\.services\.mozilla\.com$/,
+    /\.push\.apple\.com$/,
+    /\.notify\.windows\.com$/,
+    /\.wns\.windows\.com$/,
+];
+
+export function isPushServiceEndpoint(value: unknown): boolean {
+    if (typeof value !== "string") return false;
+
+    let url: URL;
+    try {
+        url = new URL(value);
+    } catch {
+        return false;
+    }
+    return url.protocol === "https:" && PUSH_SERVICE_HOSTS.some((host) => host.test(url.hostname));
+}
+
+export function IsPushServiceEndpoint(validationOptions?: ValidationOptions): PropertyDecorator {
+    return ValidateBy(
+        {
+            name: "isPushServiceEndpoint",
+            validator: {
+                validate: (value) => isPushServiceEndpoint(value),
+                defaultMessage: () => "endpoint must be an https URL on a known browser push service",
+            },
+        },
+        validationOptions,
+    );
+}
 
 export class PushSubscriptionKeysDto {
     @ApiProperty({ description: "Client public key (base64url)" })
@@ -17,8 +51,8 @@ export class PushSubscriptionKeysDto {
 }
 
 export class RegisterPushSubscriptionDto {
-    @ApiProperty({ description: "Push service endpoint URL (https)" })
-    @IsUrl({ protocols: ["https"], require_protocol: true, require_tld: false })
+    @ApiProperty({ description: "Push service endpoint URL (https, on a known browser push service)" })
+    @IsPushServiceEndpoint()
     @MaxLength(2048)
     endpoint: string;
 
