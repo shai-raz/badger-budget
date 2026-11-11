@@ -7,6 +7,7 @@ import {
     type NotificationType,
     type PushMessage,
 } from "@badger/shared-data";
+import type { AutoSyncKeyRecord } from "./autoSyncKeyStore";
 
 // Pure push and click logic for the service worker. Structural interfaces stand in for the DOM and
 // WebWorker globals so this compiles under both libs and runs under node tests (see reloadToNewBuild.ts).
@@ -37,12 +38,17 @@ export interface SwClients {
 export interface PushDeps {
     showNotification(title: string, options: ShowOptions): Promise<void>;
     fetch: typeof fetch;
+    /** The device-held auto-sync key, or null when none is stored. Never throws. */
+    loadAutoSyncKey: () => Promise<AutoSyncKeyRecord | null>;
+    /** Closes every shown notification with this tag. */
+    closeNotifications: (tag: string) => Promise<void>;
 }
 
+/** A null result means the handler already dealt with the notification itself (showed or closed it). */
 export type PushTypeHandler = (
     message: PushMessage,
     deps: PushDeps,
-) => Promise<{ title: string; options: ShowOptions }>;
+) => Promise<{ title: string; options: ShowOptions } | null>;
 
 /**
  * Merged over every shown notification in handlePush, so no PushTypeHandler can ship without them. The badge is
@@ -147,15 +153,56 @@ export function defaultHandler(message: PushMessage): { title: string; options: 
     };
 }
 
+/** Every auto-sync notification shares this tag, so the result replaces the "Syncing…" notification. */
+const AUTO_SYNC_TAG = "auto-sync";
+
+/**
+ * Shows the sync notification first, then calls /run once with the stored key, but only when the key is for this
+ * grant. Any failure is swallowed: no retry, and neither the key nor the token is logged.
+ */
+async function handleAutoSyncRun(message: PushMessage, deps: PushDeps): Promise<null> {
+    if (message.type !== "auto-sync.run") throw new Error(`Expected auto-sync.run, got ${message.type}`);
+    const shown = defaultHandler(message);
+    await deps.showNotification("Syncing your accounts…", {
+        ...shown.options,
+        tag: AUTO_SYNC_TAG,
+        ...NOTIFICATION_IMAGES,
+    });
+    try {
+        const record = await deps.loadAutoSyncKey();
+        if (record && record.grantId === message.data.grantId) {
+            await deps.fetch(`${record.apiBaseUrl}/bank-sync/auto-sync/run`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "omit",
+                body: JSON.stringify({ grantId: record.grantId, key: record.key, runToken: message.data.runToken }),
+            });
+        }
+    } catch {
+        // Not retried: the server run record is the source of truth for what happened.
+    }
+    return null;
+}
+
+/** A quiet result closes the "Syncing…" notification and shows nothing; otherwise the server content replaces it. */
+async function handleAutoSyncResult(
+    message: PushMessage,
+    deps: PushDeps,
+): Promise<{ title: string; options: ShowOptions } | null> {
+    if (message.type !== "auto-sync.result") throw new Error(`Expected auto-sync.result, got ${message.type}`);
+    if (message.data.quiet) {
+        await deps.closeNotifications(AUTO_SYNC_TAG);
+        return null;
+    }
+    const shown = defaultHandler(message);
+    return { title: shown.title, options: { ...shown.options, tag: AUTO_SYNC_TAG } };
+}
+
 export const PUSH_TYPE_HANDLERS: Record<NotificationType, PushTypeHandler> = {
     "system.update-available": (message) => Promise.resolve(defaultHandler(message)),
     "system.test": (message) => Promise.resolve(defaultHandler(message)),
-    // The run message only announces the sync; the fetch to /run is added by the auto-sync handler.
-    "auto-sync.run": (message) => {
-        const shown = defaultHandler(message);
-        return Promise.resolve({ title: "Syncing your accounts…", options: { ...shown.options, tag: "auto-sync" } });
-    },
-    "auto-sync.result": (message) => Promise.resolve(defaultHandler(message)),
+    "auto-sync.run": handleAutoSyncRun,
+    "auto-sync.result": handleAutoSyncResult,
     "auto-sync.expiring": (message) => Promise.resolve(defaultHandler(message)),
 };
 
@@ -180,8 +227,9 @@ function sanitizeMessage(message: PushMessage, origin: string): PushMessage {
 }
 
 /**
- * Shows exactly one notification for a push payload. Unparseable or unknown payloads, and handlers that throw,
- * show a fallback so the user still sees that something arrived.
+ * Shows exactly one notification for a push payload, unless a handler returns null after dealing with it itself.
+ * Unparseable or unknown payloads, and handlers that throw, show a fallback so the user still sees that something
+ * arrived.
  */
 export async function handlePush(
     text: string | null,
@@ -189,7 +237,7 @@ export async function handlePush(
     handlers: Record<NotificationType, PushTypeHandler> = PUSH_TYPE_HANDLERS,
 ): Promise<void> {
     const parsed = parsePushMessage(text);
-    let shown: { title: string; options: ShowOptions };
+    let shown: { title: string; options: ShowOptions } | null;
     if (!parsed) {
         shown = fallbackOptions(FALLBACK_NOTIFICATION.url, "fallback");
     } else {
@@ -200,6 +248,7 @@ export async function handlePush(
             shown = fallbackOptions(message.url, message.tag);
         }
     }
+    if (shown === null) return;
     await deps.showNotification(shown.title, { ...shown.options, ...NOTIFICATION_IMAGES });
 }
 
