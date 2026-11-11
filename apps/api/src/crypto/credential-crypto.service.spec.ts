@@ -258,6 +258,26 @@ describe("CredentialCryptoService", () => {
             expect(() => service.decryptForGrant(tampered, grantKey, grantId, connectionId)).toThrow(GrantDecryptError);
         });
 
+        it("rejects a truncated auth tag, so the key check cannot be forged with a short tag", () => {
+            const grantKey = service.deriveGrantKey(deviceKey, grantId);
+            const blob = service.encryptForGrant(plaintext, grantKey, grantId, connectionId);
+            const truncated: GrantBlob = {
+                ...blob,
+                authTag: Buffer.from(blob.authTag, "base64").subarray(0, 4).toString("base64"),
+            };
+
+            expect(() => service.decryptForGrant(truncated, grantKey, grantId, connectionId)).toThrow(
+                GrantDecryptError,
+            );
+
+            const check = service.createGrantKeyCheck(grantKey, grantId);
+            const truncatedCheck: GrantBlob = {
+                ...check,
+                authTag: Buffer.from(check.authTag, "base64").subarray(0, 4).toString("base64"),
+            };
+            expect(service.verifyGrantKeyCheck(truncatedCheck, grantKey, grantId)).toBe(false);
+        });
+
         it("rejects a device key of the wrong length", () => {
             expect(() => service.deriveGrantKey(Buffer.alloc(16, 1), grantId)).toThrow(GrantDecryptError);
             expect(() => service.deriveGrantKey(Buffer.alloc(AUTO_SYNC_KEY_BYTES + 1, 1), grantId)).toThrow(

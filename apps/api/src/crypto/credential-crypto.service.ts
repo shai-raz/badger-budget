@@ -8,6 +8,8 @@ const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 };
 const KEY_LEN = 32;
 const GRANT_HKDF_INFO_PREFIX = "badger-auto-sync-v1:";
 const GRANT_KEY_CHECK_PLAINTEXT = "badger-auto-sync-key-check-v1";
+// Pin the GCM tag length: Node accepts truncated tags (4-16 bytes) unless told otherwise.
+const GRANT_AUTH_TAG_BYTES = 16;
 
 export interface EncryptedBlob {
     ciphertext: string; // base64
@@ -117,7 +119,7 @@ export class CredentialCryptoService {
 
     private encryptWithAad(plaintext: string, grantKey: Buffer, aad: string): GrantBlob {
         const iv = crypto.randomBytes(12);
-        const cipher = crypto.createCipheriv("aes-256-gcm", grantKey, iv);
+        const cipher = crypto.createCipheriv("aes-256-gcm", grantKey, iv, { authTagLength: GRANT_AUTH_TAG_BYTES });
         cipher.setAAD(Buffer.from(aad, "utf8"));
         const ct = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
         return {
@@ -129,7 +131,9 @@ export class CredentialCryptoService {
 
     private decryptWithAad(blob: GrantBlob, grantKey: Buffer, aad: string): string {
         try {
-            const decipher = crypto.createDecipheriv("aes-256-gcm", grantKey, Buffer.from(blob.iv, "base64"));
+            const decipher = crypto.createDecipheriv("aes-256-gcm", grantKey, Buffer.from(blob.iv, "base64"), {
+                authTagLength: GRANT_AUTH_TAG_BYTES,
+            });
             decipher.setAAD(Buffer.from(aad, "utf8"));
             decipher.setAuthTag(Buffer.from(blob.authTag, "base64"));
             const pt = Buffer.concat([decipher.update(Buffer.from(blob.ciphertext, "base64")), decipher.final()]);
