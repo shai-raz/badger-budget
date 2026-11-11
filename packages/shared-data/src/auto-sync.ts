@@ -39,7 +39,7 @@ export function autoSyncIntervalMs(unit: AutoSyncIntervalUnit, count: number): n
     return unit === "hours" ? count * 3_600_000 : count * 86_400_000;
 }
 
-/** A run window must hold at least two intervals, so a sync can retry before the next one. */
+/** The grant duration ("Keep on for") must cover at least two intervals (AC23). */
 export function isAutoSyncDurationAllowed(
     durationDays: AutoSyncDurationDays,
     unit: AutoSyncIntervalUnit,
