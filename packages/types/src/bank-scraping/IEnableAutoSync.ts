@@ -12,5 +12,6 @@ export interface IEnableAutoSync extends Omit<
     pin: string;
     key: string;
     deviceLabel: string;
+    pushSubscriptionId: string;
     durationDays?: AutoSyncDurationDays;
 }

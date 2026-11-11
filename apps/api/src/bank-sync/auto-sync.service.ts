@@ -163,6 +163,15 @@ export class AutoSyncService {
 
     /** Replaces any existing grant: each active connection login is re-encrypted under a key only the device holds. */
     async enable(userId: string, dto: EnableAutoSyncDto, now: Date = new Date()): Promise<IAutoSyncStatus> {
+        // Checked before anything else: a grant must have a push subscription that belongs to this user.
+        const pushSubscription = await this.prisma.pushSubscription.findFirst({
+            where: { id: dto.pushSubscriptionId, userId },
+            select: { id: true },
+        });
+        if (!pushSubscription) {
+            throw new BadRequestException("Unknown push subscription");
+        }
+
         const { schedule, timeZone } = this.parseSchedule(dto);
         const durationDays = dto.durationDays ?? DEFAULT_AUTO_SYNC_DURATION_DAYS;
         if (!isAutoSyncDurationAllowed(durationDays, schedule.intervalUnit, schedule.intervalCount)) {
@@ -224,6 +233,7 @@ export class AutoSyncService {
                     id: grantId,
                     userId,
                     deviceLabel: dto.deviceLabel,
+                    pushSubscriptionId: pushSubscription.id,
                     intervalUnit: schedule.intervalUnit,
                     intervalCount: schedule.intervalCount,
                     ...scheduleColumns(schedule),

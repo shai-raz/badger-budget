@@ -22,6 +22,7 @@ const NOW = new Date("2026-11-11T10:00:00.000Z");
 const USER_ID = "user-1";
 const KEY = randomBytes(32).toString("base64url");
 const GRANT_ID = "00000000-0000-4000-8000-000000000001";
+const PUSH_ID = "00000000-0000-4000-8000-0000000000a1";
 
 describe("AutoSyncService", () => {
     let service: AutoSyncService;
@@ -38,6 +39,7 @@ describe("AutoSyncService", () => {
             deleteMany: jest.fn(),
         },
         autoSyncCredential: { findMany: jest.fn(), createMany: jest.fn(), deleteMany: jest.fn() },
+        pushSubscription: { findFirst: jest.fn() },
         $transaction: jest.fn(),
     };
 
@@ -89,6 +91,7 @@ describe("AutoSyncService", () => {
                 pin: PIN,
                 key: KEY,
                 deviceLabel: "Laptop",
+                pushSubscriptionId: PUSH_ID,
             },
             overrides,
         );
@@ -144,6 +147,7 @@ describe("AutoSyncService", () => {
         );
         mockPrisma.autoSyncCredential.findMany.mockResolvedValue([]);
         mockPrisma.scraperConnection.findMany.mockResolvedValue([]);
+        mockPrisma.pushSubscription.findFirst.mockResolvedValue({ id: PUSH_ID });
     });
 
     afterEach(() => {
@@ -166,6 +170,33 @@ describe("AutoSyncService", () => {
                 UnauthorizedException,
             );
             expectNoWrites();
+        });
+
+        it("rejects a push subscription that is missing or not the user's, before any other work", async () => {
+            mockPrisma.pushSubscription.findFirst.mockResolvedValueOnce(null);
+
+            await expect(service.enable(USER_ID, enableDto(), NOW)).rejects.toThrow(
+                new BadRequestException("Unknown push subscription"),
+            );
+            expect(mockPrisma.pushSubscription.findFirst).toHaveBeenCalledWith({
+                where: { id: PUSH_ID, userId: USER_ID },
+                select: { id: true },
+            });
+            expect(mockBankSync.verifyUserPin).not.toHaveBeenCalled();
+            expectNoWrites();
+        });
+
+        it("stores the push subscription the grant is linked to", async () => {
+            mockPrisma.scraperConnection.findMany
+                .mockResolvedValueOnce([storedConnection("c1", "Bank A")])
+                .mockResolvedValueOnce([{ id: "c1", displayName: "Bank A" }]);
+            mockPrisma.autoSyncCredential.findMany.mockResolvedValueOnce([{ connectionId: "c1" }]);
+
+            await service.enable(USER_ID, enableDto(), NOW);
+
+            expect(mockPrisma.autoSyncGrant.create.mock.calls[0][0].data).toMatchObject({
+                pushSubscriptionId: PUSH_ID,
+            });
         });
 
         it("replaces the old grant and stores one credential copy per active connection", async () => {
@@ -192,6 +223,7 @@ describe("AutoSyncService", () => {
             const grantId = grantData.id;
             expect(grantData).toMatchObject({
                 userId: USER_ID,
+                pushSubscriptionId: PUSH_ID,
                 intervalUnit: "hours",
                 intervalCount: 4,
                 windowStartMinute: 420,
@@ -803,6 +835,7 @@ describe("EnableAutoSyncDto validation", () => {
             pin: PIN,
             key: KEY,
             deviceLabel: "Laptop",
+            pushSubscriptionId: PUSH_ID,
             durationDays,
         });
 
@@ -816,6 +849,11 @@ describe("EnableAutoSyncDto validation", () => {
 
     it("rejects a duration outside the offered set (AC5)", async () => {
         expect(await validate(validInput(14))).not.toHaveLength(0);
+    });
+
+    it("rejects a push subscription id that is not a UUID", async () => {
+        const dto = Object.assign(validInput(), { pushSubscriptionId: "not-a-uuid" });
+        expect(await validate(dto)).not.toHaveLength(0);
     });
 
     it("rejects a key that is not 32 bytes of base64url", async () => {
