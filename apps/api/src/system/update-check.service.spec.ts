@@ -51,11 +51,11 @@ describe("UpdateCheckService", () => {
             expect(second).toEqual(first);
         });
 
-        it("refetches once the last successful check is 24 hours old", async () => {
+        it("refetches once the last successful check is an hour old", async () => {
             const service = build();
             await service.getLatest();
 
-            jest.advanceTimersByTime(DAY - 1);
+            jest.advanceTimersByTime(HOUR - 1);
             await service.getLatest();
             expect(fetchMock).toHaveBeenCalledTimes(1);
 
@@ -188,6 +188,128 @@ describe("UpdateCheckService", () => {
             await service.forceCheck();
 
             expect(fetchMock).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe("background tick", () => {
+        it("makes no request when UPDATE_CHECK=false", async () => {
+            env.UPDATE_CHECK = "false";
+
+            await build().tick();
+
+            expect(fetchMock).not.toHaveBeenCalled();
+        });
+
+        it("makes no request right after a check", async () => {
+            const service = build();
+            await service.getLatest();
+
+            await service.tick();
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+        });
+
+        it("waits for the full hour: no request at 59 minutes, one at 60", async () => {
+            const service = build();
+            await service.getLatest();
+
+            jest.advanceTimersByTime(HOUR - 60_000);
+            await service.tick();
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+
+            jest.advanceTimersByTime(60_000);
+            await service.tick();
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+        });
+
+        it("shares one hourly budget between lazy reads and ticks", async () => {
+            const service = build();
+            await service.getLatest();
+
+            // Ticks every 5 minutes for 3 hours, with a lazy read on each one too.
+            for (let step = 0; step < 36; step++) {
+                jest.advanceTimersByTime(5 * 60_000);
+                await service.tick();
+                await service.getLatest();
+            }
+
+            // The initial read plus one refresh at each of the 3 hour marks.
+            expect(fetchMock).toHaveBeenCalledTimes(4);
+        });
+
+        it("keeps the cache when the background refresh fails", async () => {
+            const service = build();
+            const good = await service.getLatest();
+            jest.advanceTimersByTime(HOUR);
+            fetchMock.mockRejectedValueOnce(new Error("offline"));
+
+            await expect(service.tick()).resolves.toBeUndefined();
+
+            expect(await service.getLatest()).toEqual(good);
+        });
+    });
+
+    describe("successful check listeners", () => {
+        let errorSpy: jest.SpyInstance;
+
+        beforeEach(() => {
+            errorSpy = jest.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
+        });
+
+        afterEach(() => {
+            errorSpy.mockRestore();
+        });
+
+        it("calls the listener once per successful fetch with the release", async () => {
+            const listener = jest.fn();
+            const service = build();
+            service.onSuccessfulCheck(listener);
+
+            await service.getLatest();
+            jest.advanceTimersByTime(HOUR);
+            await service.tick();
+
+            expect(listener).toHaveBeenCalledTimes(2);
+            expect(listener).toHaveBeenCalledWith({ version: "0.4.0", url: RELEASE_URL });
+        });
+
+        it("does not call the listener when the fetch fails", async () => {
+            const listener = jest.fn();
+            fetchMock.mockRejectedValueOnce(new Error("down"));
+            const service = build();
+            service.onSuccessfulCheck(listener);
+
+            await service.getLatest();
+
+            expect(listener).not.toHaveBeenCalled();
+        });
+
+        it("a throwing listener is logged and does not break the check", async () => {
+            const service = build();
+            const later = jest.fn();
+            service.onSuccessfulCheck(() => {
+                throw new Error("listener broke");
+            });
+            service.onSuccessfulCheck(later);
+
+            const result = await service.getLatest();
+
+            expect(result.latest).toEqual({ version: "0.4.0", url: RELEASE_URL });
+            expect(later).toHaveBeenCalledTimes(1);
+            expect(errorSpy).toHaveBeenCalledWith("Update check listener failed: listener broke", expect.any(String));
+            expect(warnSpy).not.toHaveBeenCalled();
+        });
+
+        it("a rejecting async listener is logged and does not break the check", async () => {
+            const service = build();
+            service.onSuccessfulCheck(async () => {
+                throw new Error("async broke");
+            });
+
+            const result = await service.getLatest();
+
+            expect(result.latest?.version).toBe("0.4.0");
+            expect(errorSpy).toHaveBeenCalledWith("Update check listener failed: async broke", expect.any(String));
         });
     });
 
