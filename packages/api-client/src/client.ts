@@ -31,6 +31,10 @@ import type {
     IUpdateScraperConnection,
     ISyncJob,
     ISyncJobPage,
+    IAutoSyncState,
+    IAutoSyncStatus,
+    IEnableAutoSync,
+    IUpdateAutoSyncSchedule,
     SpendingReport,
     MonthlySpending,
     ReportCompareMode,
@@ -945,5 +949,24 @@ export class ApiClient {
     async getActiveSyncJob() {
         const response = await this.client.get<ISyncJob | null>("/bank-sync/sync/active");
         return response.data;
+    }
+
+    async getAutoSync(): Promise<IAutoSyncState> {
+        const response = await this.client.get<IAutoSyncState>("/bank-sync/auto-sync");
+        return response.data;
+    }
+
+    async enableAutoSync(body: IEnableAutoSync): Promise<IAutoSyncStatus> {
+        const response = await this.client.post<IAutoSyncStatus>("/bank-sync/auto-sync", body);
+        return response.data;
+    }
+
+    async updateAutoSyncSchedule(body: IUpdateAutoSyncSchedule): Promise<IAutoSyncStatus> {
+        const response = await this.client.patch<IAutoSyncStatus>("/bank-sync/auto-sync", body);
+        return response.data;
+    }
+
+    async disableAutoSync(): Promise<void> {
+        await this.client.delete("/bank-sync/auto-sync");
     }
 }
