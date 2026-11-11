@@ -4,6 +4,7 @@ import { BankSyncController } from "./bank-sync.controller";
 import { BankSyncService } from "./bank-sync.service";
 import { AutoSyncController } from "./auto-sync.controller";
 import { AutoSyncService } from "./auto-sync.service";
+import { AutoSyncCleanupService } from "./auto-sync-cleanup.service";
 import { ScraperService } from "./scraper.service";
 import { DebugArtifactService } from "./debug-artifact.service";
 import { SyncRecoveryService } from "./sync-recovery.service";
@@ -19,6 +20,7 @@ import { AccountsModule } from "../accounts/accounts.module";
     providers: [
         BankSyncService,
         AutoSyncService,
+        AutoSyncCleanupService,
         ScraperService,
         DebugArtifactService,
         SyncRecoveryService,

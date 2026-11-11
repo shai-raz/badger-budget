@@ -14,7 +14,7 @@ NestJS 11 REST API under the global prefix `/api/v1` (Swagger at `/api/docs`). P
 
 ## Data
 
-- Every entity is soft-deleted (`deletedAt`), so FK cascades never fire on delete: clean up dependent rows yourself. Exceptions, hard-deleted on purpose: `account_balance_snapshots` (append-only), `reimbursement_allocations`, `push_subscriptions`, `notification_preferences`, `instance_state`, and the demo user's rolling-window trim.
+- Every entity is soft-deleted (`deletedAt`), so FK cascades never fire on delete: clean up dependent rows yourself. Exceptions, hard-deleted on purpose: `account_balance_snapshots` (append-only), `reimbursement_allocations`, `push_subscriptions`, `notification_preferences`, `instance_state`, `auto_sync_grants`, `auto_sync_credentials`, and the demo user's rolling-window trim.
 - Managed secrets (`MANAGED_SECRETS` in `config/secrets.ts`) come from env, else `DATA_DIR/secrets/<NAME>`, else are generated there on first boot. There are no hardcoded fallbacks.
 - **One-shot data backfills**: `data_backfills` holds one marker row per backfill. Claim the marker in the same transaction as the work, so a failure retries on the next boot (example: `categories/category-icon-backfill.service.ts`). Use a new marker name per backfill; never reuse one.
 - Imports from banks and Google Sheets both land through `transactions/transaction-import.service.ts`.

@@ -25,6 +25,8 @@ describe("BankSyncService passkeys", () => {
         scraperJob: { findFirst: jest.fn() },
         syncJob: { findFirst: jest.fn(), findMany: jest.fn() },
         syncPasskey: { findMany: jest.fn(), count: jest.fn(), create: jest.fn(), deleteMany: jest.fn() },
+        autoSyncCredential: { deleteMany: jest.fn() },
+        autoSyncGrant: { deleteMany: jest.fn() },
         $transaction: jest.fn(),
     };
 
@@ -125,6 +127,8 @@ describe("BankSyncService passkeys", () => {
         const mockTx = {
             userSyncSecret: { findUnique: jest.fn(), upsert: jest.fn() },
             syncPasskey: { deleteMany: jest.fn() },
+            autoSyncCredential: { deleteMany: jest.fn() },
+            autoSyncGrant: { deleteMany: jest.fn() },
         };
 
         beforeEach(() => {
@@ -140,12 +144,26 @@ describe("BankSyncService passkeys", () => {
             expect(mockTx.syncPasskey.deleteMany).toHaveBeenCalledWith({ where: { userId: "user-1" } });
         });
 
+        it("deletes this user's auto-sync grant and its credentials when a secret already exists", async () => {
+            mockTx.userSyncSecret.findUnique.mockResolvedValue({ userId });
+            await service.setPinOrChange(userId, "5678");
+
+            expect(mockTx.autoSyncCredential.deleteMany).toHaveBeenCalledTimes(1);
+            expect(mockTx.autoSyncCredential.deleteMany).toHaveBeenCalledWith({
+                where: { grant: { userId: "user-1" } },
+            });
+            expect(mockTx.autoSyncGrant.deleteMany).toHaveBeenCalledTimes(1);
+            expect(mockTx.autoSyncGrant.deleteMany).toHaveBeenCalledWith({ where: { userId: "user-1" } });
+        });
+
         it("does not delete passkeys on first PIN set", async () => {
             mockTx.userSyncSecret.findUnique.mockResolvedValue(null);
             await service.setPinOrChange(userId, "5678");
 
             expect(mockTx.userSyncSecret.upsert).toHaveBeenCalledTimes(1);
             expect(mockTx.syncPasskey.deleteMany).not.toHaveBeenCalled();
+            expect(mockTx.autoSyncCredential.deleteMany).not.toHaveBeenCalled();
+            expect(mockTx.autoSyncGrant.deleteMany).not.toHaveBeenCalled();
         });
     });
 
@@ -339,6 +357,32 @@ describe("BankSyncService passkeys", () => {
             );
         });
 
+        it("updateConnection deletes the connection's auto-sync credential before re-encrypting", async () => {
+            mockPrisma.scraperConnection.findFirst.mockResolvedValue({ id: "c1", userId });
+            mockPrisma.scraperConnection.update.mockResolvedValue({ id: "c1" });
+            mockPrisma.scraperJob.findFirst.mockResolvedValue(null);
+
+            await service.updateConnection(userId, "c1", {
+                pin: PIN,
+                credentials: { username: "u", password: "p" },
+            } as never);
+
+            expect(mockPrisma.autoSyncCredential.deleteMany).toHaveBeenCalledWith({ where: { connectionId: "c1" } });
+            expect(mockPrisma.autoSyncCredential.deleteMany.mock.invocationCallOrder[0]).toBeLessThan(
+                mockPrisma.scraperConnection.update.mock.invocationCallOrder[0],
+            );
+        });
+
+        it("updateConnection keeps the auto-sync credential when only the name changes", async () => {
+            mockPrisma.scraperConnection.findFirst.mockResolvedValue({ id: "c1", userId });
+            mockPrisma.scraperConnection.update.mockResolvedValue({ id: "c1", displayName: "New" });
+            mockPrisma.scraperJob.findFirst.mockResolvedValue(null);
+
+            await service.updateConnection(userId, "c1", { displayName: "New" } as never);
+
+            expect(mockPrisma.autoSyncCredential.deleteMany).not.toHaveBeenCalled();
+        });
+
         it("updateConnection returns the updated connection with its latestJob", async () => {
             mockPrisma.scraperConnection.findFirst.mockResolvedValue({ id: "c1", userId });
             mockPrisma.scraperConnection.update.mockResolvedValue({ id: "c1", displayName: "New" });
@@ -359,6 +403,30 @@ describe("BankSyncService passkeys", () => {
             expect(mockPrisma.scraperJob.findFirst).toHaveBeenCalledWith(
                 expect.objectContaining({ where: expect.objectContaining({ scraperConnectionId: "c1" }) }),
             );
+        });
+    });
+
+    describe("deleteConnection", () => {
+        it("deletes the connection's auto-sync credential and soft-deletes the connection", async () => {
+            mockPrisma.scraperConnection.findFirst.mockResolvedValue({ id: "c1", userId });
+            mockPrisma.scraperConnection.update.mockResolvedValue({ id: "c1" });
+
+            await service.deleteConnection(userId, "c1");
+
+            expect(mockPrisma.autoSyncCredential.deleteMany).toHaveBeenCalledWith({ where: { connectionId: "c1" } });
+            expect(mockPrisma.scraperConnection.update).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { id: "c1" }, data: { deletedAt: expect.any(Date) } }),
+            );
+            expect(mockPrisma.autoSyncCredential.deleteMany.mock.invocationCallOrder[0]).toBeLessThan(
+                mockPrisma.scraperConnection.update.mock.invocationCallOrder[0],
+            );
+        });
+
+        it("throws NotFound and deletes nothing for an unknown connection", async () => {
+            mockPrisma.scraperConnection.findFirst.mockResolvedValue(null);
+
+            await expect(service.deleteConnection(userId, "c9")).rejects.toThrow(NotFoundException);
+            expect(mockPrisma.autoSyncCredential.deleteMany).not.toHaveBeenCalled();
         });
     });
 
