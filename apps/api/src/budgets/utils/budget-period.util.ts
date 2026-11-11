@@ -1,3 +1,5 @@
+import { getZonedDateParts, zonedDateTimeToUtcDate, type LocalDateTimeParts } from "../../common/zoned-time.util";
+
 export type BudgetPeriod = "daily" | "weekly" | "monthly" | "yearly";
 
 export interface BudgetPeriodContext {
@@ -219,48 +221,6 @@ function fromUtc(date: Date): ZonedYearMonthDay {
     };
 }
 
-interface LocalDateTimeParts {
-    year: number;
-    month: number;
-    day: number;
-    hour: number;
-    minute: number;
-    second: number;
-    millisecond: number;
-}
-
-function getZonedDateParts(date: Date, timeZone: string): LocalDateTimeParts {
-    const formatter = new Intl.DateTimeFormat("en-US", {
-        timeZone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-        hourCycle: "h23",
-    });
-
-    const parts = formatter.formatToParts(date);
-
-    const hour = Number(getPart(parts, "hour"));
-
-    return {
-        year: Number(getPart(parts, "year")),
-        month: Number(getPart(parts, "month")),
-        day: Number(getPart(parts, "day")),
-        hour: hour === 24 ? 0 : hour,
-        minute: Number(getPart(parts, "minute")),
-        second: Number(getPart(parts, "second")),
-        millisecond: date.getUTCMilliseconds(),
-    };
-}
-
-function getPart(parts: Intl.DateTimeFormatPart[], type: string) {
-    return parts.find((part) => part.type === type)?.value ?? "0";
-}
-
 function getWeekdayIndex(year: number, month: number, day: number): number {
     return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
 }
@@ -287,41 +247,4 @@ function resolveWeekStartDay(locale: string): number {
     }
 
     return 1;
-}
-
-function zonedDateTimeToUtcDate(localDateTime: LocalDateTimeParts, timeZone: string): Date {
-    const utcGuess = Date.UTC(
-        localDateTime.year,
-        localDateTime.month - 1,
-        localDateTime.day,
-        localDateTime.hour,
-        localDateTime.minute,
-        localDateTime.second,
-        localDateTime.millisecond,
-    );
-
-    const offsetAtGuess = getTimeZoneOffsetMs(new Date(utcGuess), timeZone);
-    let utcTimestamp = utcGuess - offsetAtGuess;
-
-    const offsetAtTarget = getTimeZoneOffsetMs(new Date(utcTimestamp), timeZone);
-    if (offsetAtTarget !== offsetAtGuess) {
-        utcTimestamp = utcGuess - offsetAtTarget;
-    }
-
-    return new Date(utcTimestamp);
-}
-
-function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
-    const zoned = getZonedDateParts(date, timeZone);
-    const zonedAsUtc = Date.UTC(
-        zoned.year,
-        zoned.month - 1,
-        zoned.day,
-        zoned.hour,
-        zoned.minute,
-        zoned.second,
-        zoned.millisecond,
-    );
-
-    return zonedAsUtc - date.getTime();
 }
