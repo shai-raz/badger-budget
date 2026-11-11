@@ -9,6 +9,8 @@ import { BankSyncService } from "./bank-sync.service";
 import type { CredentialSource } from "./credential-source";
 import { EnableAutoSyncDto } from "./dto/enable-auto-sync.dto";
 import { PrismaService } from "../prisma/prisma.service";
+import { PushService } from "../notifications/push.service";
+import { NotificationPreferencesService } from "../notifications/notification-preferences.service";
 import { CredentialCryptoService } from "../crypto/credential-crypto.service";
 
 // Distinctive values, so a substring match cannot hit by accident.
@@ -99,6 +101,8 @@ describe("auto-sync secrets stay out of logs and errors (AC11)", () => {
                 { provide: ConfigService, useValue: mockConfigService },
                 { provide: PrismaService, useValue: mockPrisma },
                 { provide: BankSyncService, useValue: mockBankSync },
+                { provide: PushService, useValue: { send: jest.fn() } },
+                { provide: NotificationPreferencesService, useValue: { shouldSend: jest.fn() } },
             ],
         }).compile();
         service = module.get(AutoSyncService);
@@ -160,6 +164,9 @@ describe("auto-sync secrets stay out of logs and errors (AC11)", () => {
                 id: GRANT_ID,
                 userId: USER_ID,
                 expiresAt,
+                pushSubscriptionId: "00000000-0000-4000-8000-0000000000a1",
+                intervalUnit: "hours",
+                intervalCount: 4,
                 keyCheckCt: check.ciphertext,
                 keyCheckIv: check.iv,
                 keyCheckAuthTag: check.authTag,

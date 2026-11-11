@@ -11,7 +11,9 @@ import { UpdateAutoSyncScheduleDto } from "./dto/update-auto-sync-schedule.dto";
 import { PrismaService } from "../prisma/prisma.service";
 import { CredentialCryptoService, GrantDecryptError } from "../crypto/credential-crypto.service";
 import { sha256Hex } from "../oauth/oauth-crypto";
-import type { CredentialSource } from "./credential-source";
+import type { CredentialSource, SyncJobSummary } from "./credential-source";
+import { PushService } from "../notifications/push.service";
+import { NotificationPreferencesService } from "../notifications/notification-preferences.service";
 import type { ScraperConnection } from "@prisma/client";
 
 const DAY = 86_400_000;
@@ -40,10 +42,13 @@ describe("AutoSyncService", () => {
         },
         autoSyncCredential: { findMany: jest.fn(), createMany: jest.fn(), deleteMany: jest.fn() },
         pushSubscription: { findFirst: jest.fn() },
+        user: { findFirst: jest.fn() },
         $transaction: jest.fn(),
     };
 
     const mockBankSync = { verifyUserPin: jest.fn(), startSyncJob: jest.fn() };
+    const mockPush = { send: jest.fn() };
+    const mockPreferences = { shouldSend: jest.fn() };
 
     const mockConfigService = {
         get: jest.fn((key: string) => (key === "CREDENTIAL_ENCRYPTION_PEPPER" ? PEPPER : undefined)),
@@ -120,11 +125,16 @@ describe("AutoSyncService", () => {
                 { provide: ConfigService, useValue: mockConfigService },
                 { provide: PrismaService, useValue: mockPrisma },
                 { provide: BankSyncService, useValue: mockBankSync },
+                { provide: PushService, useValue: mockPush },
+                { provide: NotificationPreferencesService, useValue: mockPreferences },
             ],
         }).compile();
 
         service = module.get(AutoSyncService);
         crypto = module.get(CredentialCryptoService);
+        mockPush.send.mockResolvedValue([{ subscriptionId: PUSH_ID, outcome: "accepted" }]);
+        mockPreferences.shouldSend.mockResolvedValue(true);
+        mockPrisma.user.findFirst.mockResolvedValue({ id: USER_ID, role: "user" });
 
         mockBankSync.verifyUserPin.mockImplementation(async (_userId: string, pin: string) => {
             if (pin !== PIN) throw new UnauthorizedException("Invalid PIN");
@@ -600,6 +610,7 @@ describe("AutoSyncService", () => {
                           intervalUnit: "hours",
                           intervalCount: 1,
                           expiresAt: stored.expiresAt,
+                          pushSubscriptionId: PUSH_ID,
                           runTokenHash: stored.runTokenHash,
                           ...keyCheck,
                       }
@@ -760,6 +771,143 @@ describe("AutoSyncService", () => {
                     ConflictException,
                 );
                 expect(stored.runTokenHash).toBeNull();
+            });
+        });
+
+        describe("run result push (AC21)", () => {
+            const summaryOf = (overrides: Partial<SyncJobSummary> = {}): SyncJobSummary => ({
+                jobId: "job-1",
+                status: "success",
+                newTransactions: 0,
+                failedConnections: [],
+                ...overrides,
+            });
+
+            /** Starts a run, then reports the finished job to the source the run was started with. */
+            const finishRun = async (summary: SyncJobSummary) => {
+                const token = await issue();
+                await service.run({ grantId: GRANT_ID, key: KEY, runToken: token }, NOW);
+                const source = mockBankSync.startSyncJob.mock.calls[0][2] as CredentialSource;
+                await source.onFinished?.(summary);
+            };
+
+            it("sends the quiet variant when nothing changed, so the progress notification closes", async () => {
+                await finishRun(summaryOf());
+
+                expect(mockPush.send).toHaveBeenCalledWith(
+                    { subscriptionId: PUSH_ID },
+                    {
+                        type: "auto-sync.result",
+                        title: "",
+                        body: "",
+                        url: "/",
+                        data: { quiet: true, newTransactions: 0, failedConnectionCount: 0 },
+                    },
+                    { tag: "auto-sync", ttl: 3600 },
+                );
+                expect(mockPreferences.shouldSend).not.toHaveBeenCalled();
+            });
+
+            it("sends the quiet variant to a user who muted results, and still closes the notification", async () => {
+                mockPreferences.shouldSend.mockResolvedValueOnce(false);
+
+                await finishRun(summaryOf({ newTransactions: 3 }));
+
+                expect(mockPreferences.shouldSend).toHaveBeenCalledWith(
+                    { id: USER_ID, role: "user" },
+                    "auto-sync.result",
+                );
+                expect(mockPush.send).toHaveBeenCalledWith(
+                    { subscriptionId: PUSH_ID },
+                    {
+                        type: "auto-sync.result",
+                        title: "",
+                        body: "",
+                        url: "/",
+                        data: { quiet: true, newTransactions: 3, failedConnectionCount: 0 },
+                    },
+                    { tag: "auto-sync", ttl: 3600 },
+                );
+            });
+
+            it.each([
+                [1, "1 new transaction"],
+                [3, "3 new transactions"],
+            ])("titles %i new transaction(s) and links to the transactions page", async (count, title) => {
+                await finishRun(summaryOf({ newTransactions: count }));
+
+                expect(mockPush.send).toHaveBeenCalledWith(
+                    { subscriptionId: PUSH_ID },
+                    {
+                        type: "auto-sync.result",
+                        title,
+                        body: "",
+                        url: "/transactions",
+                        data: { quiet: false, newTransactions: count, failedConnectionCount: 0 },
+                    },
+                    { tag: "auto-sync", ttl: 3600 },
+                );
+            });
+
+            it("names the one failed connection, and a failure outranks new transactions", async () => {
+                await finishRun(
+                    summaryOf({
+                        newTransactions: 2,
+                        failedConnections: [{ id: "c1", displayName: "Bank c1", code: "INVALID_PASSWORD" }],
+                    }),
+                );
+
+                expect(mockPush.send).toHaveBeenCalledWith(
+                    { subscriptionId: PUSH_ID },
+                    {
+                        type: "auto-sync.result",
+                        title: "Bank c1 didn't sync",
+                        body: "Tap for details.",
+                        url: "/bank-connections",
+                        data: { quiet: false, newTransactions: 2, failedConnectionCount: 1 },
+                    },
+                    { tag: "auto-sync", ttl: 3600 },
+                );
+            });
+
+            it("counts several failed connections in the title", async () => {
+                await finishRun(
+                    summaryOf({
+                        failedConnections: [
+                            { id: "c1", displayName: "Bank c1", code: "INVALID_PASSWORD" },
+                            { id: "c2", displayName: "Bank c2", code: "IMPORT_FAILED" },
+                        ],
+                    }),
+                );
+
+                expect(mockPush.send).toHaveBeenCalledWith(
+                    { subscriptionId: PUSH_ID },
+                    {
+                        type: "auto-sync.result",
+                        title: "2 connections didn't sync",
+                        body: "Tap for details.",
+                        url: "/bank-connections",
+                        data: { quiet: false, newTransactions: 0, failedConnectionCount: 2 },
+                    },
+                    { tag: "auto-sync", ttl: 3600 },
+                );
+            });
+
+            it("deletes the grant when its device subscription is gone", async () => {
+                mockPush.send.mockResolvedValueOnce([{ subscriptionId: PUSH_ID, outcome: "gone", statusCode: 410 }]);
+
+                await finishRun(summaryOf({ newTransactions: 1 }));
+
+                expect(mockPrisma.autoSyncCredential.deleteMany).toHaveBeenCalledWith({ where: { grantId: GRANT_ID } });
+                expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({ where: { id: GRANT_ID } });
+            });
+
+            it("keeps the grant when the push fails for another reason", async () => {
+                mockPush.send.mockResolvedValueOnce([{ subscriptionId: PUSH_ID, outcome: "failed", statusCode: 500 }]);
+
+                await finishRun(summaryOf({ newTransactions: 1 }));
+
+                expect(mockPrisma.autoSyncGrant.deleteMany).not.toHaveBeenCalled();
             });
         });
 

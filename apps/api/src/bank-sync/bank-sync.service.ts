@@ -21,7 +21,7 @@ import {
     type SyncErrorCode,
 } from "@badger/shared-data";
 import { syncErrorCodeOf, withSyncErrorCode } from "./sync-error-code.util";
-import { CredentialSource, pinCredentialSource } from "./credential-source";
+import { CredentialSource, pinCredentialSource, SyncJobSummary } from "./credential-source";
 
 const CONNECTION_SELECT = {
     id: true,
@@ -413,6 +413,15 @@ export class BankSyncService {
         }
     }
 
+    /** Lets the source report the finished run. A throw here must never fail the run. */
+    private async notifySyncFinished(source: CredentialSource, summary: SyncJobSummary): Promise<void> {
+        try {
+            await source.onFinished?.(summary);
+        } catch {
+            this.logger.error(`Failed to report the result of sync job ${summary.jobId}`);
+        }
+    }
+
     private async runSyncJob(
         jobId: string,
         userId: string,
@@ -421,6 +430,7 @@ export class BankSyncService {
         defaultCurrencyCode?: string,
     ): Promise<void> {
         const scraperJobIds = new Map<string, string>(); // connectionId → scraperJobId
+        const failedConnections: SyncJobSummary["failedConnections"] = [];
         try {
             await this.prisma.syncJob.update({ where: { id: jobId }, data: { status: "running" } });
 
@@ -490,6 +500,11 @@ export class BankSyncService {
                         },
                     });
                     await this.notifyConnectionFailed(source, result.item.id, errorCode);
+                    failedConnections.push({
+                        id: result.item.id,
+                        displayName: result.item.displayName,
+                        code: errorCode,
+                    });
                 }
             }
 
@@ -597,6 +612,11 @@ export class BankSyncService {
                         },
                     });
                     await this.notifyConnectionFailed(source, connection.id, "IMPORT_FAILED");
+                    failedConnections.push({
+                        id: connection.id,
+                        displayName: connection.displayName,
+                        code: "IMPORT_FAILED",
+                    });
                 }
             }
 
@@ -617,6 +637,13 @@ export class BankSyncService {
                     accountsSynced: totalAccounts,
                     finishedAt: new Date(),
                 },
+            });
+
+            await this.notifySyncFinished(source, {
+                jobId,
+                status: overallStatus,
+                newTransactions: totalTransactions,
+                failedConnections,
             });
         } catch (error) {
             // Catastrophic unexpected failure

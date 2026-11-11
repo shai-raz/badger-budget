@@ -10,7 +10,7 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 import { NotificationPreferencesService } from "../notifications/notification-preferences.service";
 import { PushService } from "../notifications/push.service";
-import { AutoSyncService } from "./auto-sync.service";
+import { AutoSyncService, deleteAutoSyncGrant } from "./auto-sync.service";
 import { jitterRunAt, nextScheduledRunAt, parseAutoSyncSchedule } from "./auto-sync-schedule";
 import { bankSyncConcurrency } from "./bank-sync.service";
 
@@ -205,7 +205,7 @@ export class AutoSyncSchedulerService {
 
                 // The device subscription is gone for good, so the grant can never run again: delete it.
                 if (results.some((result) => result.outcome === "gone")) {
-                    await this.deleteGrant(grant.id);
+                    await deleteAutoSyncGrant(this.prisma, grant.id);
                     continue;
                 }
 
@@ -243,10 +243,5 @@ export class AutoSyncSchedulerService {
             where: { id: grant.id },
             data: { scheduledRunAt, dueAt: jitterRunAt(scheduledRunAt, schedule.intervalUnit) },
         });
-    }
-
-    private async deleteGrant(grantId: string): Promise<void> {
-        await this.prisma.autoSyncCredential.deleteMany({ where: { grantId } });
-        await this.prisma.autoSyncGrant.deleteMany({ where: { id: grantId } });
     }
 }
