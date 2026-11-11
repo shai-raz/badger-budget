@@ -1,4 +1,5 @@
-import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from "@nestjs/common";
+import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
+import { Interval } from "@nestjs/schedule";
 import { PrismaService } from "../prisma/prisma.service";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -8,24 +9,17 @@ const HOUR_MS = 60 * 60 * 1000;
  * around. Runs once on boot, then hourly. Never throws: a failed tick is logged and the next one retries.
  */
 @Injectable()
-export class AutoSyncCleanupService implements OnApplicationBootstrap, OnModuleDestroy {
+export class AutoSyncCleanupService implements OnApplicationBootstrap {
     private readonly logger = new Logger(AutoSyncCleanupService.name);
-    private timer?: NodeJS.Timeout;
 
     constructor(private readonly prisma: PrismaService) {}
 
-    async onApplicationBootstrap(): Promise<void> {
-        this.timer = setInterval(() => {
-            void this.tick();
-        }, HOUR_MS);
-        this.timer.unref();
-        await this.tick();
+    /** Not awaited, like UpdateCheckService: boot does not wait on the database. */
+    onApplicationBootstrap(): void {
+        void this.tick();
     }
 
-    onModuleDestroy(): void {
-        clearInterval(this.timer);
-    }
-
+    @Interval(HOUR_MS)
     async tick(now = new Date()): Promise<void> {
         try {
             await this.prisma.autoSyncCredential.deleteMany({ where: { grant: { expiresAt: { lte: now } } } });

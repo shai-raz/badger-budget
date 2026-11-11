@@ -23,10 +23,6 @@ describe("AutoSyncCleanupService", () => {
         jest.spyOn(service["logger"], "error").mockImplementation(() => undefined);
     });
 
-    afterEach(() => {
-        jest.useRealTimers();
-    });
-
     it("deletes expired credentials, then expired grants, both filtered on the given instant", async () => {
         const now = new Date("2026-11-11T10:00:00Z");
 
@@ -51,17 +47,15 @@ describe("AutoSyncCleanupService", () => {
         expect(mockPrisma.autoSyncGrant.deleteMany).not.toHaveBeenCalled();
     });
 
-    it("ticks once on bootstrap, hourly after that, and stops on destroy", async () => {
-        jest.useFakeTimers();
-
-        await service.onApplicationBootstrap();
+    it("ticks on bootstrap without waiting for the database", () => {
+        expect(() => service.onApplicationBootstrap()).not.toThrow();
         expect(mockPrisma.autoSyncCredential.deleteMany).toHaveBeenCalledTimes(1);
+    });
 
-        jest.advanceTimersByTime(60 * 60 * 1000);
-        expect(mockPrisma.autoSyncCredential.deleteMany).toHaveBeenCalledTimes(2);
-
-        service.onModuleDestroy();
-        jest.advanceTimersByTime(60 * 60 * 1000);
-        expect(mockPrisma.autoSyncCredential.deleteMany).toHaveBeenCalledTimes(2);
+    it("is registered as an hourly @nestjs/schedule interval", () => {
+        // @nestjs/schedule keeps its interval options under this metadata key on the handler.
+        expect(Reflect.getMetadata("SCHEDULE_INTERVAL_OPTIONS", AutoSyncCleanupService.prototype.tick)).toEqual({
+            timeout: 60 * 60 * 1000,
+        });
     });
 });
