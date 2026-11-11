@@ -14,9 +14,11 @@
         "format:check": "prettier --check .",
         "check-types": "turbo run check-types",
         "test": "turbo run test",
-        "test:watch": "turbo run test -- --watch"
+        "test:watch": "turbo run test -- --watch",
+        "test:e2e": "node e2e/scripts/build.mjs && playwright test -c e2e/playwright.config.ts"
     },
     "devDependencies": {
+        "@playwright/test": "^1.65.0",
         "lefthook": "^2.1.10",
         "prettier": "^3.7.4",
         "turbo": "^2.6.3",

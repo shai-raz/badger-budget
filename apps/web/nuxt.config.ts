@@ -15,6 +15,8 @@ export default defineNuxtConfig({
         "@nuxtjs/tailwindcss",
         "@peterbud/nuxt-query",
         "@vueuse/nuxt",
+        // Builds sw/sw-push.ts for the worker below. Before @vite-pwa/nuxt, so the file exists when it precaches.
+        "./modules/sw-push",
         // Skipped under vitest: its client plugin imports a virtual module that the nuxt test env cannot resolve.
         ...(process.env.VITEST ? [] : ["@vite-pwa/nuxt"]),
     ],
@@ -146,6 +148,8 @@ export default defineNuxtConfig({
         },
         workbox: {
             globPatterns: ["**/*.{js,css,html,png,svg,ico,woff2}"],
+            // Push and notification-click handlers, built by modules/sw-push.ts.
+            importScripts: ["sw-push.js"],
             // SPA fallback for offline navigation; never intercept API calls
             navigateFallback: "/",
             // /oauth/ must come from the network so it carries the frame-blocking headers

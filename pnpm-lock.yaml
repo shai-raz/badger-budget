@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@playwright/test':
+        specifier: ^1.65.0
+        version: 1.65.0
       lefthook:
         specifier: ^2.1.10
         version: 2.1.10
@@ -300,7 +303,7 @@ importers:
         version: 1.16.0(@typescript-eslint/utils@8.62.1(eslint@9.39.1(jiti@2.7.0))(typescript@5.9.2))(@vue/compiler-sfc@3.5.44)(crossws@0.4.15(srvx@0.11.22))(esbuild@0.28.2)(eslint@9.39.1(jiti@2.7.0))(magicast@0.5.5)(rolldown@1.2.13)(rollup@4.64.5)(typescript@5.9.2)(vite@8.3.4(@types/node@22.19.3)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.2)(terser@5.44.1)(yaml@2.8.2))(webpack@5.103.0(esbuild@0.28.2))
       '@nuxt/test-utils':
         specifier: ^4.3.4
-        version: 4.3.4(qq6h7jsx4nblf2g4xmx5frvqny)
+        version: 4.3.4(lhrpdkpa2srh5qfdnxwupmrs5m)
       '@primevue/nuxt-module':
         specifier: ^4.2.1
         version: 4.5.4(@babel/parser@7.29.9)(magicast@0.5.5)(vue@3.5.44(typescript@5.9.2))
@@ -316,6 +319,9 @@ importers:
       '@vue/test-utils':
         specifier: ^2.4.6
         version: 2.5.1(@vue/compiler-dom@3.5.44)(@vue/server-renderer@3.5.44)(vue@3.5.44(typescript@5.9.2))
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       eslint:
         specifier: ^9.39.1
         version: 9.39.1(jiti@2.7.0)
@@ -2877,6 +2883,11 @@ packages:
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
+
+  '@playwright/test@1.65.0':
+    resolution: {integrity: sha512-iGURLGuKDLakSEl7Pgfv8h7f+XLT+V861Wfhz0zlEl5nyFuKUopdkFBPKqTllTUp06aOwPuH8iuUEb3yp3MpbQ==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
@@ -8105,6 +8116,16 @@ packages:
 
   pkg-types@2.3.3:
     resolution: {integrity: sha512-j/lCFdcppV0JxWpCEITdbDltBxPP6cHT+yNJ6Go2OgoSA9518X847X9z0p6LtA4Nc16+eQzCZjRrWanTGvHJ5w==}
+
+  playwright-core@1.65.0:
+    resolution: {integrity: sha512-vNSKgH6YqtN7cdT/L334zo0a+YwkrpicyrHJlWWPIm/Q+Nn2SWInil01oT0mbu96U4GgoRtCYQD9CzJQgju+lA==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.65.0:
+    resolution: {integrity: sha512-F3AMWcR44qMBt4kq+6Kb6mX7bjGXshktKFOPULd7reED6ZJWevjbNRqysP7q+AATE9kdPEZBibex1BYsvpVoeA==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   pluralize@8.0.0:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
@@ -13360,7 +13381,7 @@ snapshots:
       rc9: 3.0.1
       std-env: 4.2.0
 
-  '@nuxt/test-utils@4.3.4(qq6h7jsx4nblf2g4xmx5frvqny)':
+  '@nuxt/test-utils@4.3.4(lhrpdkpa2srh5qfdnxwupmrs5m)':
     dependencies:
       '@clack/prompts': 1.8.1
       '@nuxt/devtools-kit': 3.4.2(@nuxt/schema@4.5.2)(confbox@0.3.1)(dotenv@17.4.2)(giget@3.3.0)(jiti@2.7.0)(magic-string@1.4.3)(mlly@1.8.2)(rolldown@1.2.13)(unplugin@3.4.0(esbuild@0.28.2)(rolldown@1.2.13)(rollup@4.64.5)(vite@8.3.4(@types/node@22.19.3)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.2)(terser@5.44.1)(yaml@2.8.2))(webpack@5.103.0(esbuild@0.28.2)))(vite@8.3.4(@types/node@22.19.3)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.2)(terser@5.44.1)(yaml@2.8.2))
@@ -13381,13 +13402,15 @@ snapshots:
       tinyexec: 1.3.1
       ufo: 1.6.4
       unplugin: 3.4.0(esbuild@0.28.2)(rolldown@1.2.13)(rollup@4.64.5)(vite@8.3.4(@types/node@22.19.3)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.2)(terser@5.44.1)(yaml@2.8.2))(webpack@5.103.0(esbuild@0.28.2))
-      vitest-environment-nuxt: 2.0.0(qq6h7jsx4nblf2g4xmx5frvqny)
+      vitest-environment-nuxt: 2.0.0(lhrpdkpa2srh5qfdnxwupmrs5m)
       vue: 3.5.44(typescript@5.9.2)
     optionalDependencies:
+      '@playwright/test': 1.65.0
       '@vue/test-utils': 2.5.1(@vue/compiler-dom@3.5.44)(@vue/server-renderer@3.5.44)(vue@3.5.44(typescript@5.9.2))
       h3: 1.15.11
       happy-dom: 20.14.6
       nuxt: 4.5.2(@babel/plugin-proposal-decorators@7.28.0(@babel/core@7.29.7))(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.7))(@babel/plugin-syntax-typescript@7.29.7(@babel/core@7.29.7))(@oxc-project/types@0.153.0)(@rollup/plugin-babel@6.1.0(@babel/core@7.29.7)(@types/babel__core@7.20.5)(rollup@4.64.5))(@types/node@22.19.3)(@vue/compiler-sfc@3.5.44)(cac@6.7.14)(commander@14.0.3)(confbox@0.3.1)(db0@0.3.4)(dotenv@17.4.2)(esbuild@0.28.2)(eslint@9.39.1(jiti@2.7.0))(giget@3.3.0)(ioredis@5.11.1)(lightningcss@1.33.0)(magicast@0.5.5)(optionator@0.9.4)(pinia@3.0.4(typescript@5.9.2)(vue@3.5.44(typescript@5.9.2)))(rolldown@1.2.13)(rollup-plugin-visualizer@7.1.1(rolldown@1.2.13)(rollup@4.64.5))(rollup@4.64.5)(sass@1.97.2)(srvx@0.11.22)(terser@5.44.1)(typescript@5.9.2)(vite@8.3.4(@types/node@22.19.3)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.2)(terser@5.44.1)(yaml@2.8.2))(vue-tsc@3.3.13(typescript@5.9.2))(webpack@5.103.0(esbuild@0.28.2))(yaml@2.8.2)
+      playwright-core: 1.65.0
       vitest: 5.0.2(@types/node@22.19.3)(happy-dom@20.14.6)(vite@8.3.4(@types/node@22.19.3)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.97.2)(terser@5.44.1)(yaml@2.8.2))
     transitivePeerDependencies:
       - '@farmfe/core'
@@ -13683,6 +13706,10 @@ snapshots:
 
   '@pkgjs/parseargs@0.11.0':
     optional: true
+
+  '@playwright/test@1.65.0':
+    dependencies:
+      playwright: 1.65.0
 
   '@polka/url@1.0.0-next.29': {}
 
@@ -19752,6 +19779,12 @@ snapshots:
       exsolve: 1.1.3
       pathe: 2.0.3
 
+  playwright-core@1.65.0: {}
+
+  playwright@1.65.0:
+    dependencies:
+      playwright-core: 1.65.0
+
   pluralize@8.0.0: {}
 
   portfinder@1.0.38:
@@ -21816,9 +21849,9 @@ snapshots:
       terser: 5.44.1
       yaml: 2.8.2
 
-  vitest-environment-nuxt@2.0.0(qq6h7jsx4nblf2g4xmx5frvqny):
+  vitest-environment-nuxt@2.0.0(lhrpdkpa2srh5qfdnxwupmrs5m):
     dependencies:
-      '@nuxt/test-utils': 4.3.4(qq6h7jsx4nblf2g4xmx5frvqny)
+      '@nuxt/test-utils': 4.3.4(lhrpdkpa2srh5qfdnxwupmrs5m)
     transitivePeerDependencies:
       - '@cucumber/cucumber'
       - '@farmfe/core'

@@ -28,3 +28,10 @@ apps/api/data
 backups
 data
 *.log
+
+# E2E outputs: e2e/.data holds generated JWT and VAPID secrets; e2e/.builds holds full web builds.
+e2e/.builds
+e2e/.data
+apps/web/.sw-push
+playwright-report
+test-results

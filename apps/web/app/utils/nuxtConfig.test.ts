@@ -25,4 +25,14 @@ describe("nuxt.config.ts same-origin contract", () => {
     it("keeps /.well-known out of the service worker navigation fallback", () => {
         expect(config).toContain("/^\\/\\.well-known\\//");
     });
+
+    it("keeps the service worker navigation fallback on / with /api and /oauth denied", () => {
+        expect(config).toContain('navigateFallback: "/"');
+        expect(config).toContain("/^\\/api\\//");
+        expect(config).toContain("/^\\/oauth\\//");
+    });
+
+    it("imports the push handlers into the generated service worker", () => {
+        expect(config).toContain('importScripts: ["sw-push.js"]');
+    });
 });

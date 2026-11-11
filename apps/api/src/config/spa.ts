@@ -1,5 +1,5 @@
 import { existsSync } from "fs";
-import { basename, join, relative, resolve, sep } from "path";
+import { basename, join, relative, sep } from "path";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import serveStatic from "serve-static";
 
@@ -30,7 +30,7 @@ export function frameHeadersMiddleware(): RequestHandler {
 /** Nuxt content-hashes everything under /_nuxt/, so those files can be cached forever. */
 const IMMUTABLE_PREFIX = "_nuxt/";
 /** Entry documents and service-worker files must always be revalidated. */
-const NO_CACHE_FILE = /^(sw\.js|workbox-.*\.js|manifest\.webmanifest)$/;
+const NO_CACHE_FILE = /^(sw\.js|sw-push\.js|workbox-.*\.js|manifest\.webmanifest)$/;
 /** Build output and any file-like path (has an extension in its last segment) is never a client route. */
 const isAssetPath = (path: string): boolean => path.startsWith("/_nuxt/") || /\.[^/]+$/.test(path);
 
@@ -54,7 +54,6 @@ export function createSpaHandlers(webDistDir: string): RequestHandler[] {
         },
     });
 
-    const indexHtml = resolve(webDistDir, "index.html");
     const staticOrSkip: RequestHandler = (req, res, next) =>
         isApiOrWellKnownPath(req.path) ? next() : staticFiles(req, res, next);
 
@@ -63,7 +62,9 @@ export function createSpaHandlers(webDistDir: string): RequestHandler[] {
         if ((req.method !== "GET" && req.method !== "HEAD") || isApiOrWellKnownPath(req.path) || isAssetPath(req.path))
             return next();
         res.setHeader("Cache-Control", "no-cache");
-        res.sendFile(indexHtml, (err) => {
+        // Relative path + root: express's dotfile check then applies only to "index.html", not to the
+        // directories above webDistDir (an absolute path under a dot-folder would 404 every client route).
+        res.sendFile("index.html", { root: webDistDir }, (err) => {
             if (err) next(err);
         });
     };
