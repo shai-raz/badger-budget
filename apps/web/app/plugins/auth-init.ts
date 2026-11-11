@@ -1,6 +1,7 @@
 import { useAuthStore } from "~/stores/auth";
 import { useApiClient } from "~/composables/useApiClient";
 import { getLocaleCurrencyCode } from "~/utils/locale-currency";
+import { syncThisBrowserPush } from "~/utils/push/pushDeps";
 
 export default defineNuxtPlugin(async () => {
     const authStore = useAuthStore();
@@ -21,6 +22,14 @@ export default defineNuxtPlugin(async () => {
                 apiClient.backfillCurrencies(getLocaleCurrencyCode()).catch(() => {
                     // Silently ignore — backfill is best-effort and non-blocking
                 });
+
+                // Re-register this browser's push subscription (if one exists) so the server row survives
+                // a key rotation or a removed device. Never prompts; never blocks app start.
+                if (authStore.user?.isDemo !== true) {
+                    syncThisBrowserPush(apiClient).catch(() => {
+                        // Silently ignore — sync is best-effort
+                    });
+                }
             }
         }
     }

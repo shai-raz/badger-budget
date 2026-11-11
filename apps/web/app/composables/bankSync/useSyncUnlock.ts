@@ -77,7 +77,7 @@ export function useSyncUnlock() {
                     credentialId: created.credentialId,
                     prfSalt: toBase64Url(created.prfSalt),
                     ...wrapped,
-                    label: describeDevice(navigator.userAgent),
+                    label: describeDevice(navigator.userAgent, navigator.maxTouchPoints),
                 });
             } catch (err) {
                 // The credential exists on the device but the server never stored it.

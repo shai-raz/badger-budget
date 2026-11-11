@@ -9,19 +9,24 @@ function browserOf(ua: string): string | null {
     return null;
 }
 
-function osOf(ua: string): string | null {
+// Device-style names, not phone models: Chrome's reduced UA reports the model as "K",
+// so model parsing would be unreliable.
+function deviceOf(ua: string, maxTouchPoints: number): string | null {
+    if (/iPhone|iPod/.test(ua)) return "iPhone";
+    if (/iPad/.test(ua)) return "iPad";
+    // iPadOS 13+ requests the desktop site by default, so its UA claims Macintosh; touch points tell it apart.
+    if (/Macintosh/.test(ua) && maxTouchPoints > 1) return "iPad";
     if (/Android/.test(ua)) return "Android";
-    if (/iPhone|iPad|iPod/.test(ua)) return "iOS";
     if (/Windows/.test(ua)) return "Windows";
-    if (/CrOS/.test(ua)) return "ChromeOS";
-    if (/Macintosh|Mac OS X/.test(ua)) return "macOS";
+    if (/CrOS/.test(ua)) return "Chromebook";
+    if (/Macintosh|Mac OS X/.test(ua)) return "Mac";
     if (/Linux|X11/.test(ua)) return "Linux";
     return null;
 }
 
-export function describeDevice(userAgent: string): string {
+export function describeDevice(userAgent: string, maxTouchPoints = 0): string {
     const browser = browserOf(userAgent);
-    const os = osOf(userAgent);
-    const label = browser && os ? `${browser} on ${os}` : (browser ?? os ?? "Passkey");
+    const device = deviceOf(userAgent, maxTouchPoints);
+    const label = browser && device ? `${browser} on ${device}` : (browser ?? device ?? "Unknown device");
     return label.slice(0, MAX_LEN);
 }
