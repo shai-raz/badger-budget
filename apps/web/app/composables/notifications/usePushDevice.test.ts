@@ -115,6 +115,15 @@ describe("usePushDevice.refresh", () => {
         expect(device.state.value).toBe("on");
         expect(device.endpoint.value).toBe("https://push.example/sub");
     });
+
+    it("leaves loading and keeps the error when the registration read throws", async () => {
+        installBrowser({ permission: "granted" });
+        vi.mocked(navigator.serviceWorker.getRegistration).mockRejectedValueOnce(new Error("blocked"));
+        const device = usePushDevice();
+        await device.refresh();
+        expect(device.state.value).toBe("unsupported");
+        expect(device.error.value?.message).toBe("blocked");
+    });
 });
 
 describe("usePushDevice.enable", () => {

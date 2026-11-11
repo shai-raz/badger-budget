@@ -60,6 +60,8 @@ export function usePushDevice() {
             await readState();
         } catch (e) {
             error.value = toError(e);
+            // Without this the band would keep its skeleton: no state means nothing to show but the error.
+            if (state.value === "loading") state.value = "unsupported";
         }
     }
 

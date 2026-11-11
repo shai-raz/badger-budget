@@ -31,9 +31,9 @@ const notificationsSummary = computed(() => {
         case "denied":
             return "Blocked in this browser";
         case "ios-install":
-            return "Add Badger to your Home Screen to turn on";
+            return "Needs Home Screen install";
         case "unsupported":
-            return "Not available on this device";
+            return "Not supported here";
         default:
             return "";
     }
