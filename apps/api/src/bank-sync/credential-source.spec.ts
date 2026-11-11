@@ -238,7 +238,10 @@ describe("startSyncJob with a credential source", () => {
         });
     });
 
-    it("reports no failure for a connection that already succeeded when the run dies afterwards", async () => {
+    it("reports the transactions imported before the run dies afterwards, with no failure", async () => {
+        importer.importTransactions
+            .mockResolvedValueOnce({ transactionsSynced: 3, accountsCreated: 0 })
+            .mockResolvedValueOnce({ transactionsSynced: 2, accountsCreated: 0 });
         prisma.syncJob.update.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error("db down"));
         const source: CredentialSource = {
             resolve: () => ({ username: "bank-user" }),
@@ -251,9 +254,41 @@ describe("startSyncJob with a credential source", () => {
         expect(source.onFinished).toHaveBeenCalledWith({
             jobId: "job-1",
             status: "failed",
-            newTransactions: 0,
+            newTransactions: 5,
             failedConnections: [],
         });
+    });
+
+    it("marks the job failed before it reports a catastrophic failure", async () => {
+        prisma.syncJob.update.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error("db down"));
+        const onFinished = jest.fn().mockResolvedValue(undefined);
+        const source: CredentialSource = { resolve: () => ({ username: "bank-user" }), onFinished };
+
+        await service.startSyncJob("user-1", [connection("A")], source, "ILS");
+        await finish();
+
+        const failedUpdate = prisma.syncJob.update.mock.calls.length - 1;
+        expect(prisma.syncJob.update).toHaveBeenLastCalledWith({
+            where: { id: "job-1" },
+            data: expect.objectContaining({ status: "failed", error: "db down" }),
+        });
+        expect(prisma.syncJob.update.mock.invocationCallOrder[failedUpdate]).toBeLessThan(
+            onFinished.mock.invocationCallOrder[0],
+        );
+    });
+
+    it("still reports a catastrophic failure when marking the job failed throws", async () => {
+        prisma.syncJob.update
+            .mockResolvedValueOnce({})
+            .mockRejectedValueOnce(new Error("db down"))
+            .mockRejectedValueOnce(new Error("db still down"));
+        const onFinished = jest.fn().mockResolvedValue(undefined);
+        const source: CredentialSource = { resolve: () => ({ username: "bank-user" }), onFinished };
+
+        await service.startSyncJob("user-1", [connection("A")], source, "ILS");
+        await finish();
+
+        expect(onFinished).toHaveBeenCalledWith(expect.objectContaining({ jobId: "job-1", status: "failed" }));
     });
 
     it("keeps the run's status when onFinished rejects", async () => {
