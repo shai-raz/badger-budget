@@ -56,6 +56,7 @@ model User {
   reimbursementAllocations ReimbursementAllocation[]
   pushSubscriptions    PushSubscription[]
   notificationPreferences NotificationPreference[]
+  autoSyncGrant       AutoSyncGrant?
 
   @@index([email])
   @@index([googleId])
@@ -523,6 +524,7 @@ model ScraperConnection {
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   scraperJobs ScraperJob[]
+  autoSyncCredentials AutoSyncCredential[]
 
   @@index([userId])
   @@index([isActive])
@@ -734,4 +736,59 @@ model InstanceState {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
   @@map("instance_state")
+}
+
+model AutoSyncGrant {
+  // Generated in the app with randomUUID(), not by the DB: the HKDF info and the credential AADs need the id before the insert.
+  id                String    @id @db.Uuid
+  userId            String    @unique @map("user_id") @db.Uuid
+  deviceLabel       String    @map("device_label") @db.VarChar(100)
+  intervalUnit      String    @map("interval_unit") @db.VarChar(8)
+  intervalCount     Int       @map("interval_count")
+  // Hours only: the run window, in minutes after local midnight.
+  windowStartMinute Int?      @map("window_start_minute")
+  windowEndMinute   Int?      @map("window_end_minute")
+  // Days only: the local time of day to run, in minutes after local midnight.
+  runAtMinute       Int?      @map("run_at_minute")
+  timeZone          String    @map("time_zone") @db.VarChar(64)
+  durationDays      Int       @map("duration_days")
+  expiresAt         DateTime  @map("expires_at") @db.Timestamp(6)
+  keyCheckCt        String    @map("key_check_ct") @db.Text
+  keyCheckIv        String    @map("key_check_iv") @db.VarChar(32)
+  keyCheckAuthTag   String    @map("key_check_auth_tag") @db.VarChar(32)
+  // Next run before jitter; anchors the following slot and is what the UI shows.
+  scheduledRunAt    DateTime  @map("scheduled_run_at") @db.Timestamp(6)
+  // scheduledRunAt plus jitter; what the scheduler queries.
+  dueAt             DateTime  @map("due_at") @db.Timestamp(6)
+  // Hex SHA-256 of the one-time run token, null when no run is in flight.
+  runTokenHash      String?   @map("run_token_hash") @db.VarChar(64)
+  runTokenExpiresAt DateTime? @map("run_token_expires_at") @db.Timestamp(6)
+  lastRunAt         DateTime? @map("last_run_at") @db.Timestamp(6)
+  missedRuns        Int       @default(0) @map("missed_runs")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentials AutoSyncCredential[]
+
+  @@index([dueAt])
+  @@index([expiresAt])
+  @@map("auto_sync_grants")
+}
+
+model AutoSyncCredential {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  grantId      String   @map("grant_id") @db.Uuid
+  connectionId String   @map("connection_id") @db.Uuid
+  ciphertext   String   @db.Text
+  iv           String   @db.VarChar(32)
+  authTag      String   @map("auth_tag") @db.VarChar(32)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  grant      AutoSyncGrant     @relation(fields: [grantId], references: [id], onDelete: Cascade)
+  connection ScraperConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([grantId, connectionId])
+  @@index([connectionId])
+  @@map("auto_sync_credentials")
 }
