@@ -1,4 +1,4 @@
-import type { IRegisterPushSubscriptionRequest } from "@badger/types";
+import type { IPushSubscription, IRegisterPushSubscriptionRequest } from "@badger/types";
 import { fromBase64Url } from "../base64url";
 import { describeDevice } from "../deviceLabel";
 import { subscriptionUsesKey } from "./pushState";
@@ -42,7 +42,7 @@ export interface PushUnregisterDeps {
 export interface EnablePushDeps {
     registration: PushRegistrationLike;
     publicKey: string;
-    register(data: IRegisterPushSubscriptionRequest): Promise<unknown>;
+    register(data: IRegisterPushSubscriptionRequest): Promise<IPushSubscription>;
     device: DeviceInfo;
 }
 
@@ -108,18 +108,19 @@ export async function syncPushSubscription(deps: PushSyncDeps): Promise<void> {
  * The deliberate Turn on. A removed endpoint (the browser still holds it) is dropped and replaced by a new one,
  * so an explicit enable never leaves the device stuck.
  */
-export async function enablePushSubscription(deps: EnablePushDeps): Promise<void> {
+export async function enablePushSubscription(deps: EnablePushDeps): Promise<string> {
     const subscription = await ensureSubscription(deps.registration, deps.publicKey);
     try {
-        await deps.register(buildRegisterRequest(subscription, deps.device));
-        return;
+        const registered = await deps.register(buildRegisterRequest(subscription, deps.device));
+        return registered.id;
     } catch (error) {
         if (!isRemovedRegistration(error)) throw error;
     }
 
     await subscription.unsubscribe();
     const fresh = await subscribeFresh(deps.registration, deps.publicKey);
-    await deps.register(buildRegisterRequest(fresh, deps.device));
+    const registered = await deps.register(buildRegisterRequest(fresh, deps.device));
+    return registered.id;
 }
 
 /** Best-effort removal of this browser's subscription on logout. Never rejects, and resolves within timeoutMs. */

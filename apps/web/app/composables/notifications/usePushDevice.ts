@@ -65,13 +65,14 @@ export function usePushDevice() {
         }
     }
 
-    async function withBusy(action: () => Promise<void>) {
+    async function withBusy<T>(action: () => Promise<T>): Promise<T | undefined> {
         busy.value = true;
         error.value = null;
         try {
-            await action();
+            return await action();
         } catch (e) {
             error.value = toError(e);
+            return undefined;
         } finally {
             await refresh();
             busy.value = false;
@@ -79,22 +80,25 @@ export function usePushDevice() {
     }
 
     // Must be called from a tap handler: requestPermission needs user activation, so nothing awaits before it.
-    async function enable() {
-        await withBusy(async () => {
+    // Resolves with the registered subscription's id, or null when the user did not grant permission or it failed.
+    async function enable(): Promise<string | null> {
+        const id = await withBusy(async () => {
             const permission = await Notification.requestPermission();
-            if (permission !== "granted") return;
+            if (permission !== "granted") return null;
 
             const registration = await getPushRegistration();
             if (!registration) throw new Error("Push is not available in this browser");
             const { publicKey } = await queryClient.fetchQuery(vapidPublicKeyOptions(apiClient));
-            await enablePushSubscription({
+            const subscriptionId = await enablePushSubscription({
                 registration,
                 publicKey,
                 register: (data) => apiClient.registerPushSubscription(data),
                 device: device(),
             });
             await invalidateSubscriptions();
+            return subscriptionId;
         });
+        return id ?? null;
     }
 
     async function disable() {

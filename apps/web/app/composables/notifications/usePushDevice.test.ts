@@ -84,7 +84,7 @@ beforeEach(() => {
     auth.user = { id: "u1" };
     queryClient.fetchQuery.mockResolvedValue({ publicKey: PUBLIC_KEY });
     queryClient.invalidateQueries.mockResolvedValue(undefined);
-    api.registerPushSubscription.mockResolvedValue({});
+    api.registerPushSubscription.mockResolvedValue({ id: "sub-1" });
     api.unregisterPushSubscription.mockResolvedValue(undefined);
 });
 
@@ -132,7 +132,7 @@ describe("usePushDevice.enable", () => {
         installBrowser({ permission: "default", requestPermission: "denied", registration });
         const device = usePushDevice();
 
-        await device.enable();
+        await expect(device.enable()).resolves.toBeNull();
 
         expect(device.state.value).toBe("denied");
         expect(registration.pushManager.subscribe).not.toHaveBeenCalled();
@@ -144,7 +144,7 @@ describe("usePushDevice.enable", () => {
         installBrowser({ permission: "default", requestPermission: "granted", registration });
         const device = usePushDevice();
 
-        await device.enable();
+        await expect(device.enable()).resolves.toBe("sub-1");
 
         expect(queryClient.fetchQuery).toHaveBeenCalledWith(expect.objectContaining({ staleTime: Infinity }));
         expect(registration.pushManager.subscribe).toHaveBeenCalledWith(
@@ -185,7 +185,7 @@ describe("usePushDevice.enable", () => {
         api.registerPushSubscription.mockRejectedValueOnce(new Error("server down"));
         const device = usePushDevice();
 
-        await expect(device.enable()).resolves.toBeUndefined();
+        await expect(device.enable()).resolves.toBeNull();
 
         expect(device.error.value?.message).toBe("server down");
         expect(device.busy.value).toBe(false);
