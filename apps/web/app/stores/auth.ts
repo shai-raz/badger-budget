@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import type { IAuthUser } from "@badger/types";
 import { useApiClient } from "../composables/useApiClient";
 import { getApiErrorMessage } from "../utils/apiError";
+import { unregisterThisBrowserPush } from "../utils/push/pushDeps";
 
 export const useAuthStore = defineStore("auth", () => {
     // State
@@ -112,6 +113,12 @@ export const useAuthStore = defineStore("auth", () => {
 
     async function logout() {
         const apiClient = useApiClient();
+
+        // Before the tokens are dropped: the unregister call needs the JWT. Time-bounded, and it never rejects,
+        // so logout always proceeds. Demo users never have push rows.
+        if (user.value?.isDemo !== true) {
+            await unregisterThisBrowserPush(apiClient).catch(() => undefined);
+        }
 
         try {
             const refreshToken = localStorage.getItem("refresh_token");

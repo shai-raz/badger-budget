@@ -9,7 +9,8 @@ import {
     type PushDeviceState,
     type PushEnvironment,
 } from "~/utils/push/pushState";
-import { buildRegisterRequest, ensureSubscription, type PushRegistrationLike } from "~/utils/push/pushSync";
+import { buildRegisterRequest, ensureSubscription } from "~/utils/push/pushSync";
+import { getPushRegistration } from "~/utils/push/pushDeps";
 import { notificationKeys, vapidPublicKeyOptions } from "./useNotificationQueries";
 
 function readEnvironment(): PushEnvironment {
@@ -21,12 +22,6 @@ function readEnvironment(): PushEnvironment {
         isIos: isIosDevice(navigator.userAgent, navigator.maxTouchPoints),
         isStandalone: isStandaloneDisplay(window.matchMedia("(display-mode: standalone)").matches, navigatorStandalone),
     };
-}
-
-// Never `navigator.serviceWorker.ready`: it never resolves when no worker is registered (e.g. in dev).
-async function getRegistration(): Promise<PushRegistrationLike | undefined> {
-    if (!("serviceWorker" in navigator)) return undefined;
-    return navigator.serviceWorker.getRegistration();
 }
 
 function toError(e: unknown): Error {
@@ -48,7 +43,7 @@ export function usePushDevice() {
         queryClient.invalidateQueries({ queryKey: notificationKeys.subscriptions(authStore.user?.id) });
 
     async function readState() {
-        const registration = await getRegistration();
+        const registration = await getPushRegistration();
         const subscription = await registration?.pushManager.getSubscription();
         endpoint.value = subscription?.endpoint ?? null;
         const env = readEnvironment();
@@ -87,7 +82,7 @@ export function usePushDevice() {
             const permission = await Notification.requestPermission();
             if (permission !== "granted") return;
 
-            const registration = await getRegistration();
+            const registration = await getPushRegistration();
             if (!registration) throw new Error("Push is not available in this browser");
             const { publicKey } = await queryClient.fetchQuery(vapidPublicKeyOptions(apiClient));
             const subscription = await ensureSubscription(registration, publicKey);
@@ -98,7 +93,7 @@ export function usePushDevice() {
 
     async function disable() {
         await withBusy(async () => {
-            const registration = await getRegistration();
+            const registration = await getPushRegistration();
             const subscription = await registration?.pushManager.getSubscription();
             if (!subscription) return;
             await apiClient.unregisterPushSubscription(subscription.endpoint);
