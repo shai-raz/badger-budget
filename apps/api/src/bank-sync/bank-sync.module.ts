@@ -10,13 +10,15 @@ import { ScraperService } from "./scraper.service";
 import { DebugArtifactService } from "./debug-artifact.service";
 import { SyncRecoveryService } from "./sync-recovery.service";
 import { SyncErrorCodeBackfillService } from "./sync-error-code-backfill.service";
+import { AutoSyncSchedulerService } from "./auto-sync-scheduler.service";
 import { PrismaModule } from "../prisma/prisma.module";
 import { CryptoModule } from "../crypto/crypto.module";
 import { TransactionImportModule } from "../transactions/transaction-import.module";
 import { AccountsModule } from "../accounts/accounts.module";
+import { NotificationsModule } from "../notifications/notifications.module";
 
 @Module({
-    imports: [ConfigModule, PrismaModule, CryptoModule, TransactionImportModule, AccountsModule],
+    imports: [ConfigModule, PrismaModule, CryptoModule, TransactionImportModule, AccountsModule, NotificationsModule],
     controllers: [BankSyncController, AutoSyncController, AutoSyncRunController],
     providers: [
         BankSyncService,
@@ -26,6 +28,7 @@ import { AccountsModule } from "../accounts/accounts.module";
         DebugArtifactService,
         SyncRecoveryService,
         SyncErrorCodeBackfillService,
+        AutoSyncSchedulerService,
     ],
     exports: [BankSyncService],
 })

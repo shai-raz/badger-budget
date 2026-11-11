@@ -53,3 +53,5 @@ The API is an OAuth 2.1 authorization server (`src/oauth/AGENTS.md`) for its own
 ## Bank sync
 
 `bank-sync` scrapes Israeli banks with `israeli-bank-scrapers` + `puppeteer-extra`, either on a remote Browserless (`BROWSERLESS_URL`) or local Chromium. Credentials are encrypted with the user's sync PIN (`crypto`), never stored in plaintext. Details: `src/bank-sync/AGENTS.md`.
+
+Auto-sync runs are started by `AutoSyncSchedulerService`, a 5-minute `@nestjs/schedule` tick that pushes run requests to devices within `BANK_SYNC_CONCURRENCY`. Assumes a single API instance.

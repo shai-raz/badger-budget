@@ -81,6 +81,11 @@ function toSyncJobResponse<T extends { scraperJobs: { errorCode: string | null }
     };
 }
 
+/** Scraper sessions per API instance: BANK_SYNC_CONCURRENCY, default 3. Also caps the auto-sync scheduler. */
+export function bankSyncConcurrency(configService: ConfigService): number {
+    return Math.max(1, parseInt(configService.get<string>("BANK_SYNC_CONCURRENCY", "3"), 10) || 3);
+}
+
 @Injectable()
 export class BankSyncService {
     private readonly logger = new Logger(BankSyncService.name);
@@ -433,10 +438,7 @@ export class BankSyncService {
                 scraperJobIds.set(conn.id, scraperJob.id);
             }
 
-            const concurrency = Math.max(
-                1,
-                parseInt(this.configService.get<string>("BANK_SYNC_CONCURRENCY", "3"), 10) || 3,
-            );
+            const concurrency = bankSyncConcurrency(this.configService);
 
             // Phase 1: parallel scrape (bounded by concurrency cap)
             type ScrapeSuccess = {
