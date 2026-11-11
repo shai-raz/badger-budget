@@ -342,6 +342,7 @@ const saveLabel = computed(() => (isEnable.value ? "Unlock and turn on" : "Save"
                     input-id="auto-sync-window-start"
                     aria-label="Window start"
                     class="min-w-0 flex-1"
+                    input-class="w-full"
                     :invalid="windowError"
                 />
                 <span class="text-sm text-muted-color">and</span>
@@ -353,6 +354,7 @@ const saveLabel = computed(() => (isEnable.value ? "Unlock and turn on" : "Save"
                     input-id="auto-sync-window-end"
                     aria-label="Window end"
                     class="min-w-0 flex-1"
+                    input-class="w-full"
                     :invalid="windowError"
                 />
             </div>
