@@ -1,6 +1,40 @@
 {
     "releases": [
         {
+            "version": "0.16.0",
+            "date": "2026-11-11",
+            "items": [
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "web push subscriptions, preferences and send service",
+                    "pr": 125
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "push handling in the service worker, with Playwright E2E",
+                    "pr": 126
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "notification settings page",
+                    "pr": 127
+                },
+                {
+                    "type": "feat",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "notify admins when a new version is available",
+                    "pr": 128
+                }
+            ]
+        },
+        {
             "version": "0.15.0",
             "date": "2026-11-08",
             "items": [
