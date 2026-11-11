@@ -1,0 +1,11 @@
+{
+    "extends": "../packages/typescript-config/base.json",
+    "compilerOptions": {
+        "module": "commonjs",
+        "moduleResolution": "node",
+        "types": ["node"],
+        "noEmit": true
+    },
+    "include": ["**/*.ts"],
+    "exclude": [".builds", ".data", "playwright-report", "test-results"]
+}
