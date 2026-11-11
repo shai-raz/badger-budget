@@ -15,6 +15,7 @@ import {
 } from "./swHandlers";
 
 const ORIGIN = "https://app.test";
+const IMAGES = { icon: "/pwa-192x192.png", badge: "/badge-96x96.png" };
 
 function fakeDeps() {
     const showNotification = vi.fn<(title: string, options: ShowOptions) => Promise<void>>(() => Promise.resolve());
@@ -34,6 +35,7 @@ interface FakeWindow extends SwWindowClient {
 function fakeWindow(url: string, overrides: Partial<FakeWindow> = {}): FakeWindow {
     return {
         url,
+        focused: false,
         navigate: vi.fn<(url: string) => Promise<unknown>>(() => Promise.resolve()),
         focus: vi.fn<() => Promise<unknown>>(() => Promise.resolve()),
         ...overrides,
@@ -121,7 +123,25 @@ describe("handlePush", () => {
         expect(handler).toHaveBeenCalledTimes(1);
         expect(handler.mock.calls[0]?.[0]).toMatchObject({ type: "system.update-available", tag: "update-2.0" });
         expect(showNotification).toHaveBeenCalledTimes(1);
-        expect(showNotification).toHaveBeenCalledWith("From handler", shown.options);
+        expect(showNotification).toHaveBeenCalledWith("From handler", { ...shown.options, ...IMAGES });
+    });
+
+    it("adds the icon and monochrome badge to a custom handler that omits them", async () => {
+        const { deps, showNotification } = fakeDeps();
+        const handlers = {
+            ...PUSH_TYPE_HANDLERS,
+            "system.test": vi.fn<PushTypeHandler>(() => Promise.resolve({ title: "Custom", options: { body: "b" } })),
+        };
+
+        await handlePush(JSON.stringify(testMessage), deps, handlers);
+
+        expect(showNotification).toHaveBeenCalledWith("Custom", expect.objectContaining(IMAGES));
+    });
+
+    it("sets the icon and badge for a known type", async () => {
+        const { deps, showNotification } = fakeDeps();
+        await handlePush(JSON.stringify(testMessage), deps);
+        expect(showNotification.mock.calls[0]?.[1]).toMatchObject(IMAGES);
     });
 
     it("shows the default notification for a v1 type with the message title and body", async () => {
@@ -146,6 +166,7 @@ describe("handlePush", () => {
             body: FALLBACK_NOTIFICATION.body,
             tag: "fallback",
             data: { url: "/", actions: {} },
+            ...IMAGES,
         });
     });
 
@@ -165,6 +186,7 @@ describe("handlePush", () => {
                 body: FALLBACK_NOTIFICATION.body,
                 tag: "test-1",
                 data: { url: "/transactions", actions: {} },
+                ...IMAGES,
             }),
         );
     });
@@ -263,6 +285,39 @@ describe("handleNotificationClick", () => {
 
         expect(window.navigate).toHaveBeenCalledWith(`${ORIGIN}/transactions`);
         expect(openWindow).not.toHaveBeenCalled();
+    });
+
+    it("requests focus before navigating, so a slow page load cannot outlive the tap's focus allowance", async () => {
+        const window = fakeWindow(`${ORIGIN}/`);
+        const { clients } = fakeClients([window]);
+
+        await handleNotificationClick({ action: "", data: target }, { clients, origin: ORIGIN });
+
+        const focusCall = window.focus.mock.invocationCallOrder[0] ?? Infinity;
+        const navigateCall = window.navigate.mock.invocationCallOrder[0] ?? -Infinity;
+        expect(focusCall).toBeLessThan(navigateCall);
+    });
+
+    it("prefers the focused app tab over an unfocused one", async () => {
+        const background = fakeWindow(`${ORIGIN}/a`);
+        const focused = fakeWindow(`${ORIGIN}/b`, { focused: true });
+        const { clients, openWindow } = fakeClients([background, focused]);
+
+        await handleNotificationClick({ action: "", data: target }, { clients, origin: ORIGIN });
+
+        expect(focused.navigate).toHaveBeenCalledWith(`${ORIGIN}/transactions`);
+        expect(background.navigate).not.toHaveBeenCalled();
+        expect(openWindow).not.toHaveBeenCalled();
+    });
+
+    it("ignores tabs from other origins", async () => {
+        const other = fakeWindow("https://evil.example/", { focused: true });
+        const { clients, openWindow } = fakeClients([other]);
+
+        await handleNotificationClick({ action: "", data: target }, { clients, origin: ORIGIN });
+
+        expect(other.navigate).not.toHaveBeenCalled();
+        expect(openWindow).toHaveBeenCalledWith(`${ORIGIN}/transactions`);
     });
 
     it("opens a new window when no app tab exists", async () => {

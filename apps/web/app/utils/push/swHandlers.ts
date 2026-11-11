@@ -24,6 +24,7 @@ export interface NotificationTarget {
 
 export interface SwWindowClient {
     url: string;
+    focused: boolean;
     navigate(url: string): Promise<unknown>;
     focus(): Promise<unknown>;
 }
@@ -43,7 +44,11 @@ export type PushTypeHandler = (
     deps: PushDeps,
 ) => Promise<{ title: string; options: ShowOptions }>;
 
-const ICON = "/pwa-192x192.png";
+/**
+ * Merged over every shown notification in handlePush, so no PushTypeHandler can ship without them. The badge is
+ * monochrome and alpha-only: Android draws it in the status bar.
+ */
+const NOTIFICATION_IMAGES = { icon: "/pwa-192x192.png", badge: "/badge-96x96.png" };
 
 export const FALLBACK_NOTIFICATION = {
     title: "Badger Budget",
@@ -116,8 +121,6 @@ export function defaultHandler(message: PushMessage): { title: string; options: 
         options: {
             body: message.body,
             tag: message.tag,
-            icon: ICON,
-            badge: ICON,
             actions: message.actions?.map((action) => ({ action: action.id, title: action.title })),
             data: target,
         },
@@ -135,8 +138,6 @@ function fallbackOptions(url: string, tag: string): { title: string; options: Sh
         options: {
             body: FALLBACK_NOTIFICATION.body,
             tag,
-            icon: ICON,
-            badge: ICON,
             data: { url, actions: {} } satisfies NotificationTarget,
         },
     };
@@ -172,7 +173,7 @@ export async function handlePush(
             shown = fallbackOptions(message.url, message.tag);
         }
     }
-    await deps.showNotification(shown.title, shown.options);
+    await deps.showNotification(shown.title, { ...shown.options, ...NOTIFICATION_IMAGES });
 }
 
 /** Reads the stored target, falling back to "/" when the shape is wrong. */
@@ -215,21 +216,32 @@ export async function handleNotificationClick(
     } catch {
         windows = [];
     }
-    const client = windows.find((candidate) => candidate.url.startsWith(`${origin}/`));
+    const candidates = windows.filter((candidate) => candidate.url.startsWith(`${origin}/`));
+    // Prefer the focused tab: an unfocused one may be uncontrolled, and navigating it would open a duplicate window.
+    const client = candidates.find((candidate) => candidate.focused) ?? candidates[0];
     if (!client) {
         await openNew();
         return;
     }
 
+    // Focus goes first: a full page load can outlive the click's window-interaction allowance, so focus must be
+    // requested before navigating. Navigation still happens when focus is refused.
+    const focusing = attempt(() => client.focus());
+    let navigated = true;
     try {
         await client.navigate(absolute);
     } catch {
-        await openNew();
-        return;
+        navigated = false;
     }
+    await focusing;
+    if (!navigated) await openNew();
+}
+
+/** Runs a best-effort browser call, ignoring its failure. The call is made synchronously, before any await. */
+async function attempt(call: () => Promise<unknown>): Promise<void> {
     try {
-        await client.focus();
+        await call();
     } catch {
-        // Focus is best effort; the navigation already happened.
+        // Best effort only; the caller decides what else to do.
     }
 }
