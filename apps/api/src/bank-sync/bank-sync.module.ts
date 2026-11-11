@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { BankSyncController } from "./bank-sync.controller";
 import { BankSyncService } from "./bank-sync.service";
+import { AutoSyncController } from "./auto-sync.controller";
+import { AutoSyncService } from "./auto-sync.service";
 import { ScraperService } from "./scraper.service";
 import { DebugArtifactService } from "./debug-artifact.service";
 import { SyncRecoveryService } from "./sync-recovery.service";
@@ -13,9 +15,10 @@ import { AccountsModule } from "../accounts/accounts.module";
 
 @Module({
     imports: [ConfigModule, PrismaModule, CryptoModule, TransactionImportModule, AccountsModule],
-    controllers: [BankSyncController],
+    controllers: [BankSyncController, AutoSyncController],
     providers: [
         BankSyncService,
+        AutoSyncService,
         ScraperService,
         DebugArtifactService,
         SyncRecoveryService,

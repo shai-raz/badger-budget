@@ -96,7 +96,7 @@ export class BankSyncService {
         private readonly configService: ConfigService,
     ) {}
 
-    private async verifyUserPin(userId: string, pin: string): Promise<void> {
+    async verifyUserPin(userId: string, pin: string): Promise<void> {
         const secret = await this.prisma.userSyncSecret.findUnique({ where: { userId } });
 
         if (!secret) {
