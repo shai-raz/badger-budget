@@ -21,6 +21,7 @@ import { OAuthModule } from "./oauth/oauth.module";
 import { HealthModule } from "./health/health.module";
 import { AppConfigModule } from "./app-config/app-config.module";
 import { SystemModule } from "./system/system.module";
+import { NotificationsModule } from "./notifications/notifications.module";
 
 @Module({
     imports: [
@@ -69,6 +70,9 @@ import { SystemModule } from "./system/system.module";
 
         // Running version and update check (authenticated)
         SystemModule,
+
+        // Web Push subscriptions and the test send
+        NotificationsModule,
     ],
     controllers: [],
     providers: [],

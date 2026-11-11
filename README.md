@@ -32,9 +32,9 @@ No configuration is required for a working install. Stop it with `docker compose
 
 Compose reads an optional `.env` file next to `docker-compose.yml`. Every variable has a default, so the file can be left out. An empty value is the same as an unset one.
 
-Secrets need one step of care. `JWT_SECRET`, `JWT_REFRESH_SECRET` and `CREDENTIAL_ENCRYPTION_PEPPER` are generated on first boot and saved to `/data/secrets` inside the `app_data` volume. Later boots reuse them. Values you set in `.env` take precedence over the generated files.
+Secrets need one step of care. `JWT_SECRET`, `JWT_REFRESH_SECRET`, `CREDENTIAL_ENCRYPTION_PEPPER` and `VAPID_PRIVATE_KEY` (Web Push) are generated on first boot and saved to `/data/secrets` inside the `app_data` volume. Later boots reuse them. Values you set in `.env` take precedence over the generated files.
 
-**Back up the secrets.** Losing `CREDENTIAL_ENCRYPTION_PEPPER` makes the stored bank credentials unrecoverable. Losing the JWT secrets signs everyone out. See [Backups and restore](#backups-and-restore).
+**Back up the secrets.** Losing `CREDENTIAL_ENCRYPTION_PEPPER` makes the stored bank credentials unrecoverable. Losing the JWT secrets signs everyone out. Losing `VAPID_PRIVATE_KEY` breaks every push notification subscription, so each device must turn notifications on again. See [Backups and restore](#backups-and-restore).
 
 Set `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` before the first `docker compose up`. The database keeps the password it was created with.
 

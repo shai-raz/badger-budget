@@ -1,9 +1,17 @@
 import { randomBytes } from "crypto";
 import * as nodeFs from "fs";
 import { join } from "path";
+import * as webpush from "web-push";
 
 /** Secrets that are generated on first boot when neither the environment nor DATA_DIR/secrets provides them. */
-export const MANAGED_SECRETS = ["JWT_SECRET", "JWT_REFRESH_SECRET", "CREDENTIAL_ENCRYPTION_PEPPER"] as const;
+export const MANAGED_SECRETS = [
+    "JWT_SECRET",
+    "JWT_REFRESH_SECRET",
+    "CREDENTIAL_ENCRYPTION_PEPPER",
+    "VAPID_PRIVATE_KEY",
+] as const;
+
+export type ManagedSecret = (typeof MANAGED_SECRETS)[number];
 
 /** The subset of the fs module the resolver needs, so tests can run against an in-memory shim. */
 export interface SecretsFs {
@@ -23,7 +31,7 @@ export interface ResolveSecretsOptions {
     env: NodeJS.ProcessEnv;
     dataDir: string;
     fs?: SecretsFs;
-    generate?: () => string;
+    generate?: (name: ManagedSecret) => string;
     logger?: { log(message: string): void; warn(message: string): void };
 }
 
@@ -34,7 +42,10 @@ const defaultFs: SecretsFs = {
     existsSync: (p) => nodeFs.existsSync(p),
 };
 
-const defaultGenerate = (): string => randomBytes(48).toString("base64url");
+function defaultGenerate(name: ManagedSecret): string {
+    if (name === "VAPID_PRIVATE_KEY") return webpush.generateVAPIDKeys().privateKey;
+    return randomBytes(48).toString("base64url");
+}
 
 /**
  * Fills each managed secret in env: an explicit non-empty env value wins, then a non-empty file at
@@ -60,7 +71,7 @@ export function resolveSecrets(opts: ResolveSecretsOptions): ResolveSecretsResul
             continue;
         }
 
-        const value = generate();
+        const value = generate(name);
         try {
             fs.mkdirSync(secretsDir, { recursive: true, mode: 0o700 });
             fs.writeFileSync(file, value, { flag: "wx", mode: 0o600 });
@@ -89,7 +100,7 @@ export function resolveSecrets(opts: ResolveSecretsOptions): ResolveSecretsResul
     if (result.generated.length > 0) {
         const files = result.generated.map((name) => join(secretsDir, name));
         logger?.warn(
-            `Generated secrets saved to: ${files.join(", ")}. Back up ${secretsDir}: losing CREDENTIAL_ENCRYPTION_PEPPER makes stored bank credentials undecryptable, and changing the JWT secrets logs everyone out.`,
+            `Generated secrets saved to: ${files.join(", ")}. Back up ${secretsDir}: losing CREDENTIAL_ENCRYPTION_PEPPER makes stored bank credentials undecryptable, and changing the JWT secrets logs everyone out; losing VAPID_PRIVATE_KEY breaks every push notification subscription (each device must turn notifications on again).`,
         );
     }
 
