@@ -68,8 +68,8 @@ export class PushService {
 
     private async resolveSubscriptions(target: PushTarget, type: string): Promise<DeliverySubscription[]> {
         if ("subscriptionId" in target) {
-            const sub = await this.prisma.pushSubscription.findUnique({
-                where: { id: target.subscriptionId },
+            const sub = await this.prisma.pushSubscription.findFirst({
+                where: { id: target.subscriptionId, removedAt: null },
                 select: SUBSCRIPTION_SELECT,
             });
             return sub ? [sub] : [];
@@ -82,7 +82,7 @@ export class PushService {
         if (!user || !(await this.preferences.shouldSend(user, type))) return [];
 
         return this.prisma.pushSubscription.findMany({
-            where: { userId: user.id },
+            where: { userId: user.id, removedAt: null },
             select: SUBSCRIPTION_SELECT,
         });
     }

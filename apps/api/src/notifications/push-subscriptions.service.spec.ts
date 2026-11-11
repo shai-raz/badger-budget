@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, GoneException, NotFoundException } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
 import type { AuthUser } from "../auth/auth-user";
 import { PrismaService } from "../prisma/prisma.service";
@@ -31,7 +31,9 @@ describe("PushSubscriptionsService", () => {
     let prisma: {
         pushSubscription: {
             upsert: jest.Mock;
+            findUnique: jest.Mock;
             findMany: jest.Mock;
+            updateMany: jest.Mock;
             deleteMany: jest.Mock;
         };
     };
@@ -39,6 +41,7 @@ describe("PushSubscriptionsService", () => {
     beforeEach(async () => {
         prisma = {
             pushSubscription: {
+                findUnique: jest.fn().mockResolvedValue(null),
                 upsert: jest.fn().mockResolvedValue({
                     id: "sub-1",
                     endpoint: DTO.endpoint,
@@ -48,6 +51,7 @@ describe("PushSubscriptionsService", () => {
                     lastAcceptedAt: null,
                 }),
                 findMany: jest.fn().mockResolvedValue([]),
+                updateMany: jest.fn().mockResolvedValue({ count: 1 }),
                 deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
             },
         };
@@ -124,7 +128,7 @@ describe("PushSubscriptionsService", () => {
             const result = await service.list(USER.id);
 
             expect(prisma.pushSubscription.findMany).toHaveBeenCalledWith(
-                expect.objectContaining({ where: { userId: USER.id }, orderBy: { createdAt: "asc" } }),
+                expect.objectContaining({ where: { userId: USER.id, removedAt: null }, orderBy: { createdAt: "asc" } }),
             );
             expect(result).toEqual([
                 {
@@ -140,18 +144,54 @@ describe("PushSubscriptionsService", () => {
     });
 
     describe("remove", () => {
-        it("deletes only the caller's row", async () => {
+        it("marks only the caller's row as removed instead of deleting it", async () => {
             await service.remove(USER.id, "sub-1");
 
-            expect(prisma.pushSubscription.deleteMany).toHaveBeenCalledWith({
-                where: { id: "sub-1", userId: USER.id },
+            expect(prisma.pushSubscription.updateMany).toHaveBeenCalledWith({
+                where: { id: "sub-1", userId: USER.id, removedAt: null },
+                data: { removedAt: expect.any(Date) },
             });
+            expect(prisma.pushSubscription.deleteMany).not.toHaveBeenCalled();
         });
 
         it("throws not found when the row belongs to someone else", async () => {
-            prisma.pushSubscription.deleteMany.mockResolvedValue({ count: 0 });
+            prisma.pushSubscription.updateMany.mockResolvedValue({ count: 0 });
 
             await expect(service.remove(USER.id, "sub-of-other-user")).rejects.toBeInstanceOf(NotFoundException);
+        });
+    });
+
+    describe("removed endpoints", () => {
+        it("answers 410 to a quiet re-register of an endpoint the user removed, without upserting", async () => {
+            prisma.pushSubscription.findUnique.mockResolvedValue({ removedAt: new Date("2026-11-10T09:00:00Z") });
+
+            await expect(service.register(USER, DTO)).rejects.toBeInstanceOf(GoneException);
+            expect(prisma.pushSubscription.upsert).not.toHaveBeenCalled();
+        });
+
+        it("answers 410 when another user removed the endpoint (the mark is per endpoint)", async () => {
+            prisma.pushSubscription.findUnique.mockResolvedValue({ removedAt: new Date("2026-11-10T09:00:00Z") });
+
+            await expect(service.register({ ...USER, id: "user-2" } as AuthUser, DTO)).rejects.toBeInstanceOf(
+                GoneException,
+            );
+            expect(prisma.pushSubscription.upsert).not.toHaveBeenCalled();
+        });
+
+        it("upserts an endpoint that is not removed", async () => {
+            prisma.pushSubscription.findUnique.mockResolvedValue({ removedAt: null });
+
+            await service.register(USER, DTO);
+
+            expect(prisma.pushSubscription.upsert).toHaveBeenCalled();
+        });
+
+        it("hides removed rows from the list", async () => {
+            await service.list(USER.id);
+
+            expect(prisma.pushSubscription.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { userId: USER.id, removedAt: null } }),
+            );
         });
     });
 

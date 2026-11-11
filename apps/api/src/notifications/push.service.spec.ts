@@ -53,7 +53,13 @@ describe("PushService", () => {
     let service: PushService;
     let prisma: {
         user: { findFirst: jest.Mock };
-        pushSubscription: { findUnique: jest.Mock; findMany: jest.Mock; updateMany: jest.Mock; deleteMany: jest.Mock };
+        pushSubscription: {
+            findFirst: jest.Mock;
+            findUnique: jest.Mock;
+            findMany: jest.Mock;
+            updateMany: jest.Mock;
+            deleteMany: jest.Mock;
+        };
         notificationPreference: { findUnique: jest.Mock };
     };
     let sender: jest.Mock<Promise<void>, [PushSendTarget, string, PushSendOptions]>;
@@ -80,6 +86,7 @@ describe("PushService", () => {
         prisma = {
             user: { findFirst: jest.fn().mockResolvedValue(USER) },
             pushSubscription: {
+                findFirst: jest.fn().mockResolvedValue(subscription("sub-1")),
                 findUnique: jest.fn().mockResolvedValue(subscription("sub-1")),
                 findMany: jest.fn().mockResolvedValue([subscription("sub-1")]),
                 updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -183,8 +190,8 @@ describe("PushService", () => {
         it("sends to that one subscription and skips the preference checks", async () => {
             const results = await service.send({ subscriptionId: "sub-1" }, contentOf("fixture.muted"));
 
-            expect(prisma.pushSubscription.findUnique).toHaveBeenCalledWith(
-                expect.objectContaining({ where: { id: "sub-1" } }),
+            expect(prisma.pushSubscription.findFirst).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { id: "sub-1", removedAt: null } }),
             );
             expect(prisma.user.findFirst).not.toHaveBeenCalled();
             expect(sender).toHaveBeenCalledTimes(1);
@@ -192,10 +199,27 @@ describe("PushService", () => {
         });
 
         it("returns nothing when the subscription does not exist", async () => {
-            prisma.pushSubscription.findUnique.mockResolvedValue(null);
+            prisma.pushSubscription.findFirst.mockResolvedValue(null);
 
             await expect(service.send({ subscriptionId: "missing" }, contentOf("fixture.normal"))).resolves.toEqual([]);
             expect(sender).not.toHaveBeenCalled();
+        });
+
+        it("never sends to a subscription the user removed", async () => {
+            prisma.pushSubscription.findFirst.mockResolvedValue(null);
+
+            await expect(service.send({ subscriptionId: "sub-1" }, contentOf("fixture.normal"))).resolves.toEqual([]);
+            expect(sender).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("removed endpoints", () => {
+        it("reads only subscriptions that are not removed for a user target", async () => {
+            await service.send({ userId: USER.id }, contentOf("fixture.normal"));
+
+            expect(prisma.pushSubscription.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { userId: USER.id, removedAt: null } }),
+            );
         });
     });
 

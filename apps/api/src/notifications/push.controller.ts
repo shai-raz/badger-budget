@@ -51,6 +51,7 @@ export class PushController {
     @ApiResponse({ status: 201, description: "Subscription registered" })
     @ApiResponse({ status: 400, description: "Invalid subscription" })
     @ApiResponse({ status: 403, description: "The demo account can't turn on notifications" })
+    @ApiResponse({ status: 410, description: "This endpoint was removed from the user's devices; it is not re-added" })
     register(@Body() dto: RegisterPushSubscriptionDto, @CurrentUser() user: AuthUser): Promise<IPushSubscription> {
         return this.subscriptions.register(user, dto);
     }

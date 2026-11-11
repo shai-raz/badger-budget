@@ -484,6 +484,7 @@ model PushSubscription {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   lastSeenAt     DateTime  @default(now()) @map("last_seen_at") @db.Timestamp(6)
   lastAcceptedAt DateTime? @map("last_accepted_at") @db.Timestamp(6)
+  removedAt      DateTime? @map("removed_at") @db.Timestamp(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

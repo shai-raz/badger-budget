@@ -1,8 +1,10 @@
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, GoneException, Injectable, NotFoundException } from "@nestjs/common";
 import type { IPushSubscription } from "@badger/types";
 import type { AuthUser } from "../auth/auth-user";
 import { PrismaService } from "../prisma/prisma.service";
 import type { RegisterPushSubscriptionDto } from "./dto/register-push-subscription.dto";
+
+const REMOVED_ENDPOINT_MESSAGE = "This device was removed from notifications. Turn them on again on that device.";
 
 const PUSH_SUBSCRIPTION_VIEW = {
     id: true,
@@ -38,9 +40,19 @@ function toPushSubscription(row: PushSubscriptionView): IPushSubscription {
 export class PushSubscriptionsService {
     constructor(private readonly prisma: PrismaService) {}
 
-    /** Registering an endpoint that another user holds moves it to the caller (one browser, one account). */
+    /**
+     * Registering an endpoint that another user holds moves it to the caller (one browser, one account).
+     * An endpoint the user removed from their devices answers 410 instead: the browser must not be re-added by a quiet
+     * re-register, only by a deliberate turn-on, which registers a new endpoint.
+     */
     async register(user: AuthUser, dto: RegisterPushSubscriptionDto): Promise<IPushSubscription> {
         if (user.isDemo) throw new ForbiddenException("The demo account can't turn on notifications");
+
+        const existing = await this.prisma.pushSubscription.findUnique({
+            where: { endpoint: dto.endpoint },
+            select: { removedAt: true },
+        });
+        if (existing?.removedAt) throw new GoneException(REMOVED_ENDPOINT_MESSAGE);
 
         const row = await this.prisma.pushSubscription.upsert({
             where: { endpoint: dto.endpoint },
@@ -66,15 +78,19 @@ export class PushSubscriptionsService {
 
     async list(userId: string): Promise<IPushSubscription[]> {
         const rows = await this.prisma.pushSubscription.findMany({
-            where: { userId },
+            where: { userId, removedAt: null },
             orderBy: { createdAt: "asc" },
             select: PUSH_SUBSCRIPTION_VIEW,
         });
         return rows.map(toPushSubscription);
     }
 
+    /** Keeps the row as a mark, so the endpoint's quiet re-register is refused (see register). */
     async remove(userId: string, id: string): Promise<void> {
-        const { count } = await this.prisma.pushSubscription.deleteMany({ where: { id, userId } });
+        const { count } = await this.prisma.pushSubscription.updateMany({
+            where: { id, userId, removedAt: null },
+            data: { removedAt: new Date() },
+        });
         if (count === 0) throw new NotFoundException("Push subscription not found");
     }
 
