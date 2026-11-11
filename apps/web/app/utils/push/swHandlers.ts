@@ -156,6 +156,9 @@ export function defaultHandler(message: PushMessage): { title: string; options: 
 /** Every auto-sync notification shares this tag, so the result replaces the "Syncing…" notification. */
 const AUTO_SYNC_TAG = "auto-sync";
 
+/** /run only starts a job and returns a jobId, so a hanging API must not hold the push event open. */
+const RUN_REQUEST_TIMEOUT_MS = 20_000;
+
 /**
  * Shows the sync notification first, then calls /run once with the stored key, but only when the key is for this
  * grant. Any failure is swallowed: no retry, and neither the key nor the token is logged.
@@ -175,6 +178,7 @@ async function handleAutoSyncRun(message: PushMessage, deps: PushDeps): Promise<
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "omit",
+                signal: AbortSignal.timeout(RUN_REQUEST_TIMEOUT_MS),
                 body: JSON.stringify({ grantId: record.grantId, key: record.key, runToken: message.data.runToken }),
             });
         }

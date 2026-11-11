@@ -319,6 +319,7 @@ describe("auto-sync run and quiet result handling", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "omit",
+        signal: expect.any(AbortSignal),
         body: JSON.stringify({ grantId: "grant-1", key: "key-1", runToken: "token-1" }),
     };
     const storedKey = { grantId: "grant-1", key: "key-1", apiBaseUrl: "https://api.test/api/v1" };
