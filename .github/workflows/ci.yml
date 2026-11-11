@@ -64,6 +64,78 @@ jobs:
             # `pnpm --filter web check-types` would read stale/missing dist/).
             - run: pnpm check-types --filter=web
 
+    changes:
+        name: Changes
+        runs-on: ubuntu-latest
+        outputs:
+            app: ${{ steps.filter.outputs.app }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - id: filter
+              uses: dorny/paths-filter@v3
+              with:
+                  filters: |
+                      app:
+                          - 'apps/web/**'
+                          - 'apps/api/**'
+                          - 'packages/**'
+                          - 'e2e/**'
+                          - 'package.json'
+                          - 'pnpm-lock.yaml'
+
+    e2e:
+        name: E2E
+        needs: changes
+        # A job-level skip reports as skipped, which passes a required check; a workflow-level paths filter would leave it pending.
+        if: needs.changes.outputs.app == 'true'
+        runs-on: ubuntu-latest
+        services:
+            postgres:
+                image: postgres:16-alpine
+                env:
+                    POSTGRES_USER: badger
+                    POSTGRES_PASSWORD: badger_password
+                    POSTGRES_DB: badger_e2e
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U badger -d badger_e2e"
+                    --health-interval 5s
+                    --health-timeout 5s
+                    --health-retries 10
+        env:
+            PUPPETEER_SKIP_DOWNLOAD: 1
+            LEFTHOOK: 0
+            E2E_DATABASE_URL: postgresql://badger:badger_password@localhost:5432/badger_e2e
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: pnpm/action-setup@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version-file: .node-version
+                  cache: pnpm
+
+            - run: pnpm install --frozen-lockfile
+
+            - run: pnpm --filter api exec prisma generate
+
+            - run: pnpm exec playwright install --with-deps chromium
+
+            - run: pnpm exec tsc -p e2e/tsconfig.json
+
+            - run: pnpm test:e2e
+
+            - uses: actions/upload-artifact@v4
+              if: failure()
+              with:
+                  name: playwright-report
+                  path: |
+                      playwright-report/
+                      test-results/
+
     test:
         name: Tests
         runs-on: ubuntu-latest
