@@ -9,7 +9,7 @@ import {
     type PushDeviceState,
     type PushEnvironment,
 } from "~/utils/push/pushState";
-import { buildRegisterRequest, ensureSubscription } from "~/utils/push/pushSync";
+import { enablePushSubscription } from "~/utils/push/pushSync";
 import { getPushRegistration } from "~/utils/push/pushDeps";
 import { notificationKeys, vapidPublicKeyOptions } from "./useNotificationQueries";
 
@@ -87,8 +87,12 @@ export function usePushDevice() {
             const registration = await getPushRegistration();
             if (!registration) throw new Error("Push is not available in this browser");
             const { publicKey } = await queryClient.fetchQuery(vapidPublicKeyOptions(apiClient));
-            const subscription = await ensureSubscription(registration, publicKey);
-            await apiClient.registerPushSubscription(buildRegisterRequest(subscription, device()));
+            await enablePushSubscription({
+                registration,
+                publicKey,
+                register: (data) => apiClient.registerPushSubscription(data),
+                device: device(),
+            });
             await invalidateSubscriptions();
         });
     }

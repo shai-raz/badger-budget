@@ -20,6 +20,8 @@ import ReimbursementPickerDialog from "~/components/transactions/ReimbursementPi
 // mobile padding so its sections can span the full screen width (see below).
 const route = useRoute();
 provideBankSyncFlow();
+// Consumes ?update=open|upgrade (e.g. from the update notification's action) once per load.
+useUpdateRouteTrigger();
 const { state: connectionEditor, close: closeConnectionEditor } = useConnectionEditor();
 const { state: ruleEditorState } = useRuleEditorDialog();
 

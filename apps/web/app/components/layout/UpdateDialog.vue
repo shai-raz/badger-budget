@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { useToast } from "primevue/usetoast";
 import { updateStatusLabel } from "../../utils/about";
-import { getApiErrorMessage } from "../../utils/apiError";
 import { RESTORE_GUIDE_URL, UPGRADE_GUIDE_URL } from "../../utils/updateNotice";
 import { updateDialogMode } from "../../utils/upgradeTracking";
-import { UPGRADE_TOAST_GROUP } from "~/composables/useUpgrade";
 
 interface HttpError {
     response?: { data?: { message?: string } };
@@ -16,7 +14,7 @@ const toast = useToast();
 const { open, closeDialog } = useUpdateDialog();
 const { info, dismiss } = useUpdateNotice();
 const checkMutation = useCheckForUpdates();
-const { pending, phase, actionState, trigger, triggerPending, showStarted } = useUpgrade();
+const { pending, phase, actionState, startUpgrade, triggerPending } = useUpgrade();
 
 // Set by "Upgrade now"; the confirm step replaces the body until the user confirms or cancels.
 const confirming = ref(false);
@@ -69,23 +67,10 @@ const cancelConfirm = () => {
 };
 
 const handleUpgrade = async () => {
-    try {
-        const started = await trigger();
-        confirming.value = false;
-        closeDialog();
-        // A new attempt replaces any stalled or ready toast left from the last one.
-        toast.removeGroup(UPGRADE_TOAST_GROUP);
-        showStarted(started.targetVersion);
-    } catch (err: unknown) {
-        confirming.value = false;
-        toast.add({
-            group: UPGRADE_TOAST_GROUP,
-            severity: "error",
-            summary: "Upgrade failed",
-            detail: getApiErrorMessage(err, "Could not start the upgrade"),
-            life: 6000,
-        });
-    }
+    const result = await startUpgrade();
+    confirming.value = false;
+    // "failed" has already shown its error toast; the other results are tracked, so the dialog gives way to the progress.
+    if (result !== "failed") closeDialog();
 };
 </script>
 

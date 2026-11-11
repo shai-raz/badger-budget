@@ -1,9 +1,11 @@
 import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { Interval } from "@nestjs/schedule";
 import { normalizeVersion } from "./version";
 
 const DEFAULT_REPO = "shai-raz/badger-budget";
-const CHECK_TTL_MS = 24 * 60 * 60 * 1000;
+const CHECK_TTL_MS = 60 * 60 * 1000;
+const CHECK_TICK_MS = 5 * 60 * 1000;
 const FAILURE_RETRY_MS = 60 * 60 * 1000;
 const FORCE_COOLDOWN_MS = 60_000;
 const FETCH_TIMEOUT_MS = 5_000;
@@ -18,10 +20,13 @@ export interface UpdateCheckResult {
     checkedAt: Date | null;
 }
 
+/** Called with each release a successful check returns. Failures are logged by the service and never rethrown. */
+export type UpdateCheckListener = (latest: LatestRelease) => void | Promise<void>;
+
 /**
- * Looks up the latest GitHub release at most once a day and keeps the answer in memory. Never throws: a failed
- * lookup keeps the previous answer and is retried after FAILURE_RETRY_MS. UPDATE_CHECK=false turns it off, with no
- * outbound request at all.
+ * Looks up the latest GitHub release at most once an hour and keeps the answer in memory. Lookups happen lazily on
+ * read and in a background tick. Never throws: a failed lookup keeps the previous answer and is retried after
+ * FAILURE_RETRY_MS. UPDATE_CHECK=false turns it off, with no outbound request at all.
  */
 @Injectable()
 export class UpdateCheckService implements OnApplicationBootstrap {
@@ -33,12 +38,28 @@ export class UpdateCheckService implements OnApplicationBootstrap {
     private lastAttemptAt: number | null = null;
     private lastFailed = false;
     private inFlight: Promise<void> | null = null;
+    private readonly listeners: UpdateCheckListener[] = [];
 
     constructor(private readonly config: ConfigService) {}
 
     /** Warms the cache in the background so the first About card does not wait on GitHub. */
     onApplicationBootstrap(): void {
         if (this.isEnabled()) void this.getLatest();
+    }
+
+    /**
+     * The tick only refreshes a stale cache, so lazy and background checks share one hourly budget (at most one
+     * GitHub request per hour, at least one per ~65 min without traffic). An exactly hourly timer could fire a few
+     * ms before the TTL and skip a whole period. Never throws.
+     */
+    @Interval(CHECK_TICK_MS)
+    async tick(): Promise<void> {
+        if (this.isEnabled()) await this.getLatest();
+    }
+
+    /** Runs the listener after each successful fetch, including when the release is unchanged. */
+    onSuccessfulCheck(listener: UpdateCheckListener): void {
+        this.listeners.push(listener);
     }
 
     /** False only when UPDATE_CHECK is "false" (any case, surrounding spaces allowed). Unset or empty means on. */
@@ -85,6 +106,7 @@ export class UpdateCheckService implements OnApplicationBootstrap {
 
     private async fetchLatest(): Promise<void> {
         this.lastAttemptAt = Date.now();
+        let latest: LatestRelease;
         try {
             const response = await fetch(`https://api.github.com/repos/${this.getRepo()}/releases/latest`, {
                 headers: {
@@ -100,12 +122,28 @@ export class UpdateCheckService implements OnApplicationBootstrap {
             if (typeof release.tag_name !== "string" || typeof release.html_url !== "string") {
                 throw new Error("unexpected release payload");
             }
-            this.latest = { version: normalizeVersion(release.tag_name), url: release.html_url };
-            this.checkedAt = new Date();
-            this.lastFailed = false;
+            latest = { version: normalizeVersion(release.tag_name), url: release.html_url };
         } catch (error) {
             this.lastFailed = true;
             this.logger.warn(`Update check failed: ${error instanceof Error ? error.message : String(error)}`);
+            return;
+        }
+        this.latest = latest;
+        this.checkedAt = new Date();
+        this.lastFailed = false;
+        await this.notifyListeners(latest);
+    }
+
+    private async notifyListeners(latest: LatestRelease): Promise<void> {
+        for (const listener of this.listeners) {
+            try {
+                await listener(latest);
+            } catch (error) {
+                this.logger.error(
+                    `Update check listener failed: ${error instanceof Error ? error.message : String(error)}`,
+                    error instanceof Error ? error.stack : undefined,
+                );
+            }
         }
     }
 

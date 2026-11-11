@@ -1,19 +1,24 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
+import { NotificationsModule } from "../notifications/notifications.module";
 import { BUNDLED_CHANGELOG_PATH, CHANGELOG_READER, ChangelogService, readChangelogFile } from "./changelog.service";
+import { InstanceStateService } from "./instance-state.service";
 import { SystemController } from "./system.controller";
 import { SystemService } from "./system.service";
 import { UpdateCheckService } from "./update-check.service";
+import { UpdateNotifierService } from "./update-notifier.service";
 import { UpgradeService } from "./upgrade.service";
 
 @Module({
-    imports: [AuthModule],
+    imports: [AuthModule, NotificationsModule],
     controllers: [SystemController],
     providers: [
         SystemService,
         UpdateCheckService,
         ChangelogService,
         UpgradeService,
+        InstanceStateService,
+        UpdateNotifierService,
         { provide: CHANGELOG_READER, useValue: () => readChangelogFile(BUNDLED_CHANGELOG_PATH) },
     ],
 })

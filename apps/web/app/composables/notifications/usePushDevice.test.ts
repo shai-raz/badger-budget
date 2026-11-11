@@ -161,6 +161,22 @@ describe("usePushDevice.enable", () => {
         expect(device.error.value).toBeNull();
     });
 
+    it("registers a fresh endpoint when the server answers removed, so the explicit turn-on still works", async () => {
+        installBrowser({
+            permission: "granted",
+            registration: fakeRegistration([null, fakeSubscription("https://push.example/new")]),
+        });
+        api.registerPushSubscription
+            .mockRejectedValueOnce(Object.assign(new Error("Gone"), { response: { status: 410 } }))
+            .mockResolvedValueOnce({});
+        const device = usePushDevice();
+
+        await device.enable();
+
+        expect(api.registerPushSubscription).toHaveBeenCalledTimes(2);
+        expect(device.error.value).toBeNull();
+    });
+
     it("surfaces a failed registration as an error without throwing", async () => {
         installBrowser({
             permission: "granted",

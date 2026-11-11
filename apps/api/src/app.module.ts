@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { ScheduleModule } from "@nestjs/schedule";
 import { ThrottlerModule } from "@nestjs/throttler";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
@@ -30,6 +31,9 @@ import { NotificationsModule } from "./notifications/notifications.module";
             isGlobal: true,
             envFilePath: ".env",
         }),
+
+        // Background jobs (@Interval / @Cron)
+        ScheduleModule.forRoot(),
 
         // Rate limiting
         ThrottlerModule.forRoot([

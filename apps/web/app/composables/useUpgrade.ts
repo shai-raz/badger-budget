@@ -3,7 +3,9 @@ import { useMutation } from "@tanstack/vue-query";
 import { useToast } from "primevue/usetoast";
 import { useApiClient } from "./useApiClient";
 import { useUpdateNotice } from "./useUpdateNotice";
+import type { ISystemInfo } from "@badger/types";
 import { useAuthStore } from "~/stores/auth";
+import { getApiErrorMessage } from "~/utils/apiError";
 import { reloadToNewBuild } from "~/utils/reloadToNewBuild";
 import {
     PENDING_UPGRADE_KEY,
@@ -15,6 +17,8 @@ import {
 
 export const UPGRADE_TOAST_GROUP = "upgrade";
 
+export type StartUpgradeResult = "started" | "in-progress" | "failed";
+
 // This tab's own copy of the upgrade it last saw ready. Module scope, so every consumer in the tab (toast, dialog,
 // nav items, each page header) reads the same copy. In memory only: it keeps Reload working after another tab
 // reached done and cleared the shared entry.
@@ -23,7 +27,7 @@ const held = ref<PendingUpgrade | null>(null);
 const sameUpgrade = (a: PendingUpgrade | null, b: PendingUpgrade | null): boolean =>
     a === b || (a !== null && b !== null && JSON.stringify(a) === JSON.stringify(b));
 
-/** Shared upgrade state for this browser: the pending upgrade, its phase, and the trigger/reload actions. */
+/** Shared upgrade state for this browser: the pending upgrade, its phase, and the start/reload actions. */
 export const useUpgrade = () => {
     const apiClient = useApiClient();
     const authStore = useAuthStore();
@@ -56,21 +60,28 @@ export const useUpgrade = () => {
         { immediate: true },
     );
 
+    // Writes the shared entry for an upgrade this browser is tracking, whether it started it or the server reported
+    // one already running (409).
+    const recordStarted = (targetVersion: string | null, current: ISystemInfo | null): PendingUpgrade => {
+        const userId = authStore.user?.id;
+        if (!userId) throw new Error("Not signed in");
+        const started: PendingUpgrade = {
+            userId,
+            targetVersion,
+            fromVersion: current?.version ?? null,
+            fromBuildId: buildId,
+            startedAt: Date.now(),
+        };
+        stored.value = JSON.stringify(started);
+        return started;
+    };
+
     const triggerMutation = useMutation({
         mutationFn: async (): Promise<PendingUpgrade> => {
-            const userId = authStore.user?.id;
-            if (!userId) throw new Error("Not signed in");
+            if (!authStore.user?.id) throw new Error("Not signed in");
             const current = info.value;
             const response = await apiClient.triggerUpgrade();
-            const started: PendingUpgrade = {
-                userId,
-                targetVersion: response.targetVersion ?? current?.latest ?? null,
-                fromVersion: current?.version ?? null,
-                fromBuildId: buildId,
-                startedAt: Date.now(),
-            };
-            stored.value = JSON.stringify(started);
-            return started;
+            return recordStarted(response.targetVersion ?? current?.latest ?? null, current);
         },
     });
 
@@ -97,12 +108,42 @@ export const useUpgrade = () => {
         });
     };
 
+    /**
+     * Asks the host to start the upgrade and tracks it. "in-progress" means the server already had one running (409):
+     * it is tracked the same way. "failed" has already shown its error toast.
+     */
+    const startUpgrade = async (): Promise<StartUpgradeResult> => {
+        try {
+            const started = await triggerMutation.mutateAsync();
+            // A new attempt replaces any stalled or ready toast left from the last one.
+            toast.removeGroup(UPGRADE_TOAST_GROUP);
+            showStarted(started.targetVersion);
+            return "started";
+        } catch (err: unknown) {
+            if ((err as { response?: { status?: number } })?.response?.status === 409) {
+                const current = info.value;
+                const tracked = recordStarted(current?.latest ?? null, current);
+                toast.removeGroup(UPGRADE_TOAST_GROUP);
+                showStarted(tracked.targetVersion);
+                return "in-progress";
+            }
+            toast.add({
+                group: UPGRADE_TOAST_GROUP,
+                severity: "error",
+                summary: "Upgrade failed",
+                detail: getApiErrorMessage(err, "Could not start the upgrade"),
+                life: 6000,
+            });
+            return "failed";
+        }
+    };
+
     return {
         info,
         pending,
         phase,
         actionState,
-        trigger: () => triggerMutation.mutateAsync(),
+        startUpgrade,
         triggerPending: triggerMutation.isPending,
         clear,
         claimDoneToast,

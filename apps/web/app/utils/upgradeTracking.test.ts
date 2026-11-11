@@ -15,6 +15,8 @@ import {
     upgradeNavLabel,
     upgradePhase,
     upgradePollInterval,
+    parseUpdateTrigger,
+    updateTriggerAction,
     versionReached,
     type PendingUpgrade,
     type UpgradePhase,
@@ -572,5 +574,42 @@ describe("updateNavItem", () => {
             tone: "warn",
             action: "dialog",
         });
+    });
+});
+
+describe("parseUpdateTrigger", () => {
+    it("accepts the two consumed values", () => {
+        expect(parseUpdateTrigger("open")).toBe("open");
+        expect(parseUpdateTrigger("upgrade")).toBe("upgrade");
+    });
+
+    it("rejects anything else", () => {
+        expect(parseUpdateTrigger(undefined)).toBeNull();
+        expect(parseUpdateTrigger("")).toBeNull();
+        expect(parseUpdateTrigger("Upgrade")).toBeNull();
+        expect(parseUpdateTrigger(["open"])).toBeNull();
+        expect(parseUpdateTrigger(["open", "upgrade"])).toBeNull();
+    });
+});
+
+describe("updateTriggerAction", () => {
+    it("opens the dialog for open, whatever the info or phase", () => {
+        expect(updateTriggerAction("open", null, null)).toBe("open-dialog");
+        expect(updateTriggerAction("open", info, "upgrading")).toBe("open-dialog");
+    });
+
+    it("starts the upgrade for upgrade when the action is enabled", () => {
+        expect(updateTriggerAction("upgrade", info, null)).toBe("start-upgrade");
+        expect(updateTriggerAction("upgrade", info, "ready")).toBe("start-upgrade");
+    });
+
+    it("tracks the upgrade for upgrade while one is in flight", () => {
+        expect(updateTriggerAction("upgrade", info, "upgrading")).toBe("track");
+    });
+
+    it("ignores upgrade when the action is hidden", () => {
+        expect(updateTriggerAction("upgrade", null, null)).toBe("ignore");
+        expect(updateTriggerAction("upgrade", { ...info, upgradeAvailable: false }, null)).toBe("ignore");
+        expect(updateTriggerAction("upgrade", { ...info, updateAvailable: false }, null)).toBe("ignore");
     });
 });
