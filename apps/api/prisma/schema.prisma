@@ -725,3 +725,12 @@ enum UserRole {
   USER
   ADMIN
 }
+
+/// Instance-wide key/value state (not per user). Keys are listed in INSTANCE_STATE_KEYS.
+model InstanceState {
+  key       String   @id @db.VarChar(100)
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@map("instance_state")
+}
