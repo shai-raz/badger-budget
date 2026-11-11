@@ -28,6 +28,18 @@ export function isIbsErrorCode(value: unknown): value is IbsErrorCode {
     return typeof value === "string" && (IBS_ERROR_CODES as readonly string[]).includes(value);
 }
 
+/** Credential failures are never retried: repeating bad credentials risks locking the account. */
+export const CREDENTIAL_ERROR_CODES = [
+    "INVALID_PASSWORD",
+    "CHANGE_PASSWORD",
+    "ACCOUNT_BLOCKED",
+] as const satisfies readonly IbsErrorCode[];
+export type CredentialErrorCode = (typeof CREDENTIAL_ERROR_CODES)[number];
+
+export function isCredentialErrorCode(value: unknown): value is CredentialErrorCode {
+    return typeof value === "string" && (CREDENTIAL_ERROR_CODES as readonly string[]).includes(value);
+}
+
 export function isSyncErrorCode(value: unknown): value is SyncErrorCode {
     return typeof value === "string" && (SYNC_ERROR_CODES as readonly string[]).includes(value);
 }
