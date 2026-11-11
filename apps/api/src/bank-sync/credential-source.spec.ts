@@ -144,4 +144,21 @@ describe("startSyncJob with a credential source", () => {
             data: expect.objectContaining({ status: "partial" }),
         });
     });
+
+    it("reports an import failure as IMPORT_FAILED to onConnectionFailed", async () => {
+        importer.importTransactions.mockRejectedValueOnce(new Error("db down"));
+        const source: CredentialSource = {
+            resolve: () => ({ username: "bank-user" }),
+            onConnectionFailed: jest.fn().mockResolvedValue(undefined),
+        };
+
+        await service.startSyncJob("user-1", [connection("A")], source, "ILS");
+        await finish();
+
+        expect(prisma.scraperJob.update).toHaveBeenCalledWith({
+            where: { id: "child-A" },
+            data: expect.objectContaining({ status: "failed", errorCode: "IMPORT_FAILED" }),
+        });
+        expect(source.onConnectionFailed).toHaveBeenCalledWith("A", "IMPORT_FAILED");
+    });
 });
