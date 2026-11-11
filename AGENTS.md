@@ -19,6 +19,7 @@ pnpm format         # Prettier (all supported files, honours .prettierignore)
 pnpm format:check   # Prettier, report-only
 pnpm test           # Jest (api) + Vitest (web)
 pnpm test:watch     # Watch mode
+pnpm test:e2e       # Playwright against a production build (needs the dev Postgres; E2E_SKIP_BUILD=1 reuses builds)
 
 # Build
 pnpm build          # All packages
