@@ -32,6 +32,7 @@ import {
     type ConnectionSyncState,
 } from "~/utils/syncRuns";
 import { syncErrorCopy } from "~/utils/syncErrors";
+import { useAutoSync } from "./useAutoSync";
 
 export const SYNC_RESULT_TOAST_GROUP = "sync-result";
 
@@ -74,6 +75,8 @@ function createBankSyncFlow() {
     const toast = useToast();
     const queryClient = useQueryClient();
     const authStore = useAuthStore();
+    // One auto-sync state for the app: the bank connections page shows it, and a silent renewal updates it.
+    const autoSync = useAutoSync();
 
     // Typed PIN kept in memory only, so a successful sync can offer to wrap it in a passkey. Never a ref, storage or log.
     let offerPin: string | null = null;
@@ -346,12 +349,25 @@ function createBankSyncFlow() {
         });
     };
 
+    // Silent renewal (AC16): an unlock on the device that holds auto-sync renews its grant. No UI, and errors are dropped.
+    const renewAutoSyncGrant = (syncPin: string) => {
+        void (async () => {
+            try {
+                if (!autoSync.status.value) await autoSync.refresh();
+                if (autoSync.holdsGrant.value) await autoSync.renew(syncPin);
+            } catch {
+                // Best effort: the grant keeps its current expiry, and the next unlock tries again.
+            }
+        })();
+    };
+
     const startSync = async (syncPin: string, { typed }: { typed: boolean }) => {
         const data = { pin: syncPin, defaultCurrencyCode: target.defaultCurrencyCode };
         const result = target.connectionId
             ? await triggerConnectionSyncMutation.mutateAsync({ ...data, connectionId: target.connectionId })
             : await triggerSyncMutation.mutateAsync(data);
         target = {};
+        renewAutoSyncGrant(syncPin);
         // A toast from an earlier sync must not outlive its PIN (removeGroup emits neither close nor life-end).
         toast.removeGroup(offerGroup);
         offerKnownPasskeys = undefined;
@@ -454,6 +470,7 @@ function createBankSyncFlow() {
         }
     });
     return {
+        autoSync,
         activeJobId,
         syncedCount,
         busy,

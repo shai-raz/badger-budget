@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useBankSyncFlow } from "~/composables/bankSync/useBankSyncFlow";
-import { useAutoSync } from "~/composables/bankSync/useAutoSync";
 import type { IScraperConnectionResponse } from "@badger/types";
 import { useToast } from "primevue/usetoast";
 import { useConfirm } from "primevue/useconfirm";
@@ -12,7 +11,7 @@ definePageMeta({
 });
 
 const toast = useToast();
-const { busy: syncBusy, requestSync, connectionSyncState } = useBankSyncFlow();
+const { busy: syncBusy, requestSync, connectionSyncState, autoSync } = useBankSyncFlow();
 const confirm = useConfirm();
 
 const {
@@ -24,8 +23,7 @@ const updateConnectionMutation = useUpdateScraperConnectionMutation();
 const deleteConnectionMutation = useDeleteScraperConnectionMutation();
 const { openCreate, openEdit } = useConnectionEditor();
 
-// One shared auto-sync status: the card below and the connection rows both read it.
-const autoSync = useAutoSync();
+// The card below and the connection rows read the one auto-sync state the sync flow shares.
 const autoSyncError = ref<unknown>(null);
 const notIncludedIds = computed(() => new Set(autoSync.status.value?.notIncludedConnections.map((c) => c.id) ?? []));
 onMounted(async () => {

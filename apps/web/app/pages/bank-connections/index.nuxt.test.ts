@@ -4,6 +4,7 @@ import { useNuxtApp } from "#app";
 import type { VueWrapper } from "@vue/test-utils";
 import { ref } from "vue";
 import type { IScraperConnectionResponse } from "@badger/types";
+import { useAutoSync } from "../../composables/bankSync/useAutoSync";
 import BankConnections from "./index.vue";
 
 const api = vi.hoisted(() => ({
@@ -26,6 +27,8 @@ vi.mock("../../composables/bankSync/useBankSyncFlow", () => ({
         busy: ref(false),
         requestSync: vi.fn(),
         connectionSyncState: (id: string) => syncStates.value[id] ?? null,
+        // The page reads the auto-sync state the flow shares, so the mock hands out the real one.
+        autoSync: useAutoSync(),
     }),
 }));
 vi.mock("primevue/usetoast", () => ({ useToast: () => ({ add: toastAdd }) }));
