@@ -154,6 +154,33 @@ export function upgradeActionState(info: ISystemInfo | null, phase: UpgradePhase
     return phase === "upgrading" ? "disabled" : "enabled";
 }
 
+/** Values of `?update=` that the web consumes once on load (see useUpdateRouteTrigger). */
+export const UPDATE_TRIGGERS = ["open", "upgrade"] as const;
+export type UpdateTrigger = (typeof UPDATE_TRIGGERS)[number];
+
+export function parseUpdateTrigger(v: unknown): UpdateTrigger | null {
+    return UPDATE_TRIGGERS.find((trigger) => trigger === v) ?? null;
+}
+
+export type UpdateTriggerAction = "open-dialog" | "start-upgrade" | "track" | "ignore";
+
+/** What a `?update=` trigger does with the fresh system info and upgrade phase. */
+export function updateTriggerAction(
+    trigger: UpdateTrigger,
+    info: ISystemInfo | null,
+    phase: UpgradePhase | null,
+): UpdateTriggerAction {
+    if (trigger === "open") return "open-dialog";
+    switch (upgradeActionState(info, phase)) {
+        case "enabled":
+            return "start-upgrade";
+        case "disabled":
+            return "track";
+        case "hidden":
+            return "ignore";
+    }
+}
+
 export function upgradePollInterval(phase: UpgradePhase | null): number | false {
     return phase === "upgrading" || phase === "stalled" ? UPGRADE_POLL_MS : false;
 }
