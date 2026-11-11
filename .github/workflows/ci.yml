@@ -83,6 +83,7 @@ jobs:
                           - 'e2e/**'
                           - 'package.json'
                           - 'pnpm-lock.yaml'
+                          - '.github/workflows/ci.yml'
 
     e2e:
         name: E2E
