@@ -4,6 +4,7 @@ import { BankSyncController } from "./bank-sync.controller";
 import { BankSyncService } from "./bank-sync.service";
 import { AutoSyncController } from "./auto-sync.controller";
 import { AutoSyncService } from "./auto-sync.service";
+import { AutoSyncRunController } from "./auto-sync-run.controller";
 import { AutoSyncCleanupService } from "./auto-sync-cleanup.service";
 import { ScraperService } from "./scraper.service";
 import { DebugArtifactService } from "./debug-artifact.service";
@@ -16,7 +17,7 @@ import { AccountsModule } from "../accounts/accounts.module";
 
 @Module({
     imports: [ConfigModule, PrismaModule, CryptoModule, TransactionImportModule, AccountsModule],
-    controllers: [BankSyncController, AutoSyncController],
+    controllers: [BankSyncController, AutoSyncController, AutoSyncRunController],
     providers: [
         BankSyncService,
         AutoSyncService,
