@@ -62,6 +62,33 @@ const updateMessage = {
     data: { version: "2.0" },
 } satisfies Record<string, unknown>;
 
+const autoSyncRunMessage = {
+    type: "auto-sync.run",
+    title: "Syncing",
+    body: "Starting your daily sync",
+    url: "/transactions",
+    tag: "auto-sync-run",
+    data: { grantId: "grant-1", runToken: "token-1" },
+} satisfies Record<string, unknown>;
+
+const autoSyncResultMessage = {
+    type: "auto-sync.result",
+    title: "Auto-sync finished",
+    body: "3 new transactions",
+    url: "/transactions",
+    tag: "auto-sync-result",
+    data: { quiet: false, newTransactions: 3, failedConnectionCount: 0 },
+} satisfies Record<string, unknown>;
+
+const autoSyncExpiringMessage = {
+    type: "auto-sync.expiring",
+    title: "Auto-sync ending",
+    body: "Automatic sync stops soon",
+    url: "/settings",
+    tag: "auto-sync-expiring",
+    data: { expiresAt: "2026-12-01T00:00:00.000Z" },
+} satisfies Record<string, unknown>;
+
 const testMessage = {
     type: "system.test",
     title: "Test",
@@ -91,6 +118,27 @@ describe("parsePushMessage", () => {
     it("returns the message for a valid payload", () => {
         expect(parsePushMessage(JSON.stringify(updateMessage))).toEqual(updateMessage);
     });
+
+    it.each([
+        ["auto-sync.run", autoSyncRunMessage],
+        ["auto-sync.result", autoSyncResultMessage],
+        ["auto-sync.expiring", autoSyncExpiringMessage],
+    ])("accepts a valid %s payload", (_name, message) => {
+        expect(parsePushMessage(JSON.stringify(message))).toEqual({ ...message, actions: [] });
+    });
+
+    it("rejects auto-sync payloads with mistyped data", () => {
+        expect(parsePushMessage(JSON.stringify({ ...autoSyncRunMessage, data: { grantId: "grant-1" } }))).toBeNull();
+        expect(
+            parsePushMessage(
+                JSON.stringify({
+                    ...autoSyncResultMessage,
+                    data: { quiet: "no", newTransactions: 1, failedConnectionCount: 0 },
+                }),
+            ),
+        ).toBeNull();
+        expect(parsePushMessage(JSON.stringify({ ...autoSyncExpiringMessage, data: { expiresAt: 1 } }))).toBeNull();
+    });
 });
 
 describe("safeAppPath", () => {
@@ -114,6 +162,7 @@ describe("handlePush", () => {
         const shown = { title: "From handler", options: { body: "b", tag: "t" } };
         const handler = vi.fn<PushTypeHandler>(() => Promise.resolve(shown));
         const handlers: Record<NotificationType, PushTypeHandler> = {
+            ...PUSH_TYPE_HANDLERS,
             "system.update-available": handler,
             "system.test": vi.fn<PushTypeHandler>(() => Promise.resolve(shown)),
         };
@@ -228,6 +277,34 @@ describe("handlePush", () => {
             url: "/settings",
             actions: { "upgrade-now": "/" },
         });
+    });
+});
+
+describe("auto-sync handlers", () => {
+    it("shows the run notification as Syncing your accounts under the auto-sync tag", async () => {
+        const { deps, showNotification } = fakeDeps();
+        await handlePush(JSON.stringify(autoSyncRunMessage), deps);
+        expect(showNotification).toHaveBeenCalledWith(
+            "Syncing your accounts…",
+            expect.objectContaining({ tag: "auto-sync", ...IMAGES }),
+        );
+    });
+
+    it("shows the result notification with the server title and body", async () => {
+        const { deps, showNotification } = fakeDeps();
+        await handlePush(JSON.stringify(autoSyncResultMessage), deps);
+        expect(showNotification.mock.calls[0]?.[0]).toBe("Auto-sync finished");
+        expect(showNotification.mock.calls[0]?.[1]).toMatchObject({
+            body: "3 new transactions",
+            tag: "auto-sync-result",
+        });
+    });
+
+    it("shows the expiring notification with the server title and url", async () => {
+        const { deps, showNotification } = fakeDeps();
+        await handlePush(JSON.stringify(autoSyncExpiringMessage), deps);
+        expect(showNotification.mock.calls[0]?.[0]).toBe("Auto-sync ending");
+        expect(showNotification.mock.calls[0]?.[1]?.data).toEqual({ url: "/settings", actions: {} });
     });
 });
 

@@ -96,6 +96,26 @@ export function parsePushMessage(text: string | null): PushMessage | null {
             return typeof data.version === "string" ? { ...base, type, data: { version: data.version } } : null;
         case "system.test":
             return { ...base, type, data: {} };
+        case "auto-sync.run":
+            return typeof data.grantId === "string" && typeof data.runToken === "string"
+                ? { ...base, type, data: { grantId: data.grantId, runToken: data.runToken } }
+                : null;
+        case "auto-sync.result":
+            return typeof data.quiet === "boolean" &&
+                typeof data.newTransactions === "number" &&
+                typeof data.failedConnectionCount === "number"
+                ? {
+                      ...base,
+                      type,
+                      data: {
+                          quiet: data.quiet,
+                          newTransactions: data.newTransactions,
+                          failedConnectionCount: data.failedConnectionCount,
+                      },
+                  }
+                : null;
+        case "auto-sync.expiring":
+            return typeof data.expiresAt === "string" ? { ...base, type, data: { expiresAt: data.expiresAt } } : null;
     }
 }
 
@@ -130,6 +150,13 @@ export function defaultHandler(message: PushMessage): { title: string; options: 
 export const PUSH_TYPE_HANDLERS: Record<NotificationType, PushTypeHandler> = {
     "system.update-available": (message) => Promise.resolve(defaultHandler(message)),
     "system.test": (message) => Promise.resolve(defaultHandler(message)),
+    // The run message only announces the sync; the fetch to /run is added by the auto-sync handler.
+    "auto-sync.run": (message) => {
+        const shown = defaultHandler(message);
+        return Promise.resolve({ title: "Syncing your accounts…", options: { ...shown.options, tag: "auto-sync" } });
+    },
+    "auto-sync.result": (message) => Promise.resolve(defaultHandler(message)),
+    "auto-sync.expiring": (message) => Promise.resolve(defaultHandler(message)),
 };
 
 function fallbackOptions(url: string, tag: string): { title: string; options: ShowOptions } {

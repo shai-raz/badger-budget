@@ -1,6 +1,12 @@
 // Notifications (Web Push). Adding a type = an id in NOTIFICATION_TYPES + a NOTIFICATION_TYPE_REGISTRY entry
 // + a NotificationDataMap entry. `url` on a notification is a same-origin path, never an absolute URL.
-export const NOTIFICATION_TYPES = ["system.update-available", "system.test"] as const;
+export const NOTIFICATION_TYPES = [
+    "system.update-available",
+    "system.test",
+    "auto-sync.run",
+    "auto-sync.result",
+    "auto-sync.expiring",
+] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 export function isNotificationType(value: unknown): value is NotificationType {
@@ -46,12 +52,37 @@ export const NOTIFICATION_TYPE_REGISTRY: NotificationTypeRegistry = {
         mandatory: false,
         listed: false,
     },
+    // Sent by subscription id, so preferences cannot apply.
+    "auto-sync.run": {
+        label: "Auto-sync run",
+        description: "Starts a scheduled bank sync on this device.",
+        defaultEnabled: true,
+        mandatory: true,
+        listed: false,
+    },
+    "auto-sync.result": {
+        label: "Auto-sync results",
+        description: "New transactions or a failed sync.",
+        defaultEnabled: true,
+        mandatory: false,
+        listed: true,
+    },
+    "auto-sync.expiring": {
+        label: "Auto-sync ending",
+        description: "When automatic sync is about to stop.",
+        defaultEnabled: true,
+        mandatory: false,
+        listed: true,
+    },
 };
 
 /** Payload data per type, keyed by NotificationType; extended together with NOTIFICATION_TYPES. */
 export interface NotificationDataMap {
     "system.update-available": { version: string };
     "system.test": Record<string, never>;
+    "auto-sync.run": { grantId: string; runToken: string };
+    "auto-sync.result": { quiet: boolean; newTransactions: number; failedConnectionCount: number };
+    "auto-sync.expiring": { expiresAt: string };
 }
 
 export interface NotificationActionLink {
