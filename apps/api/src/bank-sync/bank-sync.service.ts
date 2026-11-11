@@ -431,6 +431,7 @@ export class BankSyncService {
     ): Promise<void> {
         const scraperJobIds = new Map<string, string>(); // connectionId → scraperJobId
         const failedConnections: SyncJobSummary["failedConnections"] = [];
+        const succeededConnectionIds = new Set<string>();
         try {
             await this.prisma.syncJob.update({ where: { id: jobId }, data: { status: "running" } });
 
@@ -599,6 +600,7 @@ export class BankSyncService {
                             data: { lastSyncedAt: new Date() },
                         }),
                     ]);
+                    succeededConnectionIds.add(connection.id);
                 } catch (error) {
                     const errorMessage = (error as Error).message ?? "Unknown error";
                     this.logger.error(`Import failed for ${connection.displayName}: ${errorMessage}`);
@@ -649,6 +651,24 @@ export class BankSyncService {
             // Catastrophic unexpected failure
             const message = (error as Error).message ?? "Unknown error";
             const finishedAt = new Date();
+            // Every connection that did not finish counts as failed, so an auto run's "Syncing…" notification closes.
+            const unfinished = connections
+                .filter(
+                    (connection) =>
+                        !succeededConnectionIds.has(connection.id) &&
+                        !failedConnections.some((failure) => failure.id === connection.id),
+                )
+                .map((connection) => ({
+                    id: connection.id,
+                    displayName: connection.displayName,
+                    code: "UNKNOWN" as const,
+                }));
+            await this.notifySyncFinished(source, {
+                jobId,
+                status: "failed",
+                newTransactions: 0,
+                failedConnections: [...failedConnections, ...unfinished],
+            });
             await this.prisma.syncJob.update({
                 where: { id: jobId },
                 data: { status: "failed", error: message, finishedAt },

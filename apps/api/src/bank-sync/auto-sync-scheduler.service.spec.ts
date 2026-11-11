@@ -53,6 +53,7 @@ describe("AutoSyncSchedulerService", () => {
     const mockPrisma = {
         autoSyncGrant: { updateMany: jest.fn(), findMany: jest.fn(), deleteMany: jest.fn() },
         autoSyncCredential: { deleteMany: jest.fn() },
+        pushSubscription: { findFirst: jest.fn() },
         syncJob: { count: jest.fn(), findFirst: jest.fn() },
         user: { findFirst: jest.fn() },
     };
@@ -92,6 +93,7 @@ describe("AutoSyncSchedulerService", () => {
         }));
         mockPush.send.mockResolvedValue([{ subscriptionId: "sub-1", outcome: "accepted" }]);
         mockPreferences.shouldSend.mockResolvedValue(true);
+        mockPrisma.pushSubscription.findFirst.mockResolvedValue({ id: "sub-1" });
         givenGrants([]);
 
         const module: TestingModule = await Test.createTestingModule({
@@ -239,6 +241,34 @@ describe("AutoSyncSchedulerService", () => {
             await service.tick(NOW);
 
             expect(mockPush.send.mock.calls[0][2]).toEqual(expect.objectContaining({ ttl: 21600 }));
+        });
+    });
+
+    describe("device ownership", () => {
+        it("deletes a grant whose push subscription was removed, without pushing", async () => {
+            givenGrants([dailyGrant()]);
+            mockPrisma.pushSubscription.findFirst.mockResolvedValueOnce(null);
+
+            await service.tick(NOW);
+
+            expect(mockAutoSync.issueRunToken).not.toHaveBeenCalled();
+            expect(mockPush.send).not.toHaveBeenCalled();
+            expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({ where: { id: "grant-1" } });
+            expect(advanceCalls()).toHaveLength(0);
+        });
+
+        it("deletes a grant whose subscription now belongs to another user, after checking the owner", async () => {
+            givenGrants([dailyGrant()]);
+            mockPrisma.pushSubscription.findFirst.mockResolvedValueOnce(null);
+
+            await service.tick(NOW);
+
+            expect(mockPrisma.pushSubscription.findFirst).toHaveBeenCalledWith({
+                where: { id: "sub-1", userId: "user-1", removedAt: null },
+                select: { id: true },
+            });
+            expect(mockPush.send).not.toHaveBeenCalled();
+            expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({ where: { id: "grant-1" } });
         });
     });
 

@@ -182,14 +182,14 @@ describe("AutoSyncService", () => {
             expectNoWrites();
         });
 
-        it("rejects a push subscription that is missing or not the user's, before any other work", async () => {
+        it("rejects a push subscription that is missing, removed or not the user's, before any other work", async () => {
             mockPrisma.pushSubscription.findFirst.mockResolvedValueOnce(null);
 
             await expect(service.enable(USER_ID, enableDto(), NOW)).rejects.toThrow(
                 new BadRequestException("Unknown push subscription"),
             );
             expect(mockPrisma.pushSubscription.findFirst).toHaveBeenCalledWith({
-                where: { id: PUSH_ID, userId: USER_ID },
+                where: { id: PUSH_ID, userId: USER_ID, removedAt: null },
                 select: { id: true },
             });
             expect(mockBankSync.verifyUserPin).not.toHaveBeenCalled();
@@ -761,9 +761,17 @@ describe("AutoSyncService", () => {
                 expect(stored.runTokenHash).toBeNull();
                 expect(stored.lastRunAt).toBeNull();
                 expect(stored.missedRuns).toBe(2);
+                expect(mockPush.send).toHaveBeenCalledWith(
+                    { subscriptionId: PUSH_ID },
+                    expect.objectContaining({
+                        type: "auto-sync.result",
+                        data: expect.objectContaining({ quiet: true }),
+                    }),
+                    expect.anything(),
+                );
             });
 
-            it("propagates a 409 from startSyncJob after the token was consumed", async () => {
+            it("propagates a 409 from startSyncJob after the token was consumed, and closes the progress notification", async () => {
                 const token = await issue();
                 mockBankSync.startSyncJob.mockRejectedValueOnce(new ConflictException("A sync is already in progress"));
 
@@ -771,6 +779,14 @@ describe("AutoSyncService", () => {
                     ConflictException,
                 );
                 expect(stored.runTokenHash).toBeNull();
+                expect(mockPush.send).toHaveBeenCalledWith(
+                    { subscriptionId: PUSH_ID },
+                    expect.objectContaining({
+                        type: "auto-sync.result",
+                        data: expect.objectContaining({ quiet: true }),
+                    }),
+                    expect.anything(),
+                );
             });
         });
 
@@ -899,6 +915,28 @@ describe("AutoSyncService", () => {
                 await finishRun(summaryOf({ newTransactions: 1 }));
 
                 expect(mockPrisma.autoSyncCredential.deleteMany).toHaveBeenCalledWith({ where: { grantId: GRANT_ID } });
+                expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({ where: { id: GRANT_ID } });
+            });
+
+            it("deletes the grant without a push when its device subscription was removed", async () => {
+                mockPrisma.pushSubscription.findFirst.mockResolvedValueOnce(null);
+
+                await finishRun(summaryOf({ newTransactions: 1 }));
+
+                expect(mockPush.send).not.toHaveBeenCalled();
+                expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({ where: { id: GRANT_ID } });
+            });
+
+            it("deletes the grant without a push when its subscription now belongs to another user", async () => {
+                mockPrisma.pushSubscription.findFirst.mockResolvedValueOnce(null);
+
+                await finishRun(summaryOf({ newTransactions: 1 }));
+
+                expect(mockPrisma.pushSubscription.findFirst).toHaveBeenLastCalledWith({
+                    where: { id: PUSH_ID, userId: USER_ID, removedAt: null },
+                    select: { id: true },
+                });
+                expect(mockPush.send).not.toHaveBeenCalled();
                 expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({ where: { id: GRANT_ID } });
             });
 

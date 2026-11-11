@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "crypto";
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import {
     AUTO_SYNC_KEY_BYTES,
     DEFAULT_AUTO_SYNC_DURATION_DAYS,
@@ -38,6 +38,18 @@ const runRejected = () => new UnauthorizedException("Auto-sync run rejected");
 export async function deleteAutoSyncGrant(prisma: PrismaService, grantId: string): Promise<void> {
     await prisma.autoSyncCredential.deleteMany({ where: { grantId } });
     await prisma.autoSyncGrant.deleteMany({ where: { id: grantId } });
+}
+
+/** True while the grant's push subscription is live and still belongs to the grant's user. */
+export async function isGrantSubscriptionOwned(
+    prisma: PrismaService,
+    grant: { userId: string; pushSubscriptionId: string },
+): Promise<boolean> {
+    const subscription = await prisma.pushSubscription.findFirst({
+        where: { id: grant.pushSubscriptionId, userId: grant.userId, removedAt: null },
+        select: { id: true },
+    });
+    return subscription !== null;
 }
 
 const GRANT_STATUS_SELECT = {
@@ -191,6 +203,8 @@ function toStatus(
 
 @Injectable()
 export class AutoSyncService {
+    private readonly logger = new Logger(AutoSyncService.name);
+
     constructor(
         private readonly prisma: PrismaService,
         private readonly credentialCryptoService: CredentialCryptoService,
@@ -234,9 +248,9 @@ export class AutoSyncService {
 
     /** Replaces any existing grant: each active connection login is re-encrypted under a key only the device holds. */
     async enable(userId: string, dto: EnableAutoSyncDto, now: Date = new Date()): Promise<IAutoSyncStatus> {
-        // Checked before anything else: a grant must have a push subscription that belongs to this user.
+        // Checked before anything else: a grant must have a live push subscription that belongs to this user.
         const pushSubscription = await this.prisma.pushSubscription.findFirst({
-            where: { id: dto.pushSubscriptionId, userId },
+            where: { id: dto.pushSubscriptionId, userId, removedAt: null },
             select: { id: true },
         });
         if (!pushSubscription) {
@@ -465,7 +479,10 @@ export class AutoSyncService {
             },
         });
         if (consumed.count !== 1) throw runRejected();
-        if (rows.length === 0) throw new BadRequestException("Nothing to sync");
+        if (rows.length === 0) {
+            await this.closeSpentRun(runGrant);
+            throw new BadRequestException("Nothing to sync");
+        }
 
         // Decrypted up front so a renewal during the run cannot break it. grantKey stays inside this closure.
         const credentials = new Map<string, Record<string, string> | GrantDecryptError>();
@@ -499,18 +516,30 @@ export class AutoSyncService {
             onFinished: (summary) => this.sendRunResult(runGrant, summary),
         };
 
-        return this.bankSyncService.startSyncJob(
-            grant.userId,
-            rows.map((row) => row.connection),
-            source,
-        );
+        try {
+            return await this.bankSyncService.startSyncJob(
+                grant.userId,
+                rows.map((row) => row.connection),
+                source,
+            );
+        } catch (err) {
+            // Thrown after the token was spent (for example a manual sync is running): no job will report back.
+            await this.closeSpentRun(runGrant);
+            throw err;
+        }
     }
 
     /**
      * Pushes a run's result to the device that ran it. A quiet run, or a user who muted results, gets the quiet variant,
      * so "Syncing…" always closes. Sent by subscription id, so the stored preferences are checked here, not by PushService.
+     * A subscription that was removed, or now belongs to another user, gets nothing: the grant is deleted instead.
      */
     private async sendRunResult(grant: RunGrant, summary: SyncJobSummary): Promise<void> {
+        if (!(await isGrantSubscriptionOwned(this.prisma, grant))) {
+            await deleteAutoSyncGrant(this.prisma, grant.id);
+            return;
+        }
+
         const quiet = summary.newTransactions === 0 && summary.failedConnections.length === 0;
         const content =
             quiet || !(await this.resultsWanted(grant.userId)) ? quietResult(summary) : changedResult(summary);
@@ -523,6 +552,15 @@ export class AutoSyncService {
         // The device subscription is gone for good, so the grant can never run again: delete it.
         if (results.some((result) => result.outcome === "gone")) {
             await deleteAutoSyncGrant(this.prisma, grant.id);
+        }
+    }
+
+    /** Closes the device's "Syncing…" for a run whose token was spent but which started no job. Never throws. */
+    private async closeSpentRun(grant: RunGrant): Promise<void> {
+        try {
+            await this.sendRunResult(grant, { jobId: "", status: "failed", newTransactions: 0, failedConnections: [] });
+        } catch (err) {
+            this.logger.error(`Could not close the auto-sync notification for grant ${grant.id}`, err);
         }
     }
 

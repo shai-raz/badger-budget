@@ -10,7 +10,7 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 import { NotificationPreferencesService } from "../notifications/notification-preferences.service";
 import { PushService } from "../notifications/push.service";
-import { AutoSyncService, deleteAutoSyncGrant } from "./auto-sync.service";
+import { AutoSyncService, deleteAutoSyncGrant, isGrantSubscriptionOwned } from "./auto-sync.service";
 import { jitterRunAt, nextScheduledRunAt, parseAutoSyncSchedule } from "./auto-sync-schedule";
 import { bankSyncConcurrency } from "./bank-sync.service";
 
@@ -173,6 +173,12 @@ export class AutoSyncSchedulerService {
                 const schedule = this.scheduleOf(grant);
                 if (!schedule) {
                     this.logger.error(`Auto-sync grant ${grant.id} has an invalid schedule; skipped`);
+                    continue;
+                }
+
+                // The device's subscription was removed, or now belongs to another user: this grant must not run.
+                if (!(await isGrantSubscriptionOwned(this.prisma, grant))) {
+                    await deleteAutoSyncGrant(this.prisma, grant.id);
                     continue;
                 }
 
