@@ -709,12 +709,15 @@ describe("AutoSyncService", () => {
 
             it("spends the token and reports nothing to sync when no connection is covered", async () => {
                 const token = await issue();
+                stored.missedRuns = 2;
                 mockPrisma.autoSyncCredential.findMany.mockResolvedValueOnce([]);
 
                 await expect(service.run({ grantId: GRANT_ID, key: KEY, runToken: token }, NOW)).rejects.toThrow(
                     new BadRequestException("Nothing to sync"),
                 );
                 expect(stored.runTokenHash).toBeNull();
+                expect(stored.lastRunAt).toBeNull();
+                expect(stored.missedRuns).toBe(2);
             });
 
             it("propagates a 409 from startSyncJob after the token was consumed", async () => {

@@ -351,6 +351,12 @@ export class AutoSyncService {
         const keyCheck = { ciphertext: grant.keyCheckCt, iv: grant.keyCheckIv, authTag: grant.keyCheckAuthTag };
         if (!this.credentialCryptoService.verifyGrantKeyCheck(keyCheck, grantKey, grant.id)) throw runRejected();
 
+        const rows = await this.prisma.autoSyncCredential.findMany({
+            where: { grantId: grant.id, connection: { deletedAt: null, isActive: true } },
+            include: { connection: true },
+        });
+
+        // The token is spent even when nothing is covered, but only a run that starts a job counts as one.
         const consumed = await this.prisma.autoSyncGrant.updateMany({
             where: {
                 id: grant.id,
@@ -358,14 +364,13 @@ export class AutoSyncService {
                 runTokenExpiresAt: { gt: now },
                 expiresAt: { gt: now },
             },
-            data: { runTokenHash: null, runTokenExpiresAt: null, lastRunAt: now, missedRuns: 0 },
+            data: {
+                runTokenHash: null,
+                runTokenExpiresAt: null,
+                ...(rows.length > 0 ? { lastRunAt: now, missedRuns: 0 } : {}),
+            },
         });
         if (consumed.count !== 1) throw runRejected();
-
-        const rows = await this.prisma.autoSyncCredential.findMany({
-            where: { grantId: grant.id, connection: { deletedAt: null, isActive: true } },
-            include: { connection: true },
-        });
         if (rows.length === 0) throw new BadRequestException("Nothing to sync");
 
         // Decrypted up front so a renewal during the run cannot break it. grantKey stays inside this closure.

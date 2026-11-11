@@ -18,7 +18,9 @@ export class AutoSyncRunController {
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: "Start a scheduled automatic bank sync" })
     @ApiResponse({ status: 200, description: "Sync job started" })
+    @ApiResponse({ status: 400, description: "Invalid input, or no covered connection to sync" })
     @ApiResponse({ status: 401, description: "Run rejected" })
+    @ApiResponse({ status: 409, description: "A sync is already in progress" })
     run(@Body() dto: RunAutoSyncDto): Promise<{ jobId: string }> {
         return this.autoSyncService.run(dto);
     }
