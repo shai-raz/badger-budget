@@ -77,18 +77,19 @@ export class UpdateNotifierService implements OnModuleInit {
             where: { role: UserRole.ADMIN, deletedAt: null },
             select: { id: true },
         });
-        const content = buildUpdateAvailableNotification(latest.version, this.upgrade.isConfigured());
-        let failed = 0;
+        const content = buildUpdateAvailableNotification(latest.version, running, this.upgrade.isConfigured());
+        let notified = 0;
         for (const admin of admins) {
             try {
-                await this.push.send({ userId: admin.id }, content, { ttl: NOTIFICATION_TTL_SECONDS });
+                const results = await this.push.send({ userId: admin.id }, content, { ttl: NOTIFICATION_TTL_SECONDS });
+                // send() returns [] for a muted type or no subscriptions, so count only an accepted delivery.
+                if (results.some((result) => result.outcome === "accepted")) notified++;
             } catch (error) {
-                failed++;
                 this.logger.warn(
                     `Update notification to an admin failed: ${error instanceof Error ? error.message : String(error)}`,
                 );
             }
         }
-        this.logger.log(`Notified ${admins.length - failed} of ${admins.length} admin(s) of v${latest.version}`);
+        this.logger.log(`Notified ${notified} of ${admins.length} admin(s) of v${latest.version}`);
     }
 }

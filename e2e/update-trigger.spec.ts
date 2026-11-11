@@ -14,7 +14,7 @@ const LATEST_VERSION = "0.4.0";
 const UPDATE_PUSH = {
     type: "system.update-available",
     title: `Badger Budget v${LATEST_VERSION} is available`,
-    body: "Tap to see what's new, or upgrade now.",
+    body: `You're on v${RUNNING_VERSION}. Tap to see what's new.`,
     url: "/?update=open",
     data: { version: LATEST_VERSION },
     actions: [{ id: "upgrade-now", title: "Upgrade now", url: "/?update=upgrade" }],

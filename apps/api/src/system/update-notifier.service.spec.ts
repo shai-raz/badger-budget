@@ -22,6 +22,7 @@ describe("UpdateNotifierService", () => {
     let push: { send: jest.Mock };
     let errorSpy: jest.SpyInstance;
     let warnSpy: jest.SpyInstance;
+    let logSpy: jest.SpyInstance;
 
     const release = (version: string): LatestRelease => ({
         version,
@@ -65,7 +66,7 @@ describe("UpdateNotifierService", () => {
         push = { send: jest.fn().mockResolvedValue([]) };
         errorSpy = jest.spyOn(Logger.prototype, "error").mockImplementation(() => undefined);
         warnSpy = jest.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
-        jest.spyOn(Logger.prototype, "log").mockImplementation(() => undefined);
+        logSpy = jest.spyOn(Logger.prototype, "log").mockImplementation(() => undefined);
     });
 
     afterEach(() => {
@@ -165,6 +166,22 @@ describe("UpdateNotifierService", () => {
 
         expect(push.send).not.toHaveBeenCalled();
         expect(errorSpy).toHaveBeenCalled();
+    });
+
+    it("puts the running version in the push body", async () => {
+        running = "0.3.1";
+
+        await checkFound(release("0.4.0"));
+
+        expect(push.send.mock.calls[0][1].body).toBe("You're on v0.3.1. Tap to see how to upgrade.");
+    });
+
+    it("logs only the admins with an accepted delivery", async () => {
+        push.send.mockResolvedValueOnce([{ subscriptionId: "sub-1", outcome: "accepted" }]).mockResolvedValue([]);
+
+        await checkFound(release("0.4.0"));
+
+        expect(logSpy).toHaveBeenCalledWith("Notified 1 of 2 admin(s) of v0.4.0");
     });
 
     it("offers Upgrade now when the deploy webhook is configured", async () => {
