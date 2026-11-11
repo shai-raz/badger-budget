@@ -78,7 +78,13 @@ const isPhoneLabel = (label: string) => /iPhone|iPad|Android/.test(label);
 const isTooManyRequests = (error: unknown) =>
     (error as { response?: { status?: number } } | null)?.response?.status === 429;
 
+// PrimeVue's switch flips itself on click and only resyncs when its bound value changes. Binding the pending value
+// until the attempt settles means a dismissed, blocked or failed attempt always moves the switch back.
+const pendingPreferences = ref<Partial<Record<INotificationPreference["type"], boolean>>>({});
+const preferenceOn = (pref: INotificationPreference) => pendingPreferences.value[pref.type] ?? pref.enabled;
+
 function setPreference(type: INotificationPreference["type"], enabled: boolean) {
+    pendingPreferences.value = { ...pendingPreferences.value, [type]: enabled };
     updatePreferences.mutate(
         { preferences: [{ type, enabled }] },
         {
@@ -89,13 +95,26 @@ function setPreference(type: INotificationPreference["type"], enabled: boolean) 
                     detail: getApiErrorMessage(error, "Couldn't update notifications"),
                     life: 5000,
                 }),
+            onSettled: () => {
+                pendingPreferences.value = Object.fromEntries(
+                    Object.entries(pendingPreferences.value).filter(([key]) => key !== type),
+                );
+            },
         },
     );
 }
 
-function setThisDevicePush(on: boolean) {
-    if (on) void device.enable();
-    else void device.disable();
+const pendingPush = ref<boolean | null>(null);
+const pushOn = computed(() => pendingPush.value ?? deviceState.value === "on");
+
+async function setThisDevicePush(on: boolean) {
+    pendingPush.value = on;
+    try {
+        if (on) await device.enable();
+        else await device.disable();
+    } finally {
+        pendingPush.value = null;
+    }
 }
 
 async function removeDevice(subscription: IPushSubscription) {
@@ -191,7 +210,7 @@ function sendTestNotification() {
                     </div>
                     <ToggleSwitch
                         input-id="push-notifications"
-                        :model-value="deviceState === 'on'"
+                        :model-value="pushOn"
                         :disabled="!canToggle || device.busy.value"
                         class="shrink-0"
                         @update:model-value="(value) => setThisDevicePush(value === true)"
@@ -285,7 +304,7 @@ function sendTestNotification() {
                     </span>
                     <ToggleSwitch
                         :input-id="`notify-${pref.type}`"
-                        :model-value="pref.mandatory || pref.enabled"
+                        :model-value="pref.mandatory || preferenceOn(pref)"
                         :disabled="pref.mandatory || isDemo || updatePreferences.isPending.value"
                         class="shrink-0"
                         @update:model-value="(value) => setPreference(pref.type, value === true)"

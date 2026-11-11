@@ -171,6 +171,60 @@ describe("settings notifications page", () => {
             expect(m.device.disable).toHaveBeenCalledTimes(1);
         });
 
+        it("puts the switch back when turning on leaves the device off", async () => {
+            const wrapper = await mountPage();
+
+            await wrapper.get('input[id="push-notifications"]').trigger("change");
+            await flushPromises();
+
+            expect(m.device.enable).toHaveBeenCalledTimes(1);
+            expect(pushSwitch(wrapper).checked).toBe(false);
+        });
+
+        it("puts the switch back when turning on is blocked by the browser", async () => {
+            m.device.enable.mockImplementationOnce(() => {
+                m.device.state.value = "denied";
+                return Promise.resolve();
+            });
+            const wrapper = await mountPage();
+
+            await wrapper.get('input[id="push-notifications"]').trigger("change");
+            await flushPromises();
+
+            expect(pageText(wrapper)).toContain("Blocked by your browser.");
+            expect(pushSwitch(wrapper).checked).toBe(false);
+        });
+
+        it("puts the switch back when turning on fails", async () => {
+            // The composable records a failed attempt in `error` and leaves the state where it was.
+            m.device.enable.mockImplementationOnce(() => {
+                m.device.error.value = new Error("offline");
+                return Promise.resolve();
+            });
+            const wrapper = await mountPage();
+
+            await wrapper.get('input[id="push-notifications"]').trigger("change");
+            await flushPromises();
+
+            expect(pageText(wrapper)).toContain("Couldn't update notifications on this device.");
+            expect(pushSwitch(wrapper).checked).toBe(false);
+        });
+
+        it("keeps the switch on when turning off fails", async () => {
+            m.device.state.value = "on";
+            m.device.disable.mockImplementationOnce(() => {
+                m.device.error.value = new Error("offline");
+                return Promise.resolve();
+            });
+            const wrapper = await mountPage();
+
+            await wrapper.get('input[id="push-notifications"]').trigger("change");
+            await flushPromises();
+
+            expect(pageText(wrapper)).toContain("Couldn't update notifications on this device.");
+            expect(pushSwitch(wrapper).checked).toBe(true);
+        });
+
         it("labels the band with this browser's device name, except when unsupported", async () => {
             const wrapper = await mountPage();
             const label = describeDevice(navigator.userAgent, navigator.maxTouchPoints);
@@ -227,6 +281,25 @@ describe("settings notifications page", () => {
             { preferences: [{ type: "system.test", enabled: false }] },
             expect.any(Object),
         );
+    });
+
+    it("puts a type's switch back when its save fails", async () => {
+        const wrapper = await mountPage();
+        const optional = () => wrapper.get('input[id="notify-system.test"]').element as HTMLInputElement;
+
+        await wrapper.get('input[id="notify-system.test"]').trigger("change");
+        expect(optional().checked).toBe(false);
+
+        const [, handlers] = m.updatePreferences.mutate.mock.calls[0] as unknown as [
+            unknown,
+            { onError: (error: unknown) => void; onSettled: () => void },
+        ];
+        handlers.onError(new Error("server down"));
+        handlers.onSettled();
+        await flushPromises();
+
+        expect(m.toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: "error" }));
+        expect(optional().checked).toBe(true);
     });
 
     it("shows the empty copy for types when none are available", async () => {
