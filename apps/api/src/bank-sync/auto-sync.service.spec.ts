@@ -242,6 +242,14 @@ describe("AutoSyncService", () => {
             expect(grantData.expiresAt.getTime()).toBe(NOW.getTime() + 30 * DAY);
         });
 
+        it("stores the canonical time zone id when the zone is sent in another case", async () => {
+            mockPrisma.scraperConnection.findMany.mockResolvedValueOnce([storedConnection("c1", "Bank A")]);
+
+            await service.enable(USER_ID, enableDto({ timeZone: "asia/jerusalem" }), NOW);
+
+            expect(mockPrisma.autoSyncGrant.create.mock.calls[0][0].data.timeZone).toBe(TZ);
+        });
+
         it("returns the status with the connections split", async () => {
             mockPrisma.scraperConnection.findMany
                 .mockResolvedValueOnce([storedConnection("c1", "Bank A")])
@@ -461,6 +469,15 @@ describe("AutoSyncService", () => {
             });
             // 09:00 in Jerusalem has passed by 12:00 on the 11th, so the first run is 09:00 on the 12th.
             expect(data.scheduledRunAt.toISOString()).toBe("2026-11-12T07:00:00.000Z");
+        });
+
+        it("stores the canonical time zone id when the zone is sent in another case", async () => {
+            mockPrisma.autoSyncGrant.findFirst.mockResolvedValueOnce(grantRow());
+            mockPrisma.autoSyncGrant.update.mockResolvedValueOnce(grantRow());
+
+            await service.updateSchedule(USER_ID, updateDto({ timeZone: "ASIA/JERUSALEM" }), NOW);
+
+            expect(mockPrisma.autoSyncGrant.update.mock.calls[0][0].data.timeZone).toBe(TZ);
         });
 
         it("changes only the schedule: no PIN check, no expiry, duration or credential change", async () => {

@@ -1,6 +1,6 @@
 import {
     AUTO_SYNC_JITTER_MS,
-    isValidTimeZone,
+    canonicalTimeZone,
     jitterRunAt,
     nextScheduledRunAt,
     parseAutoSyncSchedule,
@@ -175,13 +175,18 @@ describe("parseAutoSyncSchedule", () => {
     });
 });
 
-describe("isValidTimeZone", () => {
-    it("accepts a real IANA zone", () => {
-        expect(isValidTimeZone(JERUSALEM)).toBe(true);
+describe("canonicalTimeZone", () => {
+    it("returns a real IANA zone unchanged", () => {
+        expect(canonicalTimeZone(JERUSALEM)).toBe(JERUSALEM);
     });
 
-    it("rejects an unknown zone", () => {
-        expect(isValidTimeZone("Mars/Base")).toBe(false);
+    it("returns the canonical id whatever the letter case", () => {
+        expect(canonicalTimeZone("europe/london")).toBe("Europe/London");
+        expect(canonicalTimeZone("ASIA/JERUSALEM")).toBe("Asia/Jerusalem");
+    });
+
+    it("returns null for an unknown zone", () => {
+        expect(canonicalTimeZone("Mars/Base")).toBeNull();
     });
 });
 

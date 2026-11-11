@@ -14,7 +14,7 @@ import { BankSyncService } from "./bank-sync.service";
 import { EnableAutoSyncDto } from "./dto/enable-auto-sync.dto";
 import { AutoSyncScheduleDto } from "./dto/auto-sync-schedule.dto";
 import { UpdateAutoSyncScheduleDto } from "./dto/update-auto-sync-schedule.dto";
-import { isValidTimeZone, jitterRunAt, nextScheduledRunAt, parseAutoSyncSchedule } from "./auto-sync-schedule";
+import { canonicalTimeZone, jitterRunAt, nextScheduledRunAt, parseAutoSyncSchedule } from "./auto-sync-schedule";
 
 /** A grant is shown as unreachable once it has missed this many runs and none has run for this long. */
 export const AUTO_SYNC_UNREACHABLE_MISSES = 2;
@@ -140,20 +140,22 @@ export class AutoSyncService {
         });
     }
 
-    private parseSchedule(input: AutoSyncScheduleDto): AutoSyncSchedule {
+    /** Validates the schedule; the time zone is returned in canonical form so equal zones store equal strings. */
+    private parseSchedule(input: AutoSyncScheduleDto): { schedule: AutoSyncSchedule; timeZone: string } {
         const parsed = parseAutoSyncSchedule(input);
         if (parsed.ok === false) {
             throw new BadRequestException(parsed.message);
         }
-        if (!isValidTimeZone(input.timeZone)) {
+        const timeZone = canonicalTimeZone(input.timeZone);
+        if (timeZone === null) {
             throw new BadRequestException("Unknown time zone");
         }
-        return parsed.schedule;
+        return { schedule: parsed.schedule, timeZone };
     }
 
     /** Replaces any existing grant: each active connection login is re-encrypted under a key only the device holds. */
     async enable(userId: string, dto: EnableAutoSyncDto, now: Date = new Date()): Promise<IAutoSyncStatus> {
-        const schedule = this.parseSchedule(dto);
+        const { schedule, timeZone } = this.parseSchedule(dto);
         const durationDays = dto.durationDays ?? DEFAULT_AUTO_SYNC_DURATION_DAYS;
         if (!isAutoSyncDurationAllowed(durationDays, schedule.intervalUnit, schedule.intervalCount)) {
             throw new BadRequestException("Keep auto-sync on for at least two intervals");
@@ -202,7 +204,7 @@ export class AutoSyncService {
             };
         });
 
-        const scheduledRunAt = nextScheduledRunAt(schedule, dto.timeZone, now, null);
+        const scheduledRunAt = nextScheduledRunAt(schedule, timeZone, now, null);
         const keyCheck = this.credentialCryptoService.createGrantKeyCheck(grantKey, grantId);
 
         const grant = await this.prisma.$transaction(async (tx) => {
@@ -217,7 +219,7 @@ export class AutoSyncService {
                     intervalUnit: schedule.intervalUnit,
                     intervalCount: schedule.intervalCount,
                     ...scheduleColumns(schedule),
-                    timeZone: dto.timeZone,
+                    timeZone,
                     durationDays,
                     expiresAt: new Date(now.getTime() + durationDays * DAY_MS),
                     keyCheckCt: keyCheck.ciphertext,
@@ -259,7 +261,7 @@ export class AutoSyncService {
             throw new NotFoundException("Auto-sync is not on");
         }
 
-        const schedule = this.parseSchedule(dto);
+        const { schedule, timeZone } = this.parseSchedule(dto);
         const durationDays = existing.durationDays;
         if (
             !isAutoSyncDurationDays(durationDays) ||
@@ -268,14 +270,14 @@ export class AutoSyncService {
             throw new BadRequestException("Keep auto-sync on for at least two intervals");
         }
 
-        const scheduledRunAt = nextScheduledRunAt(schedule, dto.timeZone, now, null);
+        const scheduledRunAt = nextScheduledRunAt(schedule, timeZone, now, null);
         const updated = await this.prisma.autoSyncGrant.update({
             where: { id: existing.id },
             data: {
                 intervalUnit: schedule.intervalUnit,
                 intervalCount: schedule.intervalCount,
                 ...scheduleColumns(schedule),
-                timeZone: dto.timeZone,
+                timeZone,
                 scheduledRunAt,
                 dueAt: jitterRunAt(scheduledRunAt, schedule.intervalUnit),
             },

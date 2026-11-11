@@ -98,12 +98,12 @@ export function parseAutoSyncSchedule(input: AutoSyncScheduleInput): ParseSchedu
     };
 }
 
-export function isValidTimeZone(timeZone: string): boolean {
+/** The canonical IANA id for `timeZone` (Intl matches ids in any case), or null when it is not a zone. */
+export function canonicalTimeZone(timeZone: string): string | null {
     try {
-        new Intl.DateTimeFormat("en-US", { timeZone });
-        return true;
+        return new Intl.DateTimeFormat("en-US", { timeZone }).resolvedOptions().timeZone;
     } catch (error) {
-        if (error instanceof RangeError) return false;
+        if (error instanceof RangeError) return null;
         throw error;
     }
 }
