@@ -9,6 +9,7 @@ import {
 } from "@badger/shared-data";
 import type { IAutoSyncStatus } from "@badger/types";
 import { formatMinuteOfDay } from "./autoSyncPresets";
+import { calendarDaysUntil } from "./relativeTime";
 
 /** The local time of day for a minute count, on the day of `now`. */
 export function minuteToDate(minute: number, now: Date = new Date()): Date {
@@ -90,4 +91,24 @@ export function firstAllowedDuration(
 ): AutoSyncDurationDays {
     if (isAutoSyncDurationAllowed(preferred, unit, count)) return preferred;
     return AUTO_SYNC_DURATIONS.find((days) => isAutoSyncDurationAllowed(days, unit, count)) ?? preferred;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** A grant with this many days or fewer left shows its expiry and the Keep on action. */
+export const EXPIRING_WITHIN_DAYS = 3;
+
+/** Whole days left on a grant that expires within EXPIRING_WITHIN_DAYS, or null while it has longer to run. */
+export function expiringDaysLeft(expiresAt: string, now: Date = new Date()): number | null {
+    const msLeft = new Date(expiresAt).getTime() - now.getTime();
+    if (msLeft > EXPIRING_WITHIN_DAYS * DAY_MS) return null;
+    return Math.max(1, Math.ceil(msLeft / DAY_MS));
+}
+
+/** "today", "yesterday" or a short date, for when an unreachable device last ran a sync. */
+export function lastSyncDayLabel(date: Date, now: Date = new Date()): string {
+    const daysAgo = -calendarDaysUntil(date, now);
+    if (daysAgo <= 0) return "today";
+    if (daysAgo === 1) return "yesterday";
+    return dayFormat.format(date);
 }

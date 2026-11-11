@@ -11,7 +11,7 @@ import {
 } from "@badger/shared-data";
 import { useQueryClient } from "@tanstack/vue-query";
 import type { AutoSync } from "~/composables/bankSync/useAutoSync";
-import { AutoSyncError } from "~/composables/bankSync/useAutoSync";
+import { AUTO_SYNC_ERROR_MESSAGES, AutoSyncError } from "~/composables/bankSync/useAutoSync";
 import { bankSyncKeys, useSyncPasskeysQuery } from "~/composables/bankSync/useBankSync";
 import { useSyncUnlock } from "~/composables/bankSync/useSyncUnlock";
 import {
@@ -44,11 +44,6 @@ const isEnable = computed(() => props.mode === "enable");
 
 const labelClass = "text-sm font-medium text-surface-700 dark:text-surface-200";
 const errorClass = "text-sm text-red-500";
-
-const AUTO_SYNC_ERROR_MESSAGES: Record<AutoSyncError["reason"], string> = {
-    "push-denied": "Auto-sync needs notifications. Allow them for Badger, then try again.",
-    "push-unavailable": "This device can't receive notifications, so auto-sync can't run here.",
-};
 
 // Form state. Hours use the window, days use the run time; the other pair keeps its default.
 const presetChoice = ref<AutoSyncPresetId | "custom">("4h");

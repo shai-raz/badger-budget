@@ -20,6 +20,12 @@ export class AutoSyncError extends Error {
     }
 }
 
+/** Copy for each reason auto-sync cannot be turned on from this device. */
+export const AUTO_SYNC_ERROR_MESSAGES: Record<AutoSyncErrorReason, string> = {
+    "push-denied": "Auto-sync needs notifications. Allow them for Badger, then try again.",
+    "push-unavailable": "This device can't receive notifications, so auto-sync can't run here.",
+};
+
 type ScheduleFields = Pick<
     IEnableAutoSync,
     "intervalUnit" | "intervalCount" | "windowStartMinute" | "windowEndMinute" | "runAtMinute"

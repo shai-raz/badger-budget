@@ -3,9 +3,11 @@ import { DEFAULT_AUTO_SYNC_SCHEDULE } from "@badger/shared-data";
 import type { IAutoSyncStatus } from "@badger/types";
 import {
     dateToMinute,
+    expiringDaysLeft,
     firstAllowedDuration,
     firstSyncLabel,
     intervalCountError,
+    lastSyncDayLabel,
     minuteToDate,
     nextOccurrence,
     scheduleFromStatus,
@@ -126,5 +128,35 @@ describe("firstAllowedDuration", () => {
     it("moves to the shortest duration that covers two intervals", () => {
         expect(firstAllowedDuration(7, "days", 5)).toBe(30);
         expect(firstAllowedDuration(7, "days", 7)).toBe(30);
+    });
+});
+
+describe("expiringDaysLeft", () => {
+    const now = new Date("2026-11-12T10:00:00Z");
+    const daysFrom = (days: number) => new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+
+    it("is null while the grant has more than three days left", () => {
+        expect(expiringDaysLeft(daysFrom(3.5), now)).toBeNull();
+        expect(expiringDaysLeft(daysFrom(30), now)).toBeNull();
+    });
+
+    it("counts the days left, rounding a part day up", () => {
+        expect(expiringDaysLeft(daysFrom(3), now)).toBe(3);
+        expect(expiringDaysLeft(daysFrom(2.5), now)).toBe(3);
+        expect(expiringDaysLeft(daysFrom(1), now)).toBe(1);
+    });
+
+    it("never reports fewer than one day once it is due", () => {
+        expect(expiringDaysLeft(daysFrom(-1), now)).toBe(1);
+    });
+});
+
+describe("lastSyncDayLabel", () => {
+    const now = new Date(2026, 10, 12, 10, 0);
+
+    it("names today, yesterday, or a short date", () => {
+        expect(lastSyncDayLabel(new Date(2026, 10, 12, 1, 0), now)).toBe("today");
+        expect(lastSyncDayLabel(new Date(2026, 10, 11, 23, 0), now)).toBe("yesterday");
+        expect(lastSyncDayLabel(new Date(2026, 10, 9, 12, 0), now)).toBe("Mon, Nov 9");
     });
 });

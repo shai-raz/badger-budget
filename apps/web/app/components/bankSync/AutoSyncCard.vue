@@ -1,9 +1,22 @@
 <script setup lang="ts">
+import { useQueryClient } from "@tanstack/vue-query";
 import { useConfirm } from "primevue/useconfirm";
 import { useToast } from "primevue/usetoast";
 import type { AutoSync } from "~/composables/bankSync/useAutoSync";
-import { dateToMinute, scheduleFromStatus, scheduleWindowLabel, syncDayLabel } from "~/utils/autoSyncForm";
+import { AUTO_SYNC_ERROR_MESSAGES, AutoSyncError } from "~/composables/bankSync/useAutoSync";
+import { bankSyncKeys, useSyncPasskeysQuery } from "~/composables/bankSync/useBankSync";
+import { useSyncUnlock } from "~/composables/bankSync/useSyncUnlock";
+import { usePushDevice } from "~/composables/notifications/usePushDevice";
+import {
+    dateToMinute,
+    expiringDaysLeft,
+    lastSyncDayLabel,
+    scheduleFromStatus,
+    scheduleWindowLabel,
+    syncDayLabel,
+} from "~/utils/autoSyncForm";
 import { formatAutoSyncInterval, formatMinuteOfDay } from "~/utils/autoSyncPresets";
+import { STALE_PIN_MESSAGE, unlockFallbackMessage } from "~/utils/syncPasskeyWebAuthn";
 
 /**
  * The Auto-sync band on the bank connections page. Off, on from this device, or on from another device; the
@@ -16,6 +29,14 @@ const props = defineProps<{
 
 const toast = useToast();
 const confirm = useConfirm();
+const queryClient = useQueryClient();
+const { isWebAuthnAvailable, unlock } = useSyncUnlock();
+const { data: passkeys } = useSyncPasskeysQuery();
+
+// On iOS, push only works from the Home Screen app, so auto-sync cannot be turned on from a browser tab.
+const pushDevice = usePushDevice();
+const needsHomeScreen = computed(() => pushDevice.state.value === "ios-install");
+onMounted(() => void pushDevice.refresh());
 
 const UNTIL_TOOLTIP =
     "Each unlock on this device restarts the countdown. A connection added later joins on the next unlock.";
@@ -41,9 +62,22 @@ const nextSyncText = computed(() => {
 });
 const untilText = computed(() => (status.value ? untilFormat.format(new Date(status.value.expiresAt)) : ""));
 
+// Only the other device's card reports this: the server marks the device holding the grant as unreachable.
+const unreachableSince = computed(() => {
+    const current = status.value;
+    if (!current?.unreachable) return null;
+    return lastSyncDayLabel(new Date(current.lastRunAt ?? current.createdAt));
+});
+const daysLeft = computed(() => (status.value ? expiringDaysLeft(status.value.expiresAt) : null));
+const daysLeftText = computed(() => {
+    if (daysLeft.value === null) return "";
+    return `${daysLeft.value} ${daysLeft.value === 1 ? "day" : "days"} left`;
+});
+
 const dialog = reactive<{ visible: boolean; mode: "enable" | "schedule" }>({ visible: false, mode: "enable" });
 
 function openEnable() {
+    if (needsHomeScreen.value) return;
     dialog.mode = "enable";
     dialog.visible = true;
 }
@@ -93,6 +127,83 @@ function confirmTurnOff() {
 function onToggle(value: boolean) {
     if (!value) confirmTurnOff();
 }
+
+// Keep on: unlock, then renew the grant on this device. A failed passkey unlock falls back to the PIN.
+const keepingOn = ref(false);
+const keepPin = reactive<{ visible: boolean; pin: string; reason: string | null; error: string | null; busy: boolean }>(
+    { visible: false, pin: "", reason: null, error: null, busy: false },
+);
+
+function keepOnFailed(error: unknown) {
+    const detail =
+        error instanceof AutoSyncError
+            ? AUTO_SYNC_ERROR_MESSAGES[error.reason]
+            : getApiErrorMessage(error, "Couldn't keep auto-sync on");
+    toast.add({ severity: "error", summary: "Error", detail, life: 5000 });
+}
+
+function keptOn() {
+    toast.add({ severity: "success", summary: "Auto-sync stays on", life: 3000 });
+}
+
+function openKeepPin(reason: string | null) {
+    keepPin.pin = "";
+    keepPin.reason = reason;
+    keepPin.error = null;
+    keepPin.visible = true;
+}
+
+async function keepOnWithPasskey() {
+    let pin: string;
+    try {
+        pin = await unlock(passkeys.value);
+    } catch (error: unknown) {
+        const reason = unlockFallbackMessage(error, false);
+        if (reason) openKeepPin(reason);
+        else keepOnFailed(error);
+        return;
+    }
+    try {
+        await props.autoSync.renew(pin);
+        keptOn();
+    } catch (error: unknown) {
+        const reason = unlockFallbackMessage(error, true);
+        // A stale passkey wrap means the stored passkey list is out of date, so it is refetched.
+        if (reason === STALE_PIN_MESSAGE) void queryClient.invalidateQueries({ queryKey: bankSyncKeys.passkeys() });
+        if (reason) openKeepPin(reason);
+        else keepOnFailed(error);
+    }
+}
+
+async function keepOn() {
+    if (keepingOn.value) return;
+    keepingOn.value = true;
+    try {
+        if (isWebAuthnAvailable() && (passkeys.value?.length ?? 0) > 0) await keepOnWithPasskey();
+        else openKeepPin(null);
+    } finally {
+        keepingOn.value = false;
+    }
+}
+
+async function submitKeepPin() {
+    if (!keepPin.pin || keepPin.busy) return;
+    keepPin.busy = true;
+    keepPin.error = null;
+    try {
+        await props.autoSync.renew(keepPin.pin);
+        keepPin.visible = false;
+        keepPin.pin = "";
+        keptOn();
+    } catch (error: unknown) {
+        keepPin.error =
+            error instanceof AutoSyncError
+                ? AUTO_SYNC_ERROR_MESSAGES[error.reason]
+                : getApiErrorMessage(error, "Couldn't keep auto-sync on");
+    } finally {
+        keepPin.busy = false;
+    }
+}
 </script>
 
 <template>
@@ -109,6 +220,7 @@ function onToggle(value: boolean) {
                 severity="secondary"
                 outlined
                 size="small"
+                :disabled="needsHomeScreen"
                 @click="openEnable"
             />
         </template>
@@ -118,6 +230,12 @@ function onToggle(value: boolean) {
             class="px-4 pb-4 md:px-0 md:pb-0"
         >
             <p class="text-sm text-muted-color">Sync on a schedule, even when Badger is closed.</p>
+            <p
+                v-if="needsHomeScreen"
+                class="mt-2 text-sm"
+            >
+                First add Badger to your Home Screen: Share › Add to Home Screen.
+            </p>
         </div>
 
         <div
@@ -134,6 +252,28 @@ function onToggle(value: boolean) {
                     aria-label="Sync automatically"
                     class="shrink-0"
                     @update:model-value="onToggle"
+                />
+            </div>
+
+            <div
+                v-if="daysLeft !== null"
+                class="flex flex-wrap items-center justify-between gap-3"
+            >
+                <div class="flex flex-wrap items-center gap-2 text-sm">
+                    <span>Stops on {{ untilText }}</span>
+                    <SharedStatusTag
+                        :value="daysLeftText"
+                        tone="warn"
+                    />
+                </div>
+                <Button
+                    label="Keep on"
+                    severity="secondary"
+                    outlined
+                    size="small"
+                    :loading="keepingOn"
+                    :disabled="keepingOn"
+                    @click="keepOn"
                 />
             </div>
 
@@ -213,7 +353,25 @@ function onToggle(value: boolean) {
                     outlined
                     size="small"
                     class="shrink-0"
+                    :disabled="needsHomeScreen"
                     @click="confirmMove"
+                />
+            </div>
+            <Message
+                v-if="unreachableSince"
+                severity="warn"
+                variant="simple"
+                size="small"
+                >Can't reach {{ status.deviceLabel }}. No sync since {{ unreachableSince }}.</Message
+            >
+            <div
+                v-if="daysLeft !== null"
+                class="flex flex-wrap items-center gap-2 text-sm"
+            >
+                <span>Stops on {{ untilText }}</span>
+                <SharedStatusTag
+                    :value="daysLeftText"
+                    tone="warn"
                 />
             </div>
         </div>
@@ -224,4 +382,35 @@ function onToggle(value: boolean) {
         :mode="dialog.mode"
         :auto-sync="autoSync"
     />
+
+    <SharedFormDialog
+        :visible="keepPin.visible"
+        header="Keep auto-sync on"
+        initial-focus="dialog"
+        :busy="keepPin.busy"
+        :api-error="keepPin.error"
+        save-label="Keep on"
+        :save-disabled="!keepPin.pin"
+        width="28rem"
+        @update:visible="keepPin.visible = $event"
+        @save="submitKeepPin"
+    >
+        <Message
+            v-if="keepPin.reason"
+            severity="warn"
+            variant="simple"
+            size="small"
+            >{{ keepPin.reason }}</Message
+        >
+        <label
+            for="auto-sync-keep-pin"
+            class="text-sm font-medium text-surface-700 dark:text-surface-200"
+            >Sync PIN *</label
+        >
+        <SharedMaskedTextField
+            v-model="keepPin.pin"
+            placeholder="Enter your sync PIN"
+            @keyup-enter="submitKeepPin"
+        />
+    </SharedFormDialog>
 </template>
