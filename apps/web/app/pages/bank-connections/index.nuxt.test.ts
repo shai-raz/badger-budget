@@ -9,6 +9,8 @@ import BankConnections from "./index.vue";
 const api = vi.hoisted(() => ({
     getScraperConnections: vi.fn(),
     updateScraperConnection: vi.fn(),
+    getAutoSync: vi.fn(),
+    getSyncPasskeys: vi.fn(async () => []),
 }));
 const toastAdd = vi.hoisted(() => vi.fn());
 // Connection id -> state in the active sync run; the flow's connectionSyncState reads it.
@@ -28,6 +30,12 @@ vi.mock("../../composables/bankSync/useBankSyncFlow", () => ({
 }));
 vi.mock("primevue/usetoast", () => ({ useToast: () => ({ add: toastAdd }) }));
 vi.mock("primevue/useconfirm", () => ({ useConfirm: () => ({ require: vi.fn() }) }));
+// The auto-sync status comes from the API; the device key store (IndexedDB) is not needed here.
+vi.mock("../../utils/push/autoSyncKeyStore", () => ({
+    loadAutoSyncKey: vi.fn(async () => null),
+    saveAutoSyncKey: vi.fn(),
+    clearAutoSyncKey: vi.fn(),
+}));
 
 const connection = (isActive: boolean): IScraperConnectionResponse => ({
     id: "c1",
@@ -80,6 +88,7 @@ const isMenuItemDisabled = (label: string) => {
 beforeEach(() => {
     vi.clearAllMocks();
     syncStates.value = {};
+    api.getAutoSync.mockResolvedValue({ autoSync: null });
     // The query client is shared across mounts in this file, so each test starts from an empty cache.
     useNuxtApp().$queryClient.clear();
 });
@@ -164,5 +173,36 @@ describe("bank connections page sync state", () => {
         await vi.waitFor(() => expect(isMenuItemDisabled("Delete")).toBe(false));
         expect(wrapper.text()).toContain("Wrong username or password");
         expect(toggleSwitch(wrapper).attributes("disabled")).toBeUndefined();
+    });
+});
+
+describe("bank connections page auto-sync", () => {
+    it("tags only the connections that are not in auto-sync", async () => {
+        api.getScraperConnections.mockResolvedValue([connection(true), otherConnection]);
+        api.getAutoSync.mockResolvedValue({
+            autoSync: {
+                id: "grant-1",
+                intervalUnit: "hours",
+                intervalCount: 4,
+                windowStartMinute: 420,
+                windowEndMinute: 1320,
+                runAtMinute: null,
+                timeZone: "Europe/London",
+                deviceLabel: "Safari on iPhone",
+                durationDays: 30,
+                expiresAt: "2026-12-12T00:00:00.000Z",
+                nextRunAt: "2026-11-12T13:00:00.000Z",
+                lastRunAt: null,
+                missedRuns: 0,
+                unreachable: false,
+                createdAt: "2026-11-12T00:00:00.000Z",
+                includedConnections: [{ id: "c1", displayName: "Visa Cal" }],
+                notIncludedConnections: [{ id: "c2", displayName: "Hapoalim" }],
+            },
+        });
+        const wrapper = await mountSuspended(BankConnections);
+        await vi.waitFor(() => expect(wrapper.text()).toContain("Not in auto-sync"));
+        expect(wrapper.text()).toContain("Joins on your next unlock");
+        expect(wrapper.text().split("Not in auto-sync").length - 1).toBe(1);
     });
 });

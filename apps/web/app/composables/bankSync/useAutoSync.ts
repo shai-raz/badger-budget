@@ -139,3 +139,6 @@ export function useAutoSync() {
 
     return { status, loading, holdsGrant, refresh, enable, updateSchedule, disable, renew };
 }
+
+/** The shape of `useAutoSync()`, passed down from the page so every auto-sync component shares one status. */
+export type AutoSync = ReturnType<typeof useAutoSync>;
