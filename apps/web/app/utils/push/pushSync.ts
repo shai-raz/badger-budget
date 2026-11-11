@@ -39,6 +39,26 @@ export interface PushUnregisterDeps {
     unregister(endpoint: string): Promise<void>;
 }
 
+export interface EnablePushDeps {
+    registration: PushRegistrationLike;
+    publicKey: string;
+    register(data: IRegisterPushSubscriptionRequest): Promise<unknown>;
+    device: DeviceInfo;
+}
+
+/** A register answered 410: the user removed this endpoint from their devices, and it must not be re-added. */
+export function isRemovedRegistration(error: unknown): boolean {
+    return (error as { response?: { status?: number } } | null)?.response?.status === 410;
+}
+
+/** Always a new endpoint from the push service, so a removed one is never reused. */
+function subscribeFresh(registration: PushRegistrationLike, publicKey: string): Promise<PushSubscriptionLike> {
+    return registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: new Uint8Array(fromBase64Url(publicKey)),
+    });
+}
+
 /** Returns this browser's subscription for the key, replacing one made with a different key. */
 export async function ensureSubscription(
     registration: PushRegistrationLike,
@@ -47,10 +67,7 @@ export async function ensureSubscription(
     const existing = await registration.pushManager.getSubscription();
     if (existing && subscriptionUsesKey(existing.options.applicationServerKey, publicKey)) return existing;
     if (existing) await existing.unsubscribe();
-    return registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: new Uint8Array(fromBase64Url(publicKey)),
-    });
+    return subscribeFresh(registration, publicKey);
 }
 
 export function buildRegisterRequest(
@@ -66,7 +83,10 @@ export function buildRegisterRequest(
     };
 }
 
-/** Re-registers an existing subscription (re-keying it if the VAPID key changed). Silent when there is nothing to sync. */
+/**
+ * Re-registers an existing subscription (re-keying it if the VAPID key changed). Silent when there is nothing to sync.
+ * A removed endpoint is turned off in this browser instead of being re-added: the page then shows "Off".
+ */
 export async function syncPushSubscription(deps: PushSyncDeps): Promise<void> {
     if (deps.permission !== "granted") return;
     const registration = await deps.getRegistration();
@@ -76,7 +96,30 @@ export async function syncPushSubscription(deps: PushSyncDeps): Promise<void> {
 
     const publicKey = await deps.fetchVapidKey();
     const subscription = await ensureSubscription(registration, publicKey);
-    await deps.register(buildRegisterRequest(subscription, deps.device));
+    try {
+        await deps.register(buildRegisterRequest(subscription, deps.device));
+    } catch (error) {
+        if (!isRemovedRegistration(error)) throw error;
+        await subscription.unsubscribe();
+    }
+}
+
+/**
+ * The deliberate Turn on. A removed endpoint (the browser still holds it) is dropped and replaced by a new one,
+ * so an explicit enable never leaves the device stuck.
+ */
+export async function enablePushSubscription(deps: EnablePushDeps): Promise<void> {
+    const subscription = await ensureSubscription(deps.registration, deps.publicKey);
+    try {
+        await deps.register(buildRegisterRequest(subscription, deps.device));
+        return;
+    } catch (error) {
+        if (!isRemovedRegistration(error)) throw error;
+    }
+
+    await subscription.unsubscribe();
+    const fresh = await subscribeFresh(deps.registration, deps.publicKey);
+    await deps.register(buildRegisterRequest(fresh, deps.device));
 }
 
 /** Best-effort removal of this browser's subscription on logout. Never rejects, and resolves within timeoutMs. */
