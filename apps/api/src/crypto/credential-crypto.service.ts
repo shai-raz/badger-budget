@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import * as crypto from "crypto";
-import { AUTO_SYNC_KEY_BYTES } from "@badger/shared-data";
+import { AUTO_SYNC_KEY_BYTES, INVALID_PIN_MESSAGE } from "@badger/shared-data";
 
 const VERIFIER_PLAINTEXT = "badger-sync-pin-verifier-v1";
 const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 };
@@ -72,7 +72,7 @@ export class CredentialCryptoService {
             const pt = Buffer.concat([decipher.update(Buffer.from(blob.ciphertext, "base64")), decipher.final()]);
             return pt.toString("utf8");
         } catch {
-            throw new UnauthorizedException("Invalid PIN");
+            throw new UnauthorizedException(INVALID_PIN_MESSAGE);
         }
     }
 
@@ -84,7 +84,7 @@ export class CredentialCryptoService {
         // Throws UnauthorizedException if PIN is wrong (GCM auth tag fails)
         const result = this.decrypt(blob, pin);
         if (result !== VERIFIER_PLAINTEXT) {
-            throw new UnauthorizedException("Invalid PIN");
+            throw new UnauthorizedException(INVALID_PIN_MESSAGE);
         }
     }
 

@@ -1,11 +1,10 @@
 import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
-import { isIbsErrorCode, type SyncErrorCode } from "@badger/shared-data";
+import { INVALID_PIN_MESSAGE, isIbsErrorCode, type SyncErrorCode } from "@badger/shared-data";
 import { PrismaService } from "../prisma/prisma.service";
 
 const ACTIVE_STATUSES = ["pending", "running"];
 // Matches the message scraper.service.ts throws (note the em dash, U+2014).
 const SCRAPER_FAILED_MESSAGE = /^Scraper failed: ([A-Z_]+) — /;
-const INVALID_PIN_MESSAGE = "Invalid PIN";
 
 /** Maps a pre-error-code failure message to its SyncErrorCode. Anything unrecognised is UNKNOWN. */
 export function errorCodeFromLegacyMessage(error: string | null): SyncErrorCode {

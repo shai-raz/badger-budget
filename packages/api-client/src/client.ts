@@ -77,7 +77,12 @@ import type {
     ApplyRuleResponse,
     AccountRuleUsageResponse,
 } from "@badger/types";
-import type { AccountType, AttachmentDisposition, AvatarIconName } from "@badger/shared-data";
+import {
+    INVALID_PIN_MESSAGE,
+    type AccountType,
+    type AttachmentDisposition,
+    type AvatarIconName,
+} from "@badger/shared-data";
 
 export interface ApiClientConfig {
     baseURL: string;
@@ -143,8 +148,12 @@ export class ApiClient {
                 const url = originalRequest.url ?? "";
                 const isRefreshExcluded = refreshExcludedSuffixes.some((suffix) => url.includes(suffix));
 
+                // Wrong PIN, not an expired session: a retry would re-send it and count twice toward the PIN limit.
+                const isWrongPin =
+                    (error.response?.data as { message?: unknown } | undefined)?.message === INVALID_PIN_MESSAGE;
+
                 // If 401 and we haven't retried yet, try to refresh token
-                if (error.response?.status === 401 && !originalRequest._retry && !isRefreshExcluded) {
+                if (error.response?.status === 401 && !originalRequest._retry && !isRefreshExcluded && !isWrongPin) {
                     if (this.isRefreshing) {
                         // Wait for refresh to complete
                         return new Promise((resolve) => {
