@@ -634,7 +634,64 @@ describe("settings notifications page", () => {
             expect(m.removeSubscription.mutateAsync).toHaveBeenCalledWith("sub-1");
         });
 
-        it("removes another device directly without asking", async () => {
+        // Another device holds the grant: its subscription is "sub-1", and this browser is not subscribed.
+        const anotherGrantHolder = () => [subscription({ id: "sub-1", deviceLabel: "Chrome on Windows" })];
+
+        async function removeAnotherGrantHolder(wrapper: VueWrapper) {
+            const remove = await openRemoveItem(wrapper, "Chrome on Windows");
+            remove?.click();
+            await flushPromises();
+        }
+
+        it("asks before removing another device that holds auto-sync", async () => {
+            setUpGrantHolder();
+            m.subscriptions.data.value = anotherGrantHolder();
+            const wrapper = await mountPage();
+
+            await removeAnotherGrantHolder(wrapper);
+
+            expect(confirmRequire).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    header: "Turn off notifications?",
+                    message: "This also turns off auto-sync.",
+                }),
+            );
+            expect(m.removeSubscription.mutateAsync).not.toHaveBeenCalled();
+        });
+
+        it("removes the other grant-holding device on accept, then refreshes auto-sync instead of turning it off", async () => {
+            setUpGrantHolder();
+            m.subscriptions.data.value = anotherGrantHolder();
+            const wrapper = await mountPage();
+            await removeAnotherGrantHolder(wrapper);
+            m.autoSync.refresh.mockClear();
+
+            confirmOptions()?.accept?.();
+            await flushPromises();
+
+            expect(m.removeSubscription.mutateAsync).toHaveBeenCalledWith("sub-1");
+            expect(m.autoSync.refresh).toHaveBeenCalledTimes(1);
+            expect(m.autoSync.refresh).toHaveBeenCalledWith({ quiet: true });
+            expect(m.autoSync.disable).not.toHaveBeenCalled();
+            expect(m.device.disable).not.toHaveBeenCalled();
+        });
+
+        it("removes nothing when removing the other grant-holding device is cancelled", async () => {
+            setUpGrantHolder();
+            m.subscriptions.data.value = anotherGrantHolder();
+            const wrapper = await mountPage();
+            await removeAnotherGrantHolder(wrapper);
+            m.autoSync.refresh.mockClear();
+
+            confirmOptions()?.reject?.();
+            await flushPromises();
+
+            expect(m.removeSubscription.mutateAsync).not.toHaveBeenCalled();
+            expect(m.autoSync.disable).not.toHaveBeenCalled();
+            expect(m.autoSync.refresh).not.toHaveBeenCalled();
+        });
+
+        it("removes another device without auto-sync directly without asking", async () => {
             setUpGrantHolder();
             m.subscriptions.data.value = [subscription({ id: "sub-2", deviceLabel: "Chrome on Windows" })];
             const wrapper = await mountPage();

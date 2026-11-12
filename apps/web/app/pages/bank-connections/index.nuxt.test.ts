@@ -192,6 +192,7 @@ describe("bank connections page auto-sync", () => {
                 runAtMinute: null,
                 timeZone: "Europe/London",
                 deviceLabel: "Safari on iPhone",
+                pushSubscriptionId: "sub-1",
                 durationDays: 30,
                 expiresAt: "2026-12-12T00:00:00.000Z",
                 nextRunAt: "2026-11-12T13:00:00.000Z",

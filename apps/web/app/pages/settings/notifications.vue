@@ -208,9 +208,16 @@ const deviceMenuItems = computed<MenuItem[]>(() => [
         command: () => {
             const subscription = selectedDevice.value;
             if (!subscription) return;
-            if (isThisDevice(subscription) && autoSync.holdsGrant.value) {
+            // The grant belongs to one push subscription, on whichever device it is.
+            if (autoSync.status.value?.pushSubscriptionId === subscription.id) {
                 confirmAutoSyncOff(async () => {
-                    if (await turnOffAutoSyncFirst()) await removeDevice(subscription);
+                    if (isThisDevice(subscription)) {
+                        if (await turnOffAutoSyncFirst()) await removeDevice(subscription);
+                        return;
+                    }
+                    // The server revokes the grant with its device. Refresh the card; disable() would clear this browser's key.
+                    await removeDevice(subscription);
+                    void autoSync.refresh({ quiet: true }).catch(() => undefined);
                 });
                 return;
             }
