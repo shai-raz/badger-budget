@@ -1,7 +1,7 @@
 import { randomBytes } from "crypto";
 import { validate } from "class-validator";
 import { Test, TestingModule } from "@nestjs/testing";
-import { BadRequestException, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, ConflictException, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { AUTO_SYNC_JITTER_MS } from "./auto-sync-schedule";
 import { AUTO_SYNC_UNREACHABLE_AFTER_MS, AutoSyncService } from "./auto-sync.service";
@@ -9,7 +9,10 @@ import { BankSyncService } from "./bank-sync.service";
 import { EnableAutoSyncDto } from "./dto/enable-auto-sync.dto";
 import { UpdateAutoSyncScheduleDto } from "./dto/update-auto-sync-schedule.dto";
 import { PrismaService } from "../prisma/prisma.service";
-import { CredentialCryptoService } from "../crypto/credential-crypto.service";
+import { CredentialCryptoService, GrantDecryptError } from "../crypto/credential-crypto.service";
+import { sha256Hex } from "../oauth/oauth-crypto";
+import type { CredentialSource } from "./credential-source";
+import type { ScraperConnection } from "@prisma/client";
 
 const DAY = 86_400_000;
 const PIN = "1234";
@@ -26,12 +29,19 @@ describe("AutoSyncService", () => {
 
     const mockPrisma = {
         scraperConnection: { findMany: jest.fn() },
-        autoSyncGrant: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), deleteMany: jest.fn() },
+        autoSyncGrant: {
+            findFirst: jest.fn(),
+            findUnique: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+            updateMany: jest.fn(),
+            deleteMany: jest.fn(),
+        },
         autoSyncCredential: { findMany: jest.fn(), createMany: jest.fn(), deleteMany: jest.fn() },
         $transaction: jest.fn(),
     };
 
-    const mockBankSync = { verifyUserPin: jest.fn() };
+    const mockBankSync = { verifyUserPin: jest.fn(), startSyncJob: jest.fn() };
 
     const mockConfigService = {
         get: jest.fn((key: string) => (key === "CREDENTIAL_ENCRYPTION_PEPPER" ? PEPPER : undefined)),
@@ -511,6 +521,273 @@ describe("AutoSyncService", () => {
             mockPrisma.autoSyncGrant.deleteMany.mockResolvedValueOnce({ count: 0 });
 
             await expect(service.disable(USER_ID)).resolves.toBeUndefined();
+        });
+    });
+    describe("issueRunToken and run", () => {
+        const TOKEN_LATER = new Date(NOW.getTime() + 2 * 3_600_000);
+        const wrongKey = randomBytes(32).toString("base64url");
+
+        type StoredRunState = {
+            runTokenHash: string | null;
+            runTokenExpiresAt: Date | null;
+            expiresAt: Date;
+            lastRunAt: Date | null;
+            missedRuns: number;
+        };
+        let stored: StoredRunState;
+        let keyCheck: { keyCheckCt: string; keyCheckIv: string; keyCheckAuthTag: string };
+
+        const grantKey = () => crypto.deriveGrantKey(Buffer.from(KEY, "base64url"), GRANT_ID);
+
+        const credentialRow = (connectionId: string, plaintext: string) => ({
+            grantId: GRANT_ID,
+            connectionId,
+            ...crypto.encryptForGrant(plaintext, grantKey(), GRANT_ID, connectionId),
+            connection: { id: connectionId, displayName: `Bank ${connectionId}`, isActive: true, deletedAt: null },
+        });
+
+        /** Issues a token and returns it; the stored grant state moves as the database would move it. */
+        const issue = async (at: Date = NOW) => (await service.issueRunToken(GRANT_ID, at)).token;
+
+        beforeEach(() => {
+            stored = {
+                runTokenHash: null,
+                runTokenExpiresAt: null,
+                expiresAt: new Date(NOW.getTime() + 30 * DAY),
+                lastRunAt: null,
+                missedRuns: 0,
+            };
+            const check = crypto.createGrantKeyCheck(grantKey(), GRANT_ID);
+            keyCheck = { keyCheckCt: check.ciphertext, keyCheckIv: check.iv, keyCheckAuthTag: check.authTag };
+
+            mockPrisma.autoSyncGrant.findUnique.mockImplementation(async ({ where }) =>
+                where.id === GRANT_ID
+                    ? {
+                          id: GRANT_ID,
+                          userId: USER_ID,
+                          intervalUnit: "hours",
+                          intervalCount: 1,
+                          expiresAt: stored.expiresAt,
+                          runTokenHash: stored.runTokenHash,
+                          ...keyCheck,
+                      }
+                    : null,
+            );
+            mockPrisma.autoSyncGrant.update.mockImplementation(async ({ data }) => {
+                const { missedRuns, ...rest } = data;
+                Object.assign(stored, rest);
+                if (missedRuns) stored.missedRuns += missedRuns.increment;
+                return {};
+            });
+            mockPrisma.autoSyncGrant.updateMany.mockImplementation(async ({ where, data }) => {
+                const live =
+                    stored.runTokenHash === where.runTokenHash &&
+                    stored.runTokenExpiresAt !== null &&
+                    stored.runTokenExpiresAt > where.runTokenExpiresAt.gt &&
+                    stored.expiresAt > where.expiresAt.gt;
+                if (!live) return { count: 0 };
+                Object.assign(stored, data);
+                return { count: 1 };
+            });
+            mockPrisma.autoSyncCredential.findMany.mockResolvedValue([
+                credentialRow("c1", JSON.stringify({ username: "a" })),
+                credentialRow("c2", JSON.stringify({ username: "b" })),
+            ]);
+            mockBankSync.startSyncJob.mockResolvedValue({ jobId: "job-1" });
+        });
+
+        describe("issueRunToken", () => {
+            it.each([
+                ["every hour", "hours", 1, 3_600_000],
+                ["every 12 hours", "hours", 12, 6 * 3_600_000],
+                ["every 3 days", "days", 3, 6 * 3_600_000],
+            ])(
+                "expires a run token after the interval, capped at six hours: %s (AC20)",
+                async (_label, unit, count, ttl) => {
+                    mockPrisma.autoSyncGrant.findUnique.mockResolvedValueOnce({
+                        intervalUnit: unit,
+                        intervalCount: count,
+                        runTokenHash: null,
+                        expiresAt: stored.expiresAt,
+                    });
+
+                    const { expiresAt } = await service.issueRunToken(GRANT_ID, NOW);
+
+                    expect(expiresAt.getTime()).toBe(NOW.getTime() + ttl);
+                },
+            );
+
+            it("stores only the hash of the token it returns", async () => {
+                const token = await issue();
+
+                expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+                expect(stored.runTokenHash).toBe(sha256Hex(token));
+                expect(stored.runTokenExpiresAt?.getTime()).toBe(NOW.getTime() + 3_600_000);
+            });
+
+            it("counts a replaced unused token as a missed run, and the first token as no miss", async () => {
+                await issue();
+                expect(stored.missedRuns).toBe(0);
+
+                await issue();
+                expect(stored.missedRuns).toBe(1);
+            });
+
+            it("refuses to issue for a grant that is not on", async () => {
+                mockPrisma.autoSyncGrant.findUnique.mockResolvedValueOnce(null);
+
+                await expect(service.issueRunToken(GRANT_ID, NOW)).rejects.toThrow(NotFoundException);
+                expect(mockPrisma.autoSyncGrant.update).not.toHaveBeenCalled();
+            });
+        });
+
+        describe("run", () => {
+            it("starts a job and consumes the token, so a second call is refused (AC6)", async () => {
+                const token = await issue();
+
+                await expect(service.run({ grantId: GRANT_ID, key: KEY, runToken: token }, NOW)).resolves.toEqual({
+                    jobId: "job-1",
+                });
+                expect(mockBankSync.startSyncJob).toHaveBeenCalledTimes(1);
+                expect(stored.runTokenHash).toBeNull();
+
+                await expect(service.run({ grantId: GRANT_ID, key: KEY, runToken: token }, NOW)).rejects.toThrow(
+                    new UnauthorizedException("Auto-sync run rejected"),
+                );
+                expect(mockBankSync.startSyncJob).toHaveBeenCalledTimes(1);
+            });
+
+            it("resets missedRuns and sets lastRunAt when the token is consumed", async () => {
+                const token = await issue();
+                stored.missedRuns = 3;
+
+                await service.run({ grantId: GRANT_ID, key: KEY, runToken: token }, NOW);
+
+                expect(stored.missedRuns).toBe(0);
+                expect(stored.lastRunAt?.getTime()).toBe(NOW.getTime());
+            });
+
+            it.each([
+                ["a wrong token", (token: string) => `${token}x`, NOW, KEY],
+                ["an expired token", (token: string) => token, TOKEN_LATER, KEY],
+                ["a wrong device key", (token: string) => token, NOW, wrongKey],
+                ["a device key of the wrong length", (token: string) => token, NOW, "c2hvcnQ"],
+            ])("refuses %s with the same 401 and starts no job", async (_label, pickToken, at, key) => {
+                const token = await issue();
+
+                await expect(service.run({ grantId: GRANT_ID, key, runToken: pickToken(token) }, at)).rejects.toThrow(
+                    new UnauthorizedException("Auto-sync run rejected"),
+                );
+                expect(mockBankSync.startSyncJob).not.toHaveBeenCalled();
+            });
+
+            it("refuses an expired grant with the same 401", async () => {
+                const token = await issue();
+                stored.expiresAt = new Date(NOW.getTime() - 1000);
+
+                await expect(service.run({ grantId: GRANT_ID, key: KEY, runToken: token }, NOW)).rejects.toThrow(
+                    new UnauthorizedException("Auto-sync run rejected"),
+                );
+                expect(mockBankSync.startSyncJob).not.toHaveBeenCalled();
+            });
+
+            it("refuses an unknown grant with the same 401", async () => {
+                await expect(service.run({ grantId: "unknown", key: KEY, runToken: "x" }, NOW)).rejects.toThrow(
+                    new UnauthorizedException("Auto-sync run rejected"),
+                );
+            });
+
+            it("checks the device key before the token is touched", async () => {
+                const token = await issue();
+
+                await expect(service.run({ grantId: GRANT_ID, key: wrongKey, runToken: token }, NOW)).rejects.toThrow(
+                    UnauthorizedException,
+                );
+                expect(mockPrisma.autoSyncGrant.updateMany).not.toHaveBeenCalled();
+                expect(stored.runTokenHash).toBe(sha256Hex(token));
+            });
+
+            it("spends the token and reports nothing to sync when no connection is covered", async () => {
+                const token = await issue();
+                stored.missedRuns = 2;
+                mockPrisma.autoSyncCredential.findMany.mockResolvedValueOnce([]);
+
+                await expect(service.run({ grantId: GRANT_ID, key: KEY, runToken: token }, NOW)).rejects.toThrow(
+                    new BadRequestException("Nothing to sync"),
+                );
+                expect(stored.runTokenHash).toBeNull();
+                expect(stored.lastRunAt).toBeNull();
+                expect(stored.missedRuns).toBe(2);
+            });
+
+            it("propagates a 409 from startSyncJob after the token was consumed", async () => {
+                const token = await issue();
+                mockBankSync.startSyncJob.mockRejectedValueOnce(new ConflictException("A sync is already in progress"));
+
+                await expect(service.run({ grantId: GRANT_ID, key: KEY, runToken: token }, NOW)).rejects.toThrow(
+                    ConflictException,
+                );
+                expect(stored.runTokenHash).toBeNull();
+            });
+        });
+
+        describe("auto credential source", () => {
+            const sourceAfterRun = async (): Promise<CredentialSource> => {
+                const token = await issue();
+                await service.run({ grantId: GRANT_ID, key: KEY, runToken: token }, NOW);
+                return mockBankSync.startSyncJob.mock.calls[0][2] as CredentialSource;
+            };
+
+            it("hands startSyncJob the covered connections", async () => {
+                await sourceAfterRun();
+
+                const connections = mockBankSync.startSyncJob.mock.calls[0][1] as Array<{ id: string }>;
+                expect(connections.map((connection) => connection.id)).toEqual(["c1", "c2"]);
+            });
+
+            it("resolves every covered connection from the device-held copies", async () => {
+                const source = await sourceAfterRun();
+
+                expect(source.resolve({ id: "c1" } as unknown as ScraperConnection)).toEqual({ username: "a" });
+                expect(source.resolve({ id: "c2" } as unknown as ScraperConnection)).toEqual({ username: "b" });
+            });
+
+            it.each(["INVALID_PASSWORD", "CREDENTIALS_UNREADABLE"] as const)(
+                "deletes the copy of the connection on %s (AC9)",
+                async (code) => {
+                    const source = await sourceAfterRun();
+
+                    await source.onConnectionFailed?.("c1", code);
+
+                    expect(mockPrisma.autoSyncCredential.deleteMany).toHaveBeenCalledWith({
+                        where: { grantId: GRANT_ID, connectionId: "c1" },
+                    });
+                },
+            );
+
+            it("keeps the copy on a timeout (AC9)", async () => {
+                const source = await sourceAfterRun();
+
+                await source.onConnectionFailed?.("c1", "TIMEOUT");
+
+                expect(mockPrisma.autoSyncCredential.deleteMany).not.toHaveBeenCalled();
+            });
+
+            it("fails only the unreadable connection and still resolves the others", async () => {
+                mockPrisma.autoSyncCredential.findMany.mockResolvedValueOnce([
+                    credentialRow("c1", JSON.stringify({ username: "a" })),
+                    {
+                        ...credentialRow("c2", JSON.stringify({ username: "b" })),
+                        ciphertext: Buffer.from("tampered").toString("base64"),
+                    },
+                ]);
+                const token = await issue();
+                await service.run({ grantId: GRANT_ID, key: KEY, runToken: token }, NOW);
+                const source = mockBankSync.startSyncJob.mock.calls[0][2] as CredentialSource;
+
+                expect(() => source.resolve({ id: "c2" } as unknown as ScraperConnection)).toThrow(GrantDecryptError);
+                expect(source.resolve({ id: "c1" } as unknown as ScraperConnection)).toEqual({ username: "a" });
+            });
         });
     });
 });

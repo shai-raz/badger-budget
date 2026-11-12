@@ -7,3 +7,4 @@ export { ListSyncJobsQueryDto } from "./list-sync-jobs-query.dto";
 export { AutoSyncScheduleDto } from "./auto-sync-schedule.dto";
 export { EnableAutoSyncDto } from "./enable-auto-sync.dto";
 export { UpdateAutoSyncScheduleDto } from "./update-auto-sync-schedule.dto";
+export { RunAutoSyncDto } from "./run-auto-sync.dto";

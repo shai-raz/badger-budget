@@ -1,26 +1,34 @@
-import { randomUUID } from "crypto";
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { randomBytes, randomUUID } from "crypto";
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import {
+    AUTO_SYNC_KEY_BYTES,
     DEFAULT_AUTO_SYNC_DURATION_DAYS,
+    autoSyncRunTokenTtlMs,
     isAutoSyncDurationAllowed,
     isAutoSyncDurationDays,
     isAutoSyncIntervalUnit,
+    isCredentialErrorCode,
     type AutoSyncSchedule,
 } from "@badger/shared-data";
 import type { IAutoSyncStatus } from "@badger/types";
 import { PrismaService } from "../prisma/prisma.service";
-import { CredentialCryptoService } from "../crypto/credential-crypto.service";
+import { CredentialCryptoService, GrantDecryptError } from "../crypto/credential-crypto.service";
 import { BankSyncService } from "./bank-sync.service";
+import type { CredentialSource } from "./credential-source";
 import { EnableAutoSyncDto } from "./dto/enable-auto-sync.dto";
 import { AutoSyncScheduleDto } from "./dto/auto-sync-schedule.dto";
 import { UpdateAutoSyncScheduleDto } from "./dto/update-auto-sync-schedule.dto";
 import { canonicalTimeZone, jitterRunAt, nextScheduledRunAt, parseAutoSyncSchedule } from "./auto-sync-schedule";
+import { sha256Hex } from "../oauth/oauth-crypto";
 
 /** A grant is shown as unreachable once it has missed this many runs and none has run for this long. */
 export const AUTO_SYNC_UNREACHABLE_MISSES = 2;
 export const AUTO_SYNC_UNREACHABLE_AFTER_MS = 24 * 3_600_000;
 
 const DAY_MS = 86_400_000;
+
+/** The one refusal every failed run gets, so a caller cannot tell which check failed. */
+const runRejected = () => new UnauthorizedException("Auto-sync run rejected");
 
 const GRANT_STATUS_SELECT = {
     id: true,
@@ -285,6 +293,122 @@ export class AutoSyncService {
         });
 
         return this.buildStatus(userId, updated, now);
+    }
+
+    /**
+     * Issues the one-time token a scheduled run presents; only its hash is stored. Issuing over a token that was
+     * never used counts that token's run as missed.
+     */
+    async issueRunToken(grantId: string, now: Date = new Date()): Promise<{ token: string; expiresAt: Date }> {
+        const grant = await this.prisma.autoSyncGrant.findUnique({
+            where: { id: grantId },
+            select: { intervalUnit: true, intervalCount: true, runTokenHash: true, expiresAt: true },
+        });
+        if (!grant || grant.expiresAt.getTime() <= now.getTime()) {
+            throw new NotFoundException("Auto-sync is not on");
+        }
+        if (!isAutoSyncIntervalUnit(grant.intervalUnit)) {
+            throw new Error(`Auto-sync grant ${grantId} has an unknown interval unit`);
+        }
+
+        const token = randomBytes(32).toString("base64url");
+        const expiresAt = new Date(now.getTime() + autoSyncRunTokenTtlMs(grant.intervalUnit, grant.intervalCount));
+        await this.prisma.autoSyncGrant.update({
+            where: { id: grantId },
+            data: {
+                runTokenHash: sha256Hex(token),
+                runTokenExpiresAt: expiresAt,
+                ...(grant.runTokenHash !== null ? { missedRuns: { increment: 1 } } : {}),
+            },
+        });
+        return { token, expiresAt };
+    }
+
+    /**
+     * Starts a sync for a grant from its device key and one-time run token. Every refusal is the same 401, so the
+     * caller cannot tell which check failed. Once the token is spent, the run counts as done even if the job fails.
+     */
+    async run(
+        input: { grantId: string; key: string; runToken: string },
+        now: Date = new Date(),
+    ): Promise<{ jobId: string }> {
+        const grant = await this.prisma.autoSyncGrant.findUnique({
+            where: { id: input.grantId },
+            select: {
+                id: true,
+                userId: true,
+                expiresAt: true,
+                keyCheckCt: true,
+                keyCheckIv: true,
+                keyCheckAuthTag: true,
+            },
+        });
+        if (!grant || grant.expiresAt.getTime() <= now.getTime()) throw runRejected();
+
+        const deviceKey = Buffer.from(input.key, "base64url");
+        if (deviceKey.length !== AUTO_SYNC_KEY_BYTES) throw runRejected();
+        const grantKey = this.credentialCryptoService.deriveGrantKey(deviceKey, grant.id);
+        const keyCheck = { ciphertext: grant.keyCheckCt, iv: grant.keyCheckIv, authTag: grant.keyCheckAuthTag };
+        if (!this.credentialCryptoService.verifyGrantKeyCheck(keyCheck, grantKey, grant.id)) throw runRejected();
+
+        const rows = await this.prisma.autoSyncCredential.findMany({
+            where: { grantId: grant.id, connection: { deletedAt: null, isActive: true } },
+            include: { connection: true },
+        });
+
+        // The token is spent even when nothing is covered, but only a run that starts a job counts as one.
+        const consumed = await this.prisma.autoSyncGrant.updateMany({
+            where: {
+                id: grant.id,
+                runTokenHash: sha256Hex(input.runToken),
+                runTokenExpiresAt: { gt: now },
+                expiresAt: { gt: now },
+            },
+            data: {
+                runTokenHash: null,
+                runTokenExpiresAt: null,
+                ...(rows.length > 0 ? { lastRunAt: now, missedRuns: 0 } : {}),
+            },
+        });
+        if (consumed.count !== 1) throw runRejected();
+        if (rows.length === 0) throw new BadRequestException("Nothing to sync");
+
+        // Decrypted up front so a renewal during the run cannot break it. grantKey stays inside this closure.
+        const credentials = new Map<string, Record<string, string> | GrantDecryptError>();
+        for (const row of rows) {
+            try {
+                const plaintext = this.credentialCryptoService.decryptForGrant(
+                    { ciphertext: row.ciphertext, iv: row.iv, authTag: row.authTag },
+                    grantKey,
+                    grant.id,
+                    row.connectionId,
+                );
+                credentials.set(row.connectionId, JSON.parse(plaintext) as Record<string, string>);
+            } catch {
+                credentials.set(row.connectionId, new GrantDecryptError());
+            }
+        }
+
+        const source: CredentialSource = {
+            resolve(connection) {
+                const entry = credentials.get(connection.id) ?? new GrantDecryptError();
+                if (entry instanceof GrantDecryptError) throw entry;
+                return entry;
+            },
+            onConnectionFailed: async (connectionId, code) => {
+                if (isCredentialErrorCode(code) || code === "CREDENTIALS_UNREADABLE") {
+                    await this.prisma.autoSyncCredential.deleteMany({
+                        where: { grantId: grant.id, connectionId },
+                    });
+                }
+            },
+        };
+
+        return this.bankSyncService.startSyncJob(
+            grant.userId,
+            rows.map((row) => row.connection),
+            source,
+        );
     }
 
     /** Splits the connections into those this grant covers and those it does not (added since, or never). */
