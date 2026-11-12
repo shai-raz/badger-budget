@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/vue-query";
 import { useConfirm } from "primevue/useconfirm";
 import { useToast } from "primevue/usetoast";
 import type { AutoSync } from "~/composables/bankSync/useAutoSync";
-import { AUTO_SYNC_ERROR_MESSAGES, AutoSyncError } from "~/composables/bankSync/useAutoSync";
+import { autoSyncErrorMessage } from "~/composables/bankSync/useAutoSync";
 import { bankSyncKeys, useSyncPasskeysQuery } from "~/composables/bankSync/useBankSync";
 import { useSyncUnlock } from "~/composables/bankSync/useSyncUnlock";
 import { usePushDevice } from "~/composables/notifications/usePushDevice";
@@ -135,10 +135,7 @@ const keepPin = reactive<{ visible: boolean; pin: string; reason: string | null;
 );
 
 function keepOnFailed(error: unknown) {
-    const detail =
-        error instanceof AutoSyncError
-            ? AUTO_SYNC_ERROR_MESSAGES[error.reason]
-            : getApiErrorMessage(error, "Couldn't keep auto-sync on");
+    const detail = autoSyncErrorMessage(error, "Couldn't keep auto-sync on");
     toast.add({ severity: "error", summary: "Error", detail, life: 5000 });
 }
 
@@ -196,10 +193,7 @@ async function submitKeepPin() {
         keepPin.pin = "";
         keptOn();
     } catch (error: unknown) {
-        keepPin.error =
-            error instanceof AutoSyncError
-                ? AUTO_SYNC_ERROR_MESSAGES[error.reason]
-                : getApiErrorMessage(error, "Couldn't keep auto-sync on");
+        keepPin.error = autoSyncErrorMessage(error, "Couldn't keep auto-sync on");
     } finally {
         keepPin.busy = false;
     }

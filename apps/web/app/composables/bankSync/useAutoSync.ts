@@ -5,17 +5,19 @@ import { useApiClient } from "../useApiClient";
 import { usePushDevice } from "../notifications/usePushDevice";
 import { toBase64Url } from "../../utils/base64url";
 import { describeDevice } from "../../utils/deviceLabel";
+import { getApiErrorMessage } from "../../utils/apiError";
 import { clearAutoSyncKey, loadAutoSyncKey, saveAutoSyncKey } from "../../utils/push/autoSyncKeyStore";
 
-export type AutoSyncErrorReason = "push-denied" | "push-unavailable";
+export type AutoSyncErrorReason = "push-denied" | "push-unavailable" | "push-failed";
 
 /** This device could not get a push subscription, so auto-sync cannot be turned on. */
 export class AutoSyncError extends Error {
     constructor(
         public readonly reason: AutoSyncErrorReason,
         message?: string,
+        options?: ErrorOptions,
     ) {
-        super(message ?? reason);
+        super(message ?? reason, options);
         this.name = "AutoSyncError";
     }
 }
@@ -24,7 +26,14 @@ export class AutoSyncError extends Error {
 export const AUTO_SYNC_ERROR_MESSAGES: Record<AutoSyncErrorReason, string> = {
     "push-denied": "Auto-sync needs notifications. Allow them for Badger, then try again.",
     "push-unavailable": "This device can't receive notifications, so auto-sync can't run here.",
+    "push-failed": "Couldn't set up notifications on this device. Try again.",
 };
+
+/** Copy for an auto-sync failure: the reason's copy, else the server's message, else `fallback`. */
+export function autoSyncErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof AutoSyncError) return AUTO_SYNC_ERROR_MESSAGES[error.reason];
+    return getApiErrorMessage(error, fallback);
+}
 
 type ScheduleFields = Pick<
     IEnableAutoSync,
@@ -60,6 +69,11 @@ function scheduleOf(status: IAutoSyncStatus): AutoSyncSchedule {
     return { intervalUnit: "days", intervalCount: status.intervalCount, runAtMinute: status.runAtMinute };
 }
 
+/** Axios-style errors from the API carry a `response`; browser push failures and network errors do not. */
+function isApiError(error: Error): boolean {
+    return !!(error as { response?: unknown }).response;
+}
+
 function browserTimeZone(): string {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
@@ -85,8 +99,13 @@ export function useAutoSync() {
         if (id) return id;
         const state = pushDevice.state.value;
         if (state === "unsupported" || state === "ios-install") throw new AutoSyncError("push-unavailable");
-        // A failed subscribe or register call is kept in pushDevice.error: surface its real cause.
-        if (pushDevice.error.value) throw pushDevice.error.value;
+        // A failed subscribe or register call is kept in pushDevice.error. An API error carries a message the user can
+        // read, so it is rethrown. A browser failure (push service, VAPID fetch) gets its own copy, with the cause kept.
+        const failure = pushDevice.error.value;
+        if (failure) {
+            if (isApiError(failure)) throw failure;
+            throw new AutoSyncError("push-failed", failure.message, { cause: failure });
+        }
         // A dismissed permission prompt leaves the state at "off", so the user is asked to allow notifications.
         if (state === "denied" || state === "off") throw new AutoSyncError("push-denied");
         throw new AutoSyncError("push-unavailable");

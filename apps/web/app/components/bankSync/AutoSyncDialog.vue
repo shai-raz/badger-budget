@@ -11,7 +11,7 @@ import {
 } from "@badger/shared-data";
 import { useQueryClient } from "@tanstack/vue-query";
 import type { AutoSync } from "~/composables/bankSync/useAutoSync";
-import { AUTO_SYNC_ERROR_MESSAGES, AutoSyncError } from "~/composables/bankSync/useAutoSync";
+import { autoSyncErrorMessage } from "~/composables/bankSync/useAutoSync";
 import { bankSyncKeys, useSyncPasskeysQuery } from "~/composables/bankSync/useBankSync";
 import { useSyncUnlock } from "~/composables/bankSync/useSyncUnlock";
 import {
@@ -200,8 +200,7 @@ function tryPasskeyAgain() {
 }
 
 function errorMessage(error: unknown): string {
-    if (error instanceof AutoSyncError) return AUTO_SYNC_ERROR_MESSAGES[error.reason];
-    return getApiErrorMessage(error, isEnable.value ? "Couldn't turn on auto-sync" : "Couldn't save the schedule");
+    return autoSyncErrorMessage(error, isEnable.value ? "Couldn't turn on auto-sync" : "Couldn't save the schedule");
 }
 
 // Push permission still at "default" needs this tap's user activation, so it is only read here, before any await.
@@ -478,6 +477,7 @@ const saveLabel = computed(() => (isEnable.value ? "Unlock and turn on" : "Save"
                 >
                 <SharedMaskedTextField
                     v-model="typedPin"
+                    input-id="auto-sync-pin"
                     placeholder="Enter your sync PIN"
                     @keyup-enter="submit"
                 />

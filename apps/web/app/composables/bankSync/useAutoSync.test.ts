@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { IAutoSyncStatus } from "@badger/types";
-import { AutoSyncError, useAutoSync } from "./useAutoSync";
+import { AUTO_SYNC_ERROR_MESSAGES, AutoSyncError, autoSyncErrorMessage, useAutoSync } from "./useAutoSync";
 
 const { api, pushDevice, keyStore } = vi.hoisted(() => ({
     api: {
@@ -195,8 +195,10 @@ describe("useAutoSync.enable", () => {
         expect(api.enableAutoSync).not.toHaveBeenCalled();
     });
 
-    it("rethrows the real push failure instead of the device copy", async () => {
-        const failure = new Error("register failed: 500");
+    it("rethrows an API push failure so the server's message shows", async () => {
+        const failure = Object.assign(new Error("register failed: 500"), {
+            response: { status: 500, data: { message: "Push registration is unavailable" } },
+        });
         pushDevice.enable.mockResolvedValueOnce(null);
         pushDevice.state.value = "off";
         pushDevice.error.value = failure;
@@ -206,6 +208,19 @@ describe("useAutoSync.enable", () => {
 
         await expect(attempt).rejects.toBe(failure);
         await expect(attempt).rejects.not.toBeInstanceOf(AutoSyncError);
+        expect(api.enableAutoSync).not.toHaveBeenCalled();
+    });
+
+    it("wraps a browser push failure as push-failed and keeps the browser error as its cause", async () => {
+        const failure = new DOMException("Registration failed - push service error", "AbortError");
+        pushDevice.enable.mockResolvedValueOnce(null);
+        pushDevice.state.value = "off";
+        pushDevice.error.value = failure;
+        const autoSync = useAutoSync();
+
+        const attempt = autoSync.enable({ pin: "1234", schedule: { ...HOURS_SCHEDULE }, durationDays: 30 });
+
+        await expect(attempt).rejects.toMatchObject({ reason: "push-failed", cause: failure });
         expect(api.enableAutoSync).not.toHaveBeenCalled();
     });
 
@@ -347,5 +362,16 @@ describe("useAutoSync.renew", () => {
 
         await expect(autoSync.renew("1234")).rejects.toThrow("Auto-sync is not on");
         expect(api.enableAutoSync).not.toHaveBeenCalled();
+    });
+});
+
+describe("autoSyncErrorMessage", () => {
+    it("maps an AutoSyncError to its copy, a server message to itself, and anything else to the fallback", () => {
+        expect(autoSyncErrorMessage(new AutoSyncError("push-failed"), "Fallback")).toBe(
+            AUTO_SYNC_ERROR_MESSAGES["push-failed"],
+        );
+        const apiError = Object.assign(new Error("Unauthorized"), { response: { data: { message: "Sign in again" } } });
+        expect(autoSyncErrorMessage(apiError, "Fallback")).toBe("Sign in again");
+        expect(autoSyncErrorMessage(new Error("Failed to fetch"), "Fallback")).toBe("Fallback");
     });
 });

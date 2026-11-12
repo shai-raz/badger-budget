@@ -4,7 +4,7 @@ import { computed, nextTick, ref } from "vue";
 import type { VueWrapper } from "@vue/test-utils";
 import Select from "primevue/select";
 import type { IAutoSyncStatus } from "@badger/types";
-import type { AutoSync } from "../../composables/bankSync/useAutoSync";
+import { AutoSyncError, type AutoSync } from "../../composables/bankSync/useAutoSync";
 import { bankSyncKeys } from "../../composables/bankSync/useBankSync";
 import { SyncUnlockError } from "../../utils/syncPasskeyWebAuthn";
 import AutoSyncDialog from "./AutoSyncDialog.vue";
@@ -258,6 +258,21 @@ describe("AutoSyncDialog enable", () => {
         expect(body()).toContain("Next, allow notifications when asked.");
         expect(body()).toContain("Sync PIN");
         expect(buttonWith("Unlock and turn on")?.disabled).toBe(true);
+    });
+
+    it("shows the push failure copy when this device cannot set up notifications", async () => {
+        const autoSync = await mountDialog({ mode: "enable", current: null });
+        vi.mocked(autoSync.ensurePushSubscriptionId).mockRejectedValueOnce(
+            new AutoSyncError("push-failed", "Registration failed - push service error"),
+        );
+        pinInput()!.value = "1234";
+        pinInput()!.dispatchEvent(new Event("input"));
+        await nextTick();
+
+        buttonWith("Unlock and turn on")!.click();
+        await vi.waitFor(() => expect(body()).toContain("Couldn't set up notifications on this device. Try again."));
+
+        expect(autoSync.enable).not.toHaveBeenCalled();
     });
 
     it("turns auto-sync on with the PIN, the default schedule and 30 days", async () => {
