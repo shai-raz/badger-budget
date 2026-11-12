@@ -17,7 +17,7 @@ describe("TransactionImportService", () => {
     const mockPrismaService = {
         transaction: {
             findMany: jest.fn(),
-            findFirst: jest.fn(),
+            create: jest.fn(),
             createMany: jest.fn(),
             groupBy: jest.fn(),
             update: jest.fn(),
@@ -74,8 +74,8 @@ describe("TransactionImportService", () => {
 
         service = module.get<TransactionImportService>(TransactionImportService);
 
-        mockPrismaService.transaction.findMany.mockResolvedValue([]); // no existing externalIds
-        mockPrismaService.transaction.findFirst.mockResolvedValue(null); // no natural-key duplicates
+        mockPrismaService.transaction.findMany.mockResolvedValue([]); // nothing stored
+        mockPrismaService.transaction.create.mockResolvedValue({});
         mockPrismaService.transaction.createMany.mockResolvedValue({ count: 1 });
         mockPrismaService.transaction.update.mockResolvedValue({});
         mockPrismaService.transaction.updateMany.mockResolvedValue({ count: 1 });
@@ -367,6 +367,9 @@ describe("TransactionImportService", () => {
             externalId: "ext-1",
             transactionDate: Dm1,
             postedDate: Dm1,
+            amount: 100,
+            description: "Some description",
+            deletedAt: null,
             ...overrides,
         });
         const run = (candidates: ImportCandidate[], rows: unknown[]) => {
@@ -449,6 +452,137 @@ describe("TransactionImportService", () => {
         it("updates a row once when several candidates share its externalId", async () => {
             await run([healCandidate(), healCandidate()], [row()]);
             expect(mockPrismaService.transaction.updateMany).toHaveBeenCalledTimes(3);
+        });
+    });
+
+    describe("duplicate check", () => {
+        const storedRow = (overrides: Record<string, unknown> = {}) => ({
+            id: "t1",
+            accountId: "account-1",
+            externalId: "ext-1",
+            transactionDate: new Date("2026-06-15"),
+            postedDate: null,
+            amount: 100,
+            description: "Some description",
+            deletedAt: null,
+            ...overrides,
+        });
+        const run = (candidates: ImportCandidate[], rows: unknown[]) => {
+            mockPrismaService.transaction.findMany.mockResolvedValue(rows);
+            return service.importTransactions("user-1", candidates, "ILS");
+        };
+
+        beforeEach(() => {
+            mockCardPayoffPatternsService.checkDescription.mockResolvedValue(false);
+        });
+
+        it("skips a transaction that is already stored", async () => {
+            const result = await run([makeCandidate({})], [storedRow()]);
+
+            expect(result).toMatchObject({ success: true, transactionsSynced: 0 });
+            expect(mockPrismaService.transaction.createMany).not.toHaveBeenCalled();
+        });
+
+        it("imports a transaction whose externalId is stored for an earlier one", async () => {
+            const logSpy = jest.spyOn(Logger.prototype, "log");
+            const result = await run(
+                [makeCandidate({ transactionDate: new Date("2026-07-15") })],
+                [storedRow({ transactionDate: new Date("2026-06-15") })],
+            );
+
+            expect(result.transactionsSynced).toBe(1);
+            expect(await importedRow()).toMatchObject({
+                externalId: "ext-1",
+                transactionDate: new Date("2026-07-15"),
+            });
+            expect(logSpy).toHaveBeenCalledWith(
+                expect.stringContaining("1 new with an externalId that was already stored"),
+            );
+        });
+
+        it("imports only the installment that is not stored yet", async () => {
+            const installment = (month: string) => makeCandidate({ transactionDate: new Date(`2026-${month}-02`) });
+            const result = await run(
+                [installment("04"), installment("05")],
+                [storedRow({ transactionDate: new Date("2026-04-02") })],
+            );
+
+            expect(result.transactionsSynced).toBe(1);
+            expect((await importedRow()).transactionDate).toEqual(new Date("2026-05-02"));
+        });
+
+        it("skips a row that looks like a stored manual one", async () => {
+            const result = await run([makeCandidate({})], [storedRow({ externalId: null })]);
+
+            expect(result.transactionsSynced).toBe(0);
+        });
+
+        it("keeps a deleted transaction deleted", async () => {
+            const result = await run([makeCandidate({})], [storedRow({ deletedAt: new Date("2026-06-20") })]);
+
+            expect(result.transactionsSynced).toBe(0);
+        });
+
+        it("loads the stored rows once: every row with an externalId, and the live rows on the candidates' days", async () => {
+            await run(
+                [
+                    makeCandidate({ externalId: "ext-1", transactionDate: new Date("2026-06-20") }),
+                    makeCandidate({ externalId: "ext-2", transactionDate: new Date("2026-06-03") }),
+                ],
+                [],
+            );
+
+            expect(mockPrismaService.transaction.findMany).toHaveBeenCalledTimes(1);
+            expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: {
+                        userId: "user-1",
+                        OR: [
+                            { externalId: { not: null } },
+                            {
+                                deletedAt: null,
+                                transactionDate: { gte: new Date("2026-06-03"), lte: new Date("2026-06-20") },
+                            },
+                        ],
+                    },
+                }),
+            );
+        });
+    });
+
+    describe("a rejected batch", () => {
+        const three = [
+            makeCandidate({ externalId: "ext-1", description: "A" }),
+            makeCandidate({ externalId: "ext-2", description: "B" }),
+            makeCandidate({ externalId: "ext-3", description: "C" }),
+        ];
+
+        beforeEach(() => {
+            mockCardPayoffPatternsService.checkDescription.mockResolvedValue(false);
+            mockPrismaService.transaction.createMany.mockRejectedValue(new Error("batch rejected"));
+        });
+
+        it("saves the rows one by one when the batch insert fails", async () => {
+            const result = await service.importTransactions("user-1", three, "ILS");
+
+            expect(mockPrismaService.transaction.create).toHaveBeenCalledTimes(3);
+            expect(result).toMatchObject({ success: true, transactionsSynced: 3, rowsSkipped: 0 });
+        });
+
+        it("saves the good rows and reports the import as failed when a row can't be saved", async () => {
+            mockPrismaService.transaction.create.mockImplementation(({ data }: { data: { description: string } }) =>
+                data.description === "B"
+                    ? Promise.reject(
+                          new Error("Invalid `create()` invocation:\n{ description: 'B' }\n\nValue out of range"),
+                      )
+                    : Promise.resolve({}),
+            );
+
+            const result = await service.importTransactions("user-1", three, "ILS");
+
+            expect(result).toMatchObject({ success: false, transactionsSynced: 2, rowsSkipped: 1 });
+            // Only the reason: the echoed query would carry the row's values.
+            expect(result.error).toBe("1 transaction(s) could not be saved: Value out of range");
         });
     });
 

@@ -551,6 +551,10 @@ export class BankSyncService {
                     totalTransactions += result.transactionsSynced;
                     totalAccounts += result.accountsCreated;
 
+                    // The importer reports its own failures instead of throwing. The rows it did save stay
+                    // (the next sync adds only what is missing), but the connection must not read as synced.
+                    if (!result.success) throw new Error(result.error ?? "Import failed");
+
                     // Balances are secondary to transactions: never let a balance failure flip an
                     // otherwise-successful scraper job to `failed`. Runs after the import so account
                     // rows for transaction-bearing accounts already exist.
