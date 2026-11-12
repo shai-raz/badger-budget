@@ -160,10 +160,27 @@ const AUTO_SYNC_TAG = "auto-sync";
 const RUN_REQUEST_TIMEOUT_MS = 20_000;
 
 /**
- * Shows the sync notification first, then calls /run once with the stored key, but only when the key is for this
- * grant. Any failure is swallowed: no retry, and neither the key nor the token is logged.
+ * The failure notification replaces "Syncing…" under the same tag. It carries no error details: the user only needs
+ * to know to open Badger, and the tap lands on the bank connections page.
  */
-async function handleAutoSyncRun(message: PushMessage, deps: PushDeps): Promise<null> {
+function runFailureNotification(): { title: string; options: ShowOptions } {
+    const target: NotificationTarget = { url: "/bank-connections", actions: {} };
+    return {
+        title: "Auto-sync couldn't run",
+        options: { body: "Open Badger to fix it.", tag: AUTO_SYNC_TAG, data: target },
+    };
+}
+
+/**
+ * Shows the sync notification first, then calls /run once with the stored key, but only when the key is for this
+ * grant. A run that starts leaves "Syncing…" up for the result push to replace. Any other outcome (no key, another
+ * grant's key, a rejected or non-2xx response, a timeout or a thrown error) swaps it for the failure notification.
+ * Nothing is retried, and neither the key nor the token is logged.
+ */
+async function handleAutoSyncRun(
+    message: PushMessage,
+    deps: PushDeps,
+): Promise<{ title: string; options: ShowOptions } | null> {
     if (message.type !== "auto-sync.run") throw new Error(`Expected auto-sync.run, got ${message.type}`);
     const shown = defaultHandler(message);
     await deps.showNotification("Syncing your accounts…", {
@@ -171,21 +188,23 @@ async function handleAutoSyncRun(message: PushMessage, deps: PushDeps): Promise<
         tag: AUTO_SYNC_TAG,
         ...NOTIFICATION_IMAGES,
     });
+    let started = false;
     try {
         const record = await deps.loadAutoSyncKey();
         if (record && record.grantId === message.data.grantId) {
-            await deps.fetch(`${record.apiBaseUrl}/bank-sync/auto-sync/run`, {
+            const response = await deps.fetch(`${record.apiBaseUrl}/bank-sync/auto-sync/run`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "omit",
                 signal: AbortSignal.timeout(RUN_REQUEST_TIMEOUT_MS),
                 body: JSON.stringify({ grantId: record.grantId, key: record.key, runToken: message.data.runToken }),
             });
+            started = response.ok;
         }
     } catch {
-        // Not retried: the server run record is the source of truth for what happened.
+        // Swallowed: the failure notification is the user's only signal, so no error text is kept.
     }
-    return null;
+    return started ? null : runFailureNotification();
 }
 
 /** A quiet result closes the "Syncing…" notification and shows nothing; otherwise the server content replaces it. */

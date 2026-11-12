@@ -328,9 +328,22 @@ describe("auto-sync run and quiet result handling", () => {
         data: { quiet: true, newTransactions: 0, failedConnectionCount: 0 },
     };
 
-    it("shows the sync notification, then posts the run with the matching stored key", async () => {
+    function expectRunFailureShown(showNotification: Mock<(title: string, options: ShowOptions) => Promise<void>>) {
+        expect(showNotification).toHaveBeenLastCalledWith(
+            "Auto-sync couldn't run",
+            expect.objectContaining({
+                body: "Open Badger to fix it.",
+                tag: "auto-sync",
+                data: { url: "/bank-connections", actions: {} },
+                ...IMAGES,
+            }),
+        );
+    }
+
+    it("shows the sync notification, then posts the run with the matching stored key and shows no failure", async () => {
         const { deps, showNotification, fetchMock, loadAutoSyncKey } = fakeDeps();
         loadAutoSyncKey.mockResolvedValue(storedKey);
+        fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
 
         await handlePush(JSON.stringify(autoSyncRunMessage), deps);
 
@@ -343,22 +356,25 @@ describe("auto-sync run and quiet result handling", () => {
         expect(fetchMock).toHaveBeenCalledWith(runUrl, runInit);
     });
 
-    it("shows the sync notification and makes no request when no key is stored", async () => {
+    it("replaces Syncing with the failure notification when no key is stored", async () => {
         const { deps, showNotification, fetchMock } = fakeDeps();
 
         await handlePush(JSON.stringify(autoSyncRunMessage), deps);
 
-        expect(showNotification).toHaveBeenCalledTimes(1);
+        expect(showNotification).toHaveBeenCalledTimes(2);
+        expect(showNotification.mock.calls[0]?.[0]).toBe("Syncing your accounts…");
+        expectRunFailureShown(showNotification);
         expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    it("makes no request when the stored key belongs to another grant", async () => {
+    it("replaces Syncing with the failure notification when the stored key belongs to another grant", async () => {
         const { deps, showNotification, fetchMock, loadAutoSyncKey } = fakeDeps();
         loadAutoSyncKey.mockResolvedValue({ ...storedKey, grantId: "grant-2" });
 
         await handlePush(JSON.stringify(autoSyncRunMessage), deps);
 
-        expect(showNotification).toHaveBeenCalledTimes(1);
+        expect(showNotification).toHaveBeenCalledTimes(2);
+        expectRunFailureShown(showNotification);
         expect(fetchMock).not.toHaveBeenCalled();
     });
 
@@ -373,25 +389,55 @@ describe("auto-sync run and quiet result handling", () => {
         expect(shownAt).toBeLessThan(fetchMock.mock.invocationCallOrder[0] ?? -Infinity);
     });
 
-    it("resolves and shows nothing more when the run request rejects", async () => {
+    it("replaces Syncing with the failure notification when the run request rejects", async () => {
         const { deps, showNotification, fetchMock, loadAutoSyncKey } = fakeDeps();
         loadAutoSyncKey.mockResolvedValue(storedKey);
         fetchMock.mockImplementation(() => Promise.reject(new Error("offline")));
 
         await expect(handlePush(JSON.stringify(autoSyncRunMessage), deps)).resolves.toBeUndefined();
 
-        expect(showNotification).toHaveBeenCalledTimes(1);
+        expect(showNotification).toHaveBeenCalledTimes(2);
+        expectRunFailureShown(showNotification);
     });
 
-    it("does not retry a non-2xx run response", async () => {
+    it("replaces Syncing with the failure notification when the run request times out", async () => {
         const { deps, showNotification, fetchMock, loadAutoSyncKey } = fakeDeps();
         loadAutoSyncKey.mockResolvedValue(storedKey);
-        fetchMock.mockResolvedValue(new Response(null, { status: 500 }));
+        fetchMock.mockImplementation(() =>
+            Promise.reject(new DOMException("The operation was aborted due to timeout", "TimeoutError")),
+        );
 
         await handlePush(JSON.stringify(autoSyncRunMessage), deps);
 
-        expect(fetchMock).toHaveBeenCalledTimes(1);
-        expect(showNotification).toHaveBeenCalledTimes(1);
+        expect(showNotification).toHaveBeenCalledTimes(2);
+        expectRunFailureShown(showNotification);
+    });
+
+    it.each([400, 401, 409, 500])(
+        "replaces Syncing with the failure notification for a %i run response, without retrying",
+        async (status) => {
+            const { deps, showNotification, fetchMock, loadAutoSyncKey } = fakeDeps();
+            loadAutoSyncKey.mockResolvedValue(storedKey);
+            fetchMock.mockResolvedValue(new Response(null, { status }));
+
+            await handlePush(JSON.stringify(autoSyncRunMessage), deps);
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            expect(showNotification).toHaveBeenCalledTimes(2);
+            expectRunFailureShown(showNotification);
+        },
+    );
+
+    it("opens the bank connections page when the failure notification is tapped", async () => {
+        const { deps, showNotification } = fakeDeps();
+
+        await handlePush(JSON.stringify(autoSyncRunMessage), deps);
+
+        const failureData = showNotification.mock.calls[1]?.[1]?.data;
+        const { clients, openWindow } = fakeClients([]);
+        await handleNotificationClick({ action: "", data: failureData }, { clients, origin: ORIGIN });
+
+        expect(openWindow).toHaveBeenCalledWith(`${ORIGIN}/bank-connections`);
     });
 
     it("closes the auto-sync notification and shows nothing for a quiet result", async () => {
