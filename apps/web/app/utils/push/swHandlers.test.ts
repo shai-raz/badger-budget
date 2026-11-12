@@ -1,8 +1,9 @@
-import { describe, expect, it, vi, type Mock } from "vitest";
+import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { NotificationType } from "@badger/shared-data";
 import {
     FALLBACK_NOTIFICATION,
     PUSH_TYPE_HANDLERS,
+    formatNoticeTime,
     handleNotificationClick,
     handlePush,
     parsePushMessage,
@@ -102,6 +103,17 @@ const testMessage = {
     tag: "test-1",
     data: {},
 } satisfies Record<string, unknown>;
+
+afterEach(() => {
+    vi.useRealTimers();
+});
+
+describe("formatNoticeTime", () => {
+    it("formats the local time as hours and minutes in the test timezone", () => {
+        // 20:00 UTC is 15:00 in New York (EST, UTC-5), so it reads as 03:00 PM or 3:00 PM depending on the locale.
+        expect(formatNoticeTime(new Date("2026-11-12T20:00:00Z"))).toMatch(/(03|15):00/);
+    });
+});
 
 describe("parsePushMessage", () => {
     it("returns null for null, bad JSON, non-object JSON and unknown types", () => {
@@ -456,13 +468,26 @@ describe("auto-sync run and quiet result handling", () => {
         expect(openWindow).toHaveBeenCalledWith(`${ORIGIN}/bank-connections`);
     });
 
-    it("closes the auto-sync notification and shows nothing for a quiet result", async () => {
+    it("shows a silent Up to date notice with the time for a quiet result, without closing notifications", async () => {
+        vi.useFakeTimers();
+        const now = new Date("2026-11-12T20:00:00Z");
+        vi.setSystemTime(now);
         const { deps, showNotification, closeNotifications } = fakeDeps();
 
         await handlePush(JSON.stringify(quietResult), deps);
 
-        expect(closeNotifications).toHaveBeenCalledWith("auto-sync");
-        expect(showNotification).not.toHaveBeenCalled();
+        expect(closeNotifications).not.toHaveBeenCalled();
+        expect(showNotification).toHaveBeenCalledTimes(1);
+        expect(showNotification).toHaveBeenCalledWith(
+            "Up to date",
+            expect.objectContaining({
+                body: `No new transactions · ${formatNoticeTime(now)}`,
+                tag: "auto-sync",
+                silent: true,
+                data: { url: "/", actions: {} },
+                ...IMAGES,
+            }),
+        );
     });
 
     it("does not close notifications for a non-quiet result, which shows under the auto-sync tag", async () => {

@@ -154,7 +154,7 @@ export function defaultHandler(message: PushMessage): { title: string; options: 
 }
 
 /** Every auto-sync notification shares this tag, so the result replaces the "Syncing…" notification. */
-const AUTO_SYNC_TAG = "auto-sync";
+export const AUTO_SYNC_TAG = "auto-sync";
 
 /** /run only starts a job and returns a jobId, so a hanging API must not hold the push event open. */
 const RUN_REQUEST_TIMEOUT_MS = 20_000;
@@ -212,15 +212,27 @@ async function handleAutoSyncRun(
     return started ? null : runFailureNotification();
 }
 
-/** A quiet result closes the "Syncing…" notification and shows nothing; otherwise the server content replaces it. */
-async function handleAutoSyncResult(
-    message: PushMessage,
-    deps: PushDeps,
-): Promise<{ title: string; options: ShowOptions } | null> {
+/** Local time for notice copy, in the device locale. */
+export function formatNoticeTime(date: Date): string {
+    return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+/**
+ * A quiet result means nothing changed, so it shows a silent "Up to date" notice in place of "Syncing…". Auto-sync
+ * notices can't be muted, so every quiet result gets this copy. Any other result shows the server content.
+ */
+async function handleAutoSyncResult(message: PushMessage): Promise<{ title: string; options: ShowOptions } | null> {
     if (message.type !== "auto-sync.result") throw new Error(`Expected auto-sync.result, got ${message.type}`);
     if (message.data.quiet) {
-        await deps.closeNotifications(AUTO_SYNC_TAG);
-        return null;
+        return {
+            title: "Up to date",
+            options: {
+                body: `No new transactions · ${formatNoticeTime(new Date())}`,
+                tag: AUTO_SYNC_TAG,
+                silent: true,
+                data: { url: "/", actions: {} } satisfies NotificationTarget,
+            },
+        };
     }
     const shown = defaultHandler(message);
     return { title: shown.title, options: { ...shown.options, tag: AUTO_SYNC_TAG } };
