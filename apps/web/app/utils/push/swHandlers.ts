@@ -173,8 +173,9 @@ function runFailureNotification(): { title: string; options: ShowOptions } {
 
 /**
  * Shows the sync notification first, then calls /run once with the stored key, but only when the key is for this
- * grant. A run that starts leaves "Syncing…" up for the result push to replace. Any other outcome (no key, another
- * grant's key, a rejected or non-2xx response, a timeout or a thrown error) swaps it for the failure notification.
+ * grant. A run that starts leaves "Syncing…" up for the result push to replace. A 409 means a manual sync is already
+ * running, which the API counts as done, so "Syncing…" is closed quietly. Any other outcome (no key, another grant's
+ * key, a rejected or non-2xx response, a timeout or a thrown error) swaps it for the failure notification.
  * Nothing is retried, and neither the key nor the token is logged.
  */
 async function handleAutoSyncRun(
@@ -199,6 +200,10 @@ async function handleAutoSyncRun(
                 signal: AbortSignal.timeout(RUN_REQUEST_TIMEOUT_MS),
                 body: JSON.stringify({ grantId: record.grantId, key: record.key, runToken: message.data.runToken }),
             });
+            if (response.status === 409) {
+                await deps.closeNotifications(AUTO_SYNC_TAG);
+                return null;
+            }
             started = response.ok;
         }
     } catch {

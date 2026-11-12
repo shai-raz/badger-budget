@@ -413,7 +413,7 @@ describe("auto-sync run and quiet result handling", () => {
         expectRunFailureShown(showNotification);
     });
 
-    it.each([400, 401, 409, 500])(
+    it.each([400, 401, 500])(
         "replaces Syncing with the failure notification for a %i run response, without retrying",
         async (status) => {
             const { deps, showNotification, fetchMock, loadAutoSyncKey } = fakeDeps();
@@ -427,6 +427,22 @@ describe("auto-sync run and quiet result handling", () => {
             expectRunFailureShown(showNotification);
         },
     );
+
+    it("closes Syncing and shows no failure when a sync is already running (409), without retrying", async () => {
+        const { deps, showNotification, fetchMock, loadAutoSyncKey, closeNotifications } = fakeDeps();
+        loadAutoSyncKey.mockResolvedValue(storedKey);
+        fetchMock.mockResolvedValue(new Response(null, { status: 409 }));
+
+        await handlePush(JSON.stringify(autoSyncRunMessage), deps);
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(closeNotifications).toHaveBeenCalledWith("auto-sync");
+        expect(showNotification).toHaveBeenCalledTimes(1);
+        expect(showNotification).toHaveBeenCalledWith(
+            "Syncing your accounts…",
+            expect.objectContaining({ tag: "auto-sync", ...IMAGES }),
+        );
+    });
 
     it("opens the bank connections page when the failure notification is tapped", async () => {
         const { deps, showNotification } = fakeDeps();
