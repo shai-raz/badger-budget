@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { flushPromises, type VueWrapper } from "@vue/test-utils";
-import type { IAuthUser, INotificationPreference, IPushSubscription } from "@badger/types";
+import type { IAuthUser, IAutoSyncStatus, INotificationPreference, IPushSubscription } from "@badger/types";
 import type { PushDeviceState } from "~/utils/push/pushState";
 import { useAuthStore } from "~/stores/auth";
 import { describeDevice } from "~/utils/deviceLabel";
@@ -26,6 +26,7 @@ const m = await vi.hoisted(async () => {
         updatePreferences: { mutate: vi.fn(), isPending: ref(false) },
         removeSubscription: { mutateAsync: vi.fn(() => Promise.resolve()), isPending: ref(false) },
         sendTest: { mutate: vi.fn(), isPending: ref(false) },
+        getAutoSync: vi.fn(),
         toastAdd: vi.fn(),
     };
 });
@@ -40,6 +41,7 @@ vi.mock("../../composables/notifications/useNotificationQueries", () => ({
     useSendTestNotificationMutation: () => m.sendTest,
 }));
 vi.mock("primevue/usetoast", () => ({ useToast: () => ({ add: m.toastAdd }) }));
+vi.mock("../../composables/useApiClient", () => ({ useApiClient: () => ({ getAutoSync: m.getAutoSync }) }));
 
 const baseUser = {
     id: "u1",
@@ -79,7 +81,34 @@ const preferences: INotificationPreference[] = [
         enabled: true,
         mandatory: false,
     },
+    {
+        type: "auto-sync.result",
+        label: "Auto-sync",
+        description: "Sync’s result, and a reminder to keep auto-sync on.",
+        enabled: true,
+        mandatory: true,
+    },
 ];
+
+const autoSyncStatus: IAutoSyncStatus = {
+    id: "auto-sync-1",
+    deviceLabel: "Chrome on Windows",
+    durationDays: 30,
+    expiresAt: "2026-12-12T00:00:00.000Z",
+    intervalUnit: "days",
+    intervalCount: 1,
+    windowStartMinute: null,
+    windowEndMinute: null,
+    runAtMinute: 480,
+    timeZone: "UTC",
+    nextRunAt: "2026-11-13T08:00:00.000Z",
+    lastRunAt: null,
+    missedRuns: 0,
+    unreachable: false,
+    createdAt: "2026-11-12T00:00:00.000Z",
+    includedConnections: [],
+    notIncludedConnections: [],
+};
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -98,6 +127,7 @@ beforeEach(() => {
     m.updatePreferences.isPending.value = false;
     m.removeSubscription.isPending.value = false;
     m.sendTest.isPending.value = false;
+    m.getAutoSync.mockResolvedValue({ autoSync: null });
 });
 
 async function mountPage(): Promise<VueWrapper> {
@@ -269,6 +299,39 @@ describe("settings notifications page", () => {
         const optional = wrapper.get('input[id="notify-system.test"]').element as HTMLInputElement;
         expect(optional.disabled).toBe(false);
         expect(optional.checked).toBe(true);
+    });
+
+    describe("auto-sync entry", () => {
+        it("is hidden while auto-sync is off", async () => {
+            const wrapper = await mountPage();
+            await flushPromises();
+
+            expect(wrapper.find('input[id="notify-auto-sync.result"]').exists()).toBe(false);
+            expect(pageText(wrapper)).not.toContain("Sync’s result, and a reminder to keep auto-sync on.");
+        });
+
+        it("is shown as an always-on entry while auto-sync is on", async () => {
+            m.getAutoSync.mockResolvedValue({ autoSync: autoSyncStatus });
+            const wrapper = await mountPage();
+            await flushPromises();
+
+            const section = bandById(wrapper, "notify-heading");
+            expect(section?.textContent).toContain("Auto-sync");
+            expect(section?.textContent).toContain("Sync’s result, and a reminder to keep auto-sync on.");
+            expect(section?.textContent).toContain("Always on");
+
+            const toggle = wrapper.get('input[id="notify-auto-sync.result"]').element as HTMLInputElement;
+            expect(toggle.disabled).toBe(true);
+            expect(toggle.checked).toBe(true);
+        });
+
+        it("stays hidden when the auto-sync status cannot be loaded", async () => {
+            m.getAutoSync.mockRejectedValue(new Error("offline"));
+            const wrapper = await mountPage();
+            await flushPromises();
+
+            expect(wrapper.find('input[id="notify-auto-sync.result"]').exists()).toBe(false);
+        });
     });
 
     it("saves a changed type through the update mutation", async () => {

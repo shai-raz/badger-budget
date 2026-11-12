@@ -49,6 +49,7 @@
         "@vue/test-utils": "^2.4.6",
         "esbuild": "0.28.2",
         "eslint": "^9.39.1",
+        "fake-indexeddb": "6.2.6",
         "happy-dom": "^20",
         "sass": "^1.82.0",
         "typescript": "^5.9.2",

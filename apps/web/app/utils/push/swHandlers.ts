@@ -7,6 +7,10 @@ import {
     type NotificationType,
     type PushMessage,
 } from "@badger/shared-data";
+import type { AutoSyncKeyRecord } from "./autoSyncKeyStore";
+import { AUTO_SYNC_TAG } from "./autoSyncNotices";
+
+export { AUTO_SYNC_TAG };
 
 // Pure push and click logic for the service worker. Structural interfaces stand in for the DOM and
 // WebWorker globals so this compiles under both libs and runs under node tests (see reloadToNewBuild.ts).
@@ -37,12 +41,17 @@ export interface SwClients {
 export interface PushDeps {
     showNotification(title: string, options: ShowOptions): Promise<void>;
     fetch: typeof fetch;
+    /** The device-held auto-sync key, or null when none is stored. Never throws. */
+    loadAutoSyncKey: () => Promise<AutoSyncKeyRecord | null>;
+    /** Closes every shown notification with this tag. */
+    closeNotifications: (tag: string) => Promise<void>;
 }
 
+/** A null result means the handler already dealt with the notification itself (showed or closed it). */
 export type PushTypeHandler = (
     message: PushMessage,
     deps: PushDeps,
-) => Promise<{ title: string; options: ShowOptions }>;
+) => Promise<{ title: string; options: ShowOptions } | null>;
 
 /**
  * Merged over every shown notification in handlePush, so no PushTypeHandler can ship without them. The badge is
@@ -96,6 +105,26 @@ export function parsePushMessage(text: string | null): PushMessage | null {
             return typeof data.version === "string" ? { ...base, type, data: { version: data.version } } : null;
         case "system.test":
             return { ...base, type, data: {} };
+        case "auto-sync.run":
+            return typeof data.grantId === "string" && typeof data.runToken === "string"
+                ? { ...base, type, data: { grantId: data.grantId, runToken: data.runToken } }
+                : null;
+        case "auto-sync.result":
+            return typeof data.quiet === "boolean" &&
+                typeof data.newTransactions === "number" &&
+                typeof data.failedConnectionCount === "number"
+                ? {
+                      ...base,
+                      type,
+                      data: {
+                          quiet: data.quiet,
+                          newTransactions: data.newTransactions,
+                          failedConnectionCount: data.failedConnectionCount,
+                      },
+                  }
+                : null;
+        case "auto-sync.expiring":
+            return typeof data.expiresAt === "string" ? { ...base, type, data: { expiresAt: data.expiresAt } } : null;
     }
 }
 
@@ -127,9 +156,94 @@ export function defaultHandler(message: PushMessage): { title: string; options: 
     };
 }
 
+/** /run only starts a job and returns a jobId, so a hanging API must not hold the push event open. */
+const RUN_REQUEST_TIMEOUT_MS = 20_000;
+
+/**
+ * The failure notification replaces "Syncing…" under the same tag. It carries no error details: the user only needs
+ * to know to open Badger, and the tap lands on the bank connections page.
+ */
+function runFailureNotification(): { title: string; options: ShowOptions } {
+    const target: NotificationTarget = { url: "/bank-connections", actions: {} };
+    return {
+        title: "Auto-sync couldn't run",
+        options: { body: "Open Badger to fix it.", tag: AUTO_SYNC_TAG, data: target },
+    };
+}
+
+/**
+ * Shows the sync notification first, then calls /run once with the stored key, but only when the key is for this
+ * grant. A run that starts leaves "Syncing…" up for the result push to replace. A 409 means a manual sync is already
+ * running, which the API counts as done, so "Syncing…" is closed quietly. Any other outcome (no key, another grant's
+ * key, a rejected or non-2xx response, a timeout or a thrown error) swaps it for the failure notification.
+ * Nothing is retried, and neither the key nor the token is logged.
+ */
+async function handleAutoSyncRun(
+    message: PushMessage,
+    deps: PushDeps,
+): Promise<{ title: string; options: ShowOptions } | null> {
+    if (message.type !== "auto-sync.run") throw new Error(`Expected auto-sync.run, got ${message.type}`);
+    const shown = defaultHandler(message);
+    await deps.showNotification("Syncing your accounts…", {
+        ...shown.options,
+        tag: AUTO_SYNC_TAG,
+        ...NOTIFICATION_IMAGES,
+    });
+    let started = false;
+    try {
+        const record = await deps.loadAutoSyncKey();
+        if (record && record.grantId === message.data.grantId) {
+            const response = await deps.fetch(`${record.apiBaseUrl}/bank-sync/auto-sync/run`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "omit",
+                signal: AbortSignal.timeout(RUN_REQUEST_TIMEOUT_MS),
+                body: JSON.stringify({ grantId: record.grantId, key: record.key, runToken: message.data.runToken }),
+            });
+            if (response.status === 409) {
+                await deps.closeNotifications(AUTO_SYNC_TAG);
+                return null;
+            }
+            started = response.ok;
+        }
+    } catch {
+        // Swallowed: the failure notification is the user's only signal, so no error text is kept.
+    }
+    return started ? null : runFailureNotification();
+}
+
+/** Local time for notice copy, in the device locale. */
+export function formatNoticeTime(date: Date): string {
+    return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+/**
+ * A quiet result means nothing changed, so it shows a silent "Up to date" notice in place of "Syncing…". Auto-sync
+ * notices can't be muted, so every quiet result gets this copy. Any other result shows the server content.
+ */
+async function handleAutoSyncResult(message: PushMessage): Promise<{ title: string; options: ShowOptions } | null> {
+    if (message.type !== "auto-sync.result") throw new Error(`Expected auto-sync.result, got ${message.type}`);
+    if (message.data.quiet) {
+        return {
+            title: "Up to date",
+            options: {
+                body: `No new transactions · ${formatNoticeTime(new Date())}`,
+                tag: AUTO_SYNC_TAG,
+                silent: true,
+                data: { url: "/", actions: {} } satisfies NotificationTarget,
+            },
+        };
+    }
+    const shown = defaultHandler(message);
+    return { title: shown.title, options: { ...shown.options, tag: AUTO_SYNC_TAG } };
+}
+
 export const PUSH_TYPE_HANDLERS: Record<NotificationType, PushTypeHandler> = {
     "system.update-available": (message) => Promise.resolve(defaultHandler(message)),
     "system.test": (message) => Promise.resolve(defaultHandler(message)),
+    "auto-sync.run": handleAutoSyncRun,
+    "auto-sync.result": handleAutoSyncResult,
+    "auto-sync.expiring": (message) => Promise.resolve(defaultHandler(message)),
 };
 
 function fallbackOptions(url: string, tag: string): { title: string; options: ShowOptions } {
@@ -153,8 +267,9 @@ function sanitizeMessage(message: PushMessage, origin: string): PushMessage {
 }
 
 /**
- * Shows exactly one notification for a push payload. Unparseable or unknown payloads, and handlers that throw,
- * show a fallback so the user still sees that something arrived.
+ * Shows exactly one notification for a push payload, unless a handler returns null after dealing with it itself.
+ * Unparseable or unknown payloads, and handlers that throw, show a fallback so the user still sees that something
+ * arrived.
  */
 export async function handlePush(
     text: string | null,
@@ -162,7 +277,7 @@ export async function handlePush(
     handlers: Record<NotificationType, PushTypeHandler> = PUSH_TYPE_HANDLERS,
 ): Promise<void> {
     const parsed = parsePushMessage(text);
-    let shown: { title: string; options: ShowOptions };
+    let shown: { title: string; options: ShowOptions } | null;
     if (!parsed) {
         shown = fallbackOptions(FALLBACK_NOTIFICATION.url, "fallback");
     } else {
@@ -173,6 +288,7 @@ export async function handlePush(
             shown = fallbackOptions(message.url, message.tag);
         }
     }
+    if (shown === null) return;
     await deps.showNotification(shown.title, { ...shown.options, ...NOTIFICATION_IMAGES });
 }
 

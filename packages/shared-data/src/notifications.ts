@@ -1,6 +1,12 @@
 // Notifications (Web Push). Adding a type = an id in NOTIFICATION_TYPES + a NOTIFICATION_TYPE_REGISTRY entry
 // + a NotificationDataMap entry. `url` on a notification is a same-origin path, never an absolute URL.
-export const NOTIFICATION_TYPES = ["system.update-available", "system.test"] as const;
+export const NOTIFICATION_TYPES = [
+    "system.update-available",
+    "system.test",
+    "auto-sync.run",
+    "auto-sync.result",
+    "auto-sync.expiring",
+] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 export function isNotificationType(value: unknown): value is NotificationType {
@@ -46,12 +52,43 @@ export const NOTIFICATION_TYPE_REGISTRY: NotificationTypeRegistry = {
         mandatory: false,
         listed: false,
     },
+    // Sent by subscription id, so preferences cannot apply.
+    "auto-sync.run": {
+        label: "Auto-sync run",
+        description: "Starts a scheduled bank sync on this device.",
+        defaultEnabled: true,
+        mandatory: true,
+        listed: false,
+    },
+    // The one settings entry for all auto-sync notices. They can't be muted, because every auto-sync push must show
+    // a notice. The settings page shows this entry only while auto-sync is on.
+    "auto-sync.result": {
+        label: "Auto-sync",
+        description: "Sync’s result, and a reminder to keep auto-sync on.",
+        defaultEnabled: true,
+        mandatory: true,
+        listed: true,
+    },
+    // Covered by the Auto-sync entry.
+    "auto-sync.expiring": {
+        label: "Auto-sync ending",
+        description: "When automatic sync is about to stop.",
+        defaultEnabled: true,
+        mandatory: true,
+        listed: false,
+    },
 };
+
+/** The settings entry that stands for every auto-sync notice. */
+export const AUTO_SYNC_SETTINGS_TYPE = "auto-sync.result" satisfies NotificationType;
 
 /** Payload data per type, keyed by NotificationType; extended together with NOTIFICATION_TYPES. */
 export interface NotificationDataMap {
     "system.update-available": { version: string };
     "system.test": Record<string, never>;
+    "auto-sync.run": { grantId: string; runToken: string };
+    "auto-sync.result": { quiet: boolean; newTransactions: number; failedConnectionCount: number };
+    "auto-sync.expiring": { expiresAt: string };
 }
 
 export interface NotificationActionLink {

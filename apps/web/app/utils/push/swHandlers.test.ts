@@ -1,8 +1,9 @@
-import { describe, expect, it, vi, type Mock } from "vitest";
+import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { NotificationType } from "@badger/shared-data";
 import {
     FALLBACK_NOTIFICATION,
     PUSH_TYPE_HANDLERS,
+    formatNoticeTime,
     handleNotificationClick,
     handlePush,
     parsePushMessage,
@@ -19,12 +20,17 @@ const IMAGES = { icon: "/pwa-192x192.png", badge: "/badge-96x96.png" };
 
 function fakeDeps() {
     const showNotification = vi.fn<(title: string, options: ShowOptions) => Promise<void>>(() => Promise.resolve());
+    const fetchMock = vi.fn<typeof fetch>();
+    const loadAutoSyncKey = vi.fn<PushDeps["loadAutoSyncKey"]>(() => Promise.resolve(null));
+    const closeNotifications = vi.fn<PushDeps["closeNotifications"]>(() => Promise.resolve());
     const deps: PushDeps & { origin: string } = {
         showNotification,
-        fetch: vi.fn<typeof fetch>(),
+        fetch: fetchMock,
+        loadAutoSyncKey,
+        closeNotifications,
         origin: ORIGIN,
     };
-    return { deps, showNotification };
+    return { deps, showNotification, fetchMock, loadAutoSyncKey, closeNotifications };
 }
 
 interface FakeWindow extends SwWindowClient {
@@ -62,6 +68,33 @@ const updateMessage = {
     data: { version: "2.0" },
 } satisfies Record<string, unknown>;
 
+const autoSyncRunMessage = {
+    type: "auto-sync.run",
+    title: "Syncing",
+    body: "Starting your daily sync",
+    url: "/transactions",
+    tag: "auto-sync-run",
+    data: { grantId: "grant-1", runToken: "token-1" },
+} satisfies Record<string, unknown>;
+
+const autoSyncResultMessage = {
+    type: "auto-sync.result",
+    title: "Auto-sync finished",
+    body: "3 new transactions",
+    url: "/transactions",
+    tag: "auto-sync-result",
+    data: { quiet: false, newTransactions: 3, failedConnectionCount: 0 },
+} satisfies Record<string, unknown>;
+
+const autoSyncExpiringMessage = {
+    type: "auto-sync.expiring",
+    title: "Auto-sync ending",
+    body: "Automatic sync stops soon",
+    url: "/settings",
+    tag: "auto-sync-expiring",
+    data: { expiresAt: "2026-12-01T00:00:00.000Z" },
+} satisfies Record<string, unknown>;
+
 const testMessage = {
     type: "system.test",
     title: "Test",
@@ -70,6 +103,17 @@ const testMessage = {
     tag: "test-1",
     data: {},
 } satisfies Record<string, unknown>;
+
+afterEach(() => {
+    vi.useRealTimers();
+});
+
+describe("formatNoticeTime", () => {
+    it("formats the local time as hours and minutes in the test timezone", () => {
+        // 20:00 UTC is 15:00 in New York (EST, UTC-5), so it reads as 03:00 PM or 3:00 PM depending on the locale.
+        expect(formatNoticeTime(new Date("2026-11-12T20:00:00Z"))).toMatch(/(03|15):00/);
+    });
+});
 
 describe("parsePushMessage", () => {
     it("returns null for null, bad JSON, non-object JSON and unknown types", () => {
@@ -90,6 +134,27 @@ describe("parsePushMessage", () => {
 
     it("returns the message for a valid payload", () => {
         expect(parsePushMessage(JSON.stringify(updateMessage))).toEqual(updateMessage);
+    });
+
+    it.each([
+        ["auto-sync.run", autoSyncRunMessage],
+        ["auto-sync.result", autoSyncResultMessage],
+        ["auto-sync.expiring", autoSyncExpiringMessage],
+    ])("accepts a valid %s payload", (_name, message) => {
+        expect(parsePushMessage(JSON.stringify(message))).toEqual({ ...message, actions: [] });
+    });
+
+    it("rejects auto-sync payloads with mistyped data", () => {
+        expect(parsePushMessage(JSON.stringify({ ...autoSyncRunMessage, data: { grantId: "grant-1" } }))).toBeNull();
+        expect(
+            parsePushMessage(
+                JSON.stringify({
+                    ...autoSyncResultMessage,
+                    data: { quiet: "no", newTransactions: 1, failedConnectionCount: 0 },
+                }),
+            ),
+        ).toBeNull();
+        expect(parsePushMessage(JSON.stringify({ ...autoSyncExpiringMessage, data: { expiresAt: 1 } }))).toBeNull();
     });
 });
 
@@ -114,6 +179,7 @@ describe("handlePush", () => {
         const shown = { title: "From handler", options: { body: "b", tag: "t" } };
         const handler = vi.fn<PushTypeHandler>(() => Promise.resolve(shown));
         const handlers: Record<NotificationType, PushTypeHandler> = {
+            ...PUSH_TYPE_HANDLERS,
             "system.update-available": handler,
             "system.test": vi.fn<PushTypeHandler>(() => Promise.resolve(shown)),
         };
@@ -228,6 +294,212 @@ describe("handlePush", () => {
             url: "/settings",
             actions: { "upgrade-now": "/" },
         });
+    });
+});
+
+describe("auto-sync handlers", () => {
+    it("shows the run notification as Syncing your accounts under the auto-sync tag", async () => {
+        const { deps, showNotification } = fakeDeps();
+        await handlePush(JSON.stringify(autoSyncRunMessage), deps);
+        expect(showNotification).toHaveBeenCalledWith(
+            "Syncing your accounts…",
+            expect.objectContaining({ tag: "auto-sync", ...IMAGES }),
+        );
+    });
+
+    it("shows the result notification with the server title and body", async () => {
+        const { deps, showNotification } = fakeDeps();
+        await handlePush(JSON.stringify(autoSyncResultMessage), deps);
+        expect(showNotification.mock.calls[0]?.[0]).toBe("Auto-sync finished");
+        expect(showNotification.mock.calls[0]?.[1]).toMatchObject({
+            body: "3 new transactions",
+            tag: "auto-sync",
+        });
+    });
+
+    it("shows the expiring notification with the server title and url", async () => {
+        const { deps, showNotification } = fakeDeps();
+        await handlePush(JSON.stringify(autoSyncExpiringMessage), deps);
+        expect(showNotification.mock.calls[0]?.[0]).toBe("Auto-sync ending");
+        expect(showNotification.mock.calls[0]?.[1]?.data).toEqual({ url: "/settings", actions: {} });
+    });
+});
+
+describe("auto-sync run and quiet result handling", () => {
+    const runUrl = "https://api.test/api/v1/bank-sync/auto-sync/run";
+    const runInit = {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "omit",
+        signal: expect.any(AbortSignal),
+        body: JSON.stringify({ grantId: "grant-1", key: "key-1", runToken: "token-1" }),
+    };
+    const storedKey = { grantId: "grant-1", key: "key-1", apiBaseUrl: "https://api.test/api/v1" };
+    const quietResult = {
+        ...autoSyncResultMessage,
+        data: { quiet: true, newTransactions: 0, failedConnectionCount: 0 },
+    };
+
+    function expectRunFailureShown(showNotification: Mock<(title: string, options: ShowOptions) => Promise<void>>) {
+        expect(showNotification).toHaveBeenLastCalledWith(
+            "Auto-sync couldn't run",
+            expect.objectContaining({
+                body: "Open Badger to fix it.",
+                tag: "auto-sync",
+                data: { url: "/bank-connections", actions: {} },
+                ...IMAGES,
+            }),
+        );
+    }
+
+    it("shows the sync notification, then posts the run with the matching stored key and shows no failure", async () => {
+        const { deps, showNotification, fetchMock, loadAutoSyncKey } = fakeDeps();
+        loadAutoSyncKey.mockResolvedValue(storedKey);
+        fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
+
+        await handlePush(JSON.stringify(autoSyncRunMessage), deps);
+
+        expect(showNotification).toHaveBeenCalledTimes(1);
+        expect(showNotification).toHaveBeenCalledWith(
+            "Syncing your accounts…",
+            expect.objectContaining({ tag: "auto-sync", ...IMAGES }),
+        );
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledWith(runUrl, runInit);
+    });
+
+    it("replaces Syncing with the failure notification when no key is stored", async () => {
+        const { deps, showNotification, fetchMock } = fakeDeps();
+
+        await handlePush(JSON.stringify(autoSyncRunMessage), deps);
+
+        expect(showNotification).toHaveBeenCalledTimes(2);
+        expect(showNotification.mock.calls[0]?.[0]).toBe("Syncing your accounts…");
+        expectRunFailureShown(showNotification);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("replaces Syncing with the failure notification when the stored key belongs to another grant", async () => {
+        const { deps, showNotification, fetchMock, loadAutoSyncKey } = fakeDeps();
+        loadAutoSyncKey.mockResolvedValue({ ...storedKey, grantId: "grant-2" });
+
+        await handlePush(JSON.stringify(autoSyncRunMessage), deps);
+
+        expect(showNotification).toHaveBeenCalledTimes(2);
+        expectRunFailureShown(showNotification);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("shows the sync notification before reading the key or posting the run", async () => {
+        const { deps, showNotification, fetchMock, loadAutoSyncKey } = fakeDeps();
+        loadAutoSyncKey.mockResolvedValue(storedKey);
+
+        await handlePush(JSON.stringify(autoSyncRunMessage), deps);
+
+        const shownAt = showNotification.mock.invocationCallOrder[0] ?? Infinity;
+        expect(shownAt).toBeLessThan(loadAutoSyncKey.mock.invocationCallOrder[0] ?? -Infinity);
+        expect(shownAt).toBeLessThan(fetchMock.mock.invocationCallOrder[0] ?? -Infinity);
+    });
+
+    it("replaces Syncing with the failure notification when the run request rejects", async () => {
+        const { deps, showNotification, fetchMock, loadAutoSyncKey } = fakeDeps();
+        loadAutoSyncKey.mockResolvedValue(storedKey);
+        fetchMock.mockImplementation(() => Promise.reject(new Error("offline")));
+
+        await expect(handlePush(JSON.stringify(autoSyncRunMessage), deps)).resolves.toBeUndefined();
+
+        expect(showNotification).toHaveBeenCalledTimes(2);
+        expectRunFailureShown(showNotification);
+    });
+
+    it("replaces Syncing with the failure notification when the run request times out", async () => {
+        const { deps, showNotification, fetchMock, loadAutoSyncKey } = fakeDeps();
+        loadAutoSyncKey.mockResolvedValue(storedKey);
+        fetchMock.mockImplementation(() =>
+            Promise.reject(new DOMException("The operation was aborted due to timeout", "TimeoutError")),
+        );
+
+        await handlePush(JSON.stringify(autoSyncRunMessage), deps);
+
+        expect(showNotification).toHaveBeenCalledTimes(2);
+        expectRunFailureShown(showNotification);
+    });
+
+    it.each([400, 401, 500])(
+        "replaces Syncing with the failure notification for a %i run response, without retrying",
+        async (status) => {
+            const { deps, showNotification, fetchMock, loadAutoSyncKey } = fakeDeps();
+            loadAutoSyncKey.mockResolvedValue(storedKey);
+            fetchMock.mockResolvedValue(new Response(null, { status }));
+
+            await handlePush(JSON.stringify(autoSyncRunMessage), deps);
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            expect(showNotification).toHaveBeenCalledTimes(2);
+            expectRunFailureShown(showNotification);
+        },
+    );
+
+    it("closes Syncing and shows no failure when a sync is already running (409), without retrying", async () => {
+        const { deps, showNotification, fetchMock, loadAutoSyncKey, closeNotifications } = fakeDeps();
+        loadAutoSyncKey.mockResolvedValue(storedKey);
+        fetchMock.mockResolvedValue(new Response(null, { status: 409 }));
+
+        await handlePush(JSON.stringify(autoSyncRunMessage), deps);
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(closeNotifications).toHaveBeenCalledWith("auto-sync");
+        expect(showNotification).toHaveBeenCalledTimes(1);
+        expect(showNotification).toHaveBeenCalledWith(
+            "Syncing your accounts…",
+            expect.objectContaining({ tag: "auto-sync", ...IMAGES }),
+        );
+    });
+
+    it("opens the bank connections page when the failure notification is tapped", async () => {
+        const { deps, showNotification } = fakeDeps();
+
+        await handlePush(JSON.stringify(autoSyncRunMessage), deps);
+
+        const failureData = showNotification.mock.calls[1]?.[1]?.data;
+        const { clients, openWindow } = fakeClients([]);
+        await handleNotificationClick({ action: "", data: failureData }, { clients, origin: ORIGIN });
+
+        expect(openWindow).toHaveBeenCalledWith(`${ORIGIN}/bank-connections`);
+    });
+
+    it("shows a silent Up to date notice with the time for a quiet result, without closing notifications", async () => {
+        vi.useFakeTimers();
+        const now = new Date("2026-11-12T20:00:00Z");
+        vi.setSystemTime(now);
+        const { deps, showNotification, closeNotifications } = fakeDeps();
+
+        await handlePush(JSON.stringify(quietResult), deps);
+
+        expect(closeNotifications).not.toHaveBeenCalled();
+        expect(showNotification).toHaveBeenCalledTimes(1);
+        expect(showNotification).toHaveBeenCalledWith(
+            "Up to date",
+            expect.objectContaining({
+                body: `No new transactions · ${formatNoticeTime(now)}`,
+                tag: "auto-sync",
+                silent: true,
+                data: { url: "/", actions: {} },
+                ...IMAGES,
+            }),
+        );
+    });
+
+    it("does not close notifications for a non-quiet result, which shows under the auto-sync tag", async () => {
+        const { deps, showNotification, closeNotifications } = fakeDeps();
+
+        await handlePush(JSON.stringify(autoSyncResultMessage), deps);
+
+        expect(closeNotifications).not.toHaveBeenCalled();
+        expect(showNotification).toHaveBeenCalledWith(
+            "Auto-sync finished",
+            expect.objectContaining({ tag: "auto-sync" }),
+        );
     });
 });
 

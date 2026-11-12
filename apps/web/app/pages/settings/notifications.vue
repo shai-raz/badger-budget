@@ -2,6 +2,8 @@
 import type { IPushSubscription, INotificationPreference } from "@badger/types";
 import type { MenuItem } from "primevue/menuitem";
 import { useToast } from "primevue/usetoast";
+import { AUTO_SYNC_SETTINGS_TYPE } from "@badger/shared-data";
+import { useApiClient } from "../../composables/useApiClient";
 import { useDevtoolsFlag } from "../../composables/useDevtoolsFlag";
 import {
     useDeletePushSubscriptionMutation,
@@ -50,9 +52,14 @@ const { data: preferences, isLoading: preferencesLoading, error: preferencesErro
 const updatePreferences = useUpdateNotificationPreferencesMutation();
 const removeSubscription = useDeletePushSubscriptionMutation();
 const sendTest = useSendTestNotificationMutation();
+const apiClient = useApiClient();
+const autoSyncOn = ref(false);
 
 const devices = computed(() => subscriptions.value ?? []);
-const preferenceRows = computed(() => preferences.value ?? []);
+// The Auto-sync entry is only shown while auto-sync is on.
+const preferenceRows = computed(() =>
+    (preferences.value ?? []).filter((pref) => pref.type !== AUTO_SYNC_SETTINGS_TYPE || autoSyncOn.value),
+);
 const deviceCountLabel = computed(() => {
     const count = devices.value.length;
     if (count === 0) return "None";
@@ -61,6 +68,15 @@ const deviceCountLabel = computed(() => {
 
 onMounted(() => {
     void device.refresh();
+    // The Auto-sync entry is only shown while auto-sync is on.
+    apiClient
+        .getAutoSync()
+        .then((state) => {
+            autoSyncOn.value = state.autoSync !== null;
+        })
+        .catch(() => {
+            autoSyncOn.value = false;
+        });
 });
 
 const isThisDevice = (subscription: IPushSubscription) =>
