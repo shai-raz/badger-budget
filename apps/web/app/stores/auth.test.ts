@@ -10,6 +10,7 @@ const { api, keyStore } = vi.hoisted(() => ({
         registerPushSubscription: vi.fn(),
         unregisterPushSubscription: vi.fn(),
         disableAutoSync: vi.fn(),
+        getAutoSync: vi.fn(),
     },
     keyStore: { load: vi.fn(), clear: vi.fn() },
 }));
@@ -95,6 +96,7 @@ describe("auth store logout", () => {
         api.logout.mockResolvedValue(undefined);
         api.unregisterPushSubscription.mockResolvedValue(undefined);
         api.disableAutoSync.mockResolvedValue(undefined);
+        api.getAutoSync.mockResolvedValue({ autoSync: { id: "grant-1" } });
         keyStore.load.mockResolvedValue(null);
         keyStore.clear.mockResolvedValue(undefined);
     });
@@ -168,6 +170,18 @@ describe("auth store logout", () => {
         await store.logout();
 
         expect(api.disableAutoSync).not.toHaveBeenCalled();
+    });
+
+    it("leaves the current holder's auto-sync alone when this device's stored grant has moved away", async () => {
+        keyStore.load.mockResolvedValue(HELD_GRANT);
+        api.getAutoSync.mockResolvedValue({ autoSync: { id: "grant-2" } });
+        const store = signIn();
+        await store.logout();
+
+        expect(api.disableAutoSync).not.toHaveBeenCalled();
+        expect(keyStore.clear).toHaveBeenCalledTimes(1);
+        expect(api.logout).toHaveBeenCalledWith("refresh");
+        expect(store.isAuthenticated).toBe(false);
     });
 
     it("clears the device key even when turning auto-sync off fails", async () => {

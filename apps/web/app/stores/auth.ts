@@ -14,13 +14,19 @@ const AUTO_SYNC_CLEANUP_TIMEOUT_MS = 3000;
  * failures and sign-out still proceeds.
  */
 async function disableAutoSyncOnThisDevice(apiClient: ApiClient): Promise<void> {
-    if (!(await loadAutoSyncKey())) return;
+    const record = await loadAutoSyncKey();
+    if (!record) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<void>((resolve) => {
         timer = setTimeout(resolve, AUTO_SYNC_CLEANUP_TIMEOUT_MS);
     });
+    // The server's DELETE turns off every grant of the user, so only disable when this device still holds the grant.
+    const disableIfHeld = async () => {
+        const { autoSync } = await apiClient.getAutoSync();
+        if (autoSync?.id === record.grantId) await apiClient.disableAutoSync();
+    };
     try {
-        await Promise.race([apiClient.disableAutoSync().catch(() => undefined), timeout]);
+        await Promise.race([disableIfHeld().catch(() => undefined), timeout]);
     } finally {
         clearTimeout(timer);
     }
