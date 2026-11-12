@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "crypto";
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, NotFoundException, UnauthorizedException } from "@nestjs/common";
 import {
     AUTO_SYNC_KEY_BYTES,
     DEFAULT_AUTO_SYNC_DURATION_DAYS,
@@ -8,18 +8,21 @@ import {
     isAutoSyncDurationDays,
     isAutoSyncIntervalUnit,
     isCredentialErrorCode,
+    type AutoSyncIntervalUnit,
     type AutoSyncSchedule,
+    type NotificationContent,
 } from "@badger/shared-data";
 import type { IAutoSyncStatus } from "@badger/types";
 import { PrismaService } from "../prisma/prisma.service";
 import { CredentialCryptoService, GrantDecryptError } from "../crypto/credential-crypto.service";
 import { BankSyncService } from "./bank-sync.service";
-import type { CredentialSource } from "./credential-source";
+import type { CredentialSource, SyncJobSummary } from "./credential-source";
 import { EnableAutoSyncDto } from "./dto/enable-auto-sync.dto";
 import { AutoSyncScheduleDto } from "./dto/auto-sync-schedule.dto";
 import { UpdateAutoSyncScheduleDto } from "./dto/update-auto-sync-schedule.dto";
 import { canonicalTimeZone, jitterRunAt, nextScheduledRunAt, parseAutoSyncSchedule } from "./auto-sync-schedule";
 import { sha256Hex } from "../oauth/oauth-crypto";
+import { PushService } from "../notifications/push.service";
 
 /** A grant is shown as unreachable once it has missed this many runs and none has run for this long. */
 export const AUTO_SYNC_UNREACHABLE_MISSES = 2;
@@ -30,9 +33,28 @@ const DAY_MS = 86_400_000;
 /** The one refusal every failed run gets, so a caller cannot tell which check failed. */
 const runRejected = () => new UnauthorizedException("Auto-sync run rejected");
 
+/** Deletes a grant and its credential copies, for a device whose push subscription is gone for good. */
+export async function deleteAutoSyncGrant(prisma: PrismaService, grantId: string): Promise<void> {
+    await prisma.autoSyncCredential.deleteMany({ where: { grantId } });
+    await prisma.autoSyncGrant.deleteMany({ where: { id: grantId } });
+}
+
+/** True while the grant's push subscription is live and still belongs to the grant's user. */
+export async function isGrantSubscriptionOwned(
+    prisma: PrismaService,
+    grant: { userId: string; pushSubscriptionId: string },
+): Promise<boolean> {
+    const subscription = await prisma.pushSubscription.findFirst({
+        where: { id: grant.pushSubscriptionId, userId: grant.userId, removedAt: null },
+        select: { id: true },
+    });
+    return subscription !== null;
+}
+
 const GRANT_STATUS_SELECT = {
     id: true,
     deviceLabel: true,
+    pushSubscriptionId: true,
     intervalUnit: true,
     intervalCount: true,
     windowStartMinute: true,
@@ -50,6 +72,7 @@ const GRANT_STATUS_SELECT = {
 type GrantStatusRow = {
     id: string;
     deviceLabel: string;
+    pushSubscriptionId: string;
     intervalUnit: string;
     intervalCount: number;
     windowStartMinute: number | null;
@@ -65,6 +88,68 @@ type GrantStatusRow = {
 };
 
 type ConnectionRef = { id: string; displayName: string };
+
+/** The grant fields a run needs to report its result, captured when the run starts. */
+type RunGrant = {
+    id: string;
+    userId: string;
+    pushSubscriptionId: string;
+    intervalUnit: AutoSyncIntervalUnit;
+    intervalCount: number;
+};
+
+/**
+ * The quiet variant, for a run that changed nothing: empty title and body; the device replaces "Syncing…" with a
+ * silent notice it writes itself.
+ */
+function quietResult(summary: SyncJobSummary): NotificationContent {
+    return {
+        type: "auto-sync.result",
+        title: "",
+        body: "",
+        url: "/",
+        data: {
+            quiet: true,
+            newTransactions: summary.newTransactions,
+            failedConnectionCount: summary.failedConnections.length,
+        },
+    };
+}
+
+/** A failure outranks new transactions: one failed connection is named, several are counted. */
+function changedResult(summary: SyncJobSummary): NotificationContent {
+    const failures = summary.failedConnections;
+    const data = {
+        quiet: false,
+        newTransactions: summary.newTransactions,
+        failedConnectionCount: failures.length,
+    };
+    if (failures.length === 1) {
+        return {
+            type: "auto-sync.result",
+            title: `${failures[0].displayName} didn't sync`,
+            body: "Tap for details.",
+            url: "/bank-connections",
+            data,
+        };
+    }
+    if (failures.length > 1) {
+        return {
+            type: "auto-sync.result",
+            title: `${failures.length} connections didn't sync`,
+            body: "Tap for details.",
+            url: "/bank-connections",
+            data,
+        };
+    }
+    return {
+        type: "auto-sync.result",
+        title: summary.newTransactions === 1 ? "1 new transaction" : `${summary.newTransactions} new transactions`,
+        body: "",
+        url: "/transactions",
+        data,
+    };
+}
 
 /** The schedule columns for a parsed schedule; the other unit's columns are null. */
 function scheduleColumns(schedule: AutoSyncSchedule) {
@@ -102,6 +187,7 @@ function toStatus(
     return {
         id: grant.id,
         deviceLabel: grant.deviceLabel,
+        pushSubscriptionId: grant.pushSubscriptionId,
         intervalUnit: grant.intervalUnit,
         intervalCount: grant.intervalCount,
         windowStartMinute: grant.windowStartMinute,
@@ -122,10 +208,13 @@ function toStatus(
 
 @Injectable()
 export class AutoSyncService {
+    private readonly logger = new Logger(AutoSyncService.name);
+
     constructor(
         private readonly prisma: PrismaService,
         private readonly credentialCryptoService: CredentialCryptoService,
         private readonly bankSyncService: BankSyncService,
+        private readonly pushService: PushService,
     ) {}
 
     /** The live grant, or null when there is none or it has expired. */
@@ -163,6 +252,15 @@ export class AutoSyncService {
 
     /** Replaces any existing grant: each active connection login is re-encrypted under a key only the device holds. */
     async enable(userId: string, dto: EnableAutoSyncDto, now: Date = new Date()): Promise<IAutoSyncStatus> {
+        // Checked before anything else: a grant must have a live push subscription that belongs to this user.
+        const pushSubscription = await this.prisma.pushSubscription.findFirst({
+            where: { id: dto.pushSubscriptionId, userId, removedAt: null },
+            select: { id: true },
+        });
+        if (!pushSubscription) {
+            throw new BadRequestException("Unknown push subscription");
+        }
+
         const { schedule, timeZone } = this.parseSchedule(dto);
         const durationDays = dto.durationDays ?? DEFAULT_AUTO_SYNC_DURATION_DAYS;
         if (!isAutoSyncDurationAllowed(durationDays, schedule.intervalUnit, schedule.intervalCount)) {
@@ -224,6 +322,7 @@ export class AutoSyncService {
                     id: grantId,
                     userId,
                     deviceLabel: dto.deviceLabel,
+                    pushSubscriptionId: pushSubscription.id,
                     intervalUnit: schedule.intervalUnit,
                     intervalCount: schedule.intervalCount,
                     ...scheduleColumns(schedule),
@@ -341,6 +440,9 @@ export class AutoSyncService {
                 keyCheckCt: true,
                 keyCheckIv: true,
                 keyCheckAuthTag: true,
+                pushSubscriptionId: true,
+                intervalUnit: true,
+                intervalCount: true,
             },
         });
         if (!grant || grant.expiresAt.getTime() <= now.getTime()) throw runRejected();
@@ -350,6 +452,19 @@ export class AutoSyncService {
         const grantKey = this.credentialCryptoService.deriveGrantKey(deviceKey, grant.id);
         const keyCheck = { ciphertext: grant.keyCheckCt, iv: grant.keyCheckIv, authTag: grant.keyCheckAuthTag };
         if (!this.credentialCryptoService.verifyGrantKeyCheck(keyCheck, grantKey, grant.id)) throw runRejected();
+        if (!isAutoSyncIntervalUnit(grant.intervalUnit)) {
+            throw new Error(`Auto-sync grant ${grant.id} has an unknown interval unit`);
+        }
+        const runGrant: RunGrant = {
+            id: grant.id,
+            userId: grant.userId,
+            pushSubscriptionId: grant.pushSubscriptionId,
+            intervalUnit: grant.intervalUnit,
+            intervalCount: grant.intervalCount,
+        };
+
+        // A device removed, or moved to another user, after the token was issued: refuse before the token is spent.
+        if (!(await isGrantSubscriptionOwned(this.prisma, runGrant))) throw runRejected();
 
         const rows = await this.prisma.autoSyncCredential.findMany({
             where: { grantId: grant.id, connection: { deletedAt: null, isActive: true } },
@@ -371,7 +486,10 @@ export class AutoSyncService {
             },
         });
         if (consumed.count !== 1) throw runRejected();
-        if (rows.length === 0) throw new BadRequestException("Nothing to sync");
+        if (rows.length === 0) {
+            await this.closeSpentRun(runGrant);
+            throw new BadRequestException("Nothing to sync");
+        }
 
         // Decrypted up front so a renewal during the run cannot break it. grantKey stays inside this closure.
         const credentials = new Map<string, Record<string, string> | GrantDecryptError>();
@@ -402,13 +520,54 @@ export class AutoSyncService {
                     });
                 }
             },
+            onFinished: (summary) => this.sendRunResult(runGrant, summary),
         };
 
-        return this.bankSyncService.startSyncJob(
-            grant.userId,
-            rows.map((row) => row.connection),
-            source,
-        );
+        try {
+            return await this.bankSyncService.startSyncJob(
+                grant.userId,
+                rows.map((row) => row.connection),
+                source,
+            );
+        } catch (err) {
+            // Thrown after the token was spent (for example a manual sync is running): no job will report back.
+            await this.closeSpentRun(runGrant);
+            throw err;
+        }
+    }
+
+    /**
+     * Pushes a run's result to the device that ran it, so "Syncing…" is always replaced. Auto-sync notices can't be
+     * muted, so stored preferences are not consulted. A subscription that was removed, or now belongs to another user,
+     * gets nothing: the grant is deleted instead.
+     */
+    private async sendRunResult(grant: RunGrant, summary: SyncJobSummary): Promise<void> {
+        if (!(await isGrantSubscriptionOwned(this.prisma, grant))) {
+            await deleteAutoSyncGrant(this.prisma, grant.id);
+            return;
+        }
+
+        const quiet = summary.newTransactions === 0 && summary.failedConnections.length === 0;
+        const content = quiet ? quietResult(summary) : changedResult(summary);
+
+        const results = await this.pushService.send({ subscriptionId: grant.pushSubscriptionId }, content, {
+            tag: "auto-sync",
+            ttl: autoSyncRunTokenTtlMs(grant.intervalUnit, grant.intervalCount) / 1000,
+        });
+
+        // The device subscription is gone for good, so the grant can never run again: delete it.
+        if (results.some((result) => result.outcome === "gone")) {
+            await deleteAutoSyncGrant(this.prisma, grant.id);
+        }
+    }
+
+    /** Closes the device's "Syncing…" for a run whose token was spent but which started no job. Never throws. */
+    private async closeSpentRun(grant: RunGrant): Promise<void> {
+        try {
+            await this.sendRunResult(grant, { jobId: "", status: "failed", newTransactions: 0, failedConnections: [] });
+        } catch (err) {
+            this.logger.error(`Could not close the auto-sync notification for grant ${grant.id}`, err);
+        }
     }
 
     /** Splits the connections into those this grant covers and those it does not (added since, or never). */

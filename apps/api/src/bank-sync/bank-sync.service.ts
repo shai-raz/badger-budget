@@ -21,7 +21,7 @@ import {
     type SyncErrorCode,
 } from "@badger/shared-data";
 import { syncErrorCodeOf, withSyncErrorCode } from "./sync-error-code.util";
-import { CredentialSource, pinCredentialSource } from "./credential-source";
+import { CredentialSource, pinCredentialSource, SyncJobSummary } from "./credential-source";
 
 const CONNECTION_SELECT = {
     id: true,
@@ -79,6 +79,11 @@ function toSyncJobResponse<T extends { scraperJobs: { errorCode: string | null }
             errorCode: parseSyncErrorCode(scraperJob.errorCode),
         })),
     };
+}
+
+/** Scraper sessions per API instance: BANK_SYNC_CONCURRENCY, default 3. Also caps the auto-sync scheduler. */
+export function bankSyncConcurrency(configService: ConfigService): number {
+    return Math.max(1, parseInt(configService.get<string>("BANK_SYNC_CONCURRENCY", "3"), 10) || 3);
 }
 
 @Injectable()
@@ -408,6 +413,15 @@ export class BankSyncService {
         }
     }
 
+    /** Lets the source report the finished run. A throw here must never fail the run. */
+    private async notifySyncFinished(source: CredentialSource, summary: SyncJobSummary): Promise<void> {
+        try {
+            await source.onFinished?.(summary);
+        } catch {
+            this.logger.error(`Failed to report the result of sync job ${summary.jobId}`);
+        }
+    }
+
     private async runSyncJob(
         jobId: string,
         userId: string,
@@ -416,6 +430,10 @@ export class BankSyncService {
         defaultCurrencyCode?: string,
     ): Promise<void> {
         const scraperJobIds = new Map<string, string>(); // connectionId → scraperJobId
+        const failedConnections: SyncJobSummary["failedConnections"] = [];
+        const succeededConnectionIds = new Set<string>();
+        let totalTransactions = 0;
+        let totalAccounts = 0;
         try {
             await this.prisma.syncJob.update({ where: { id: jobId }, data: { status: "running" } });
 
@@ -433,10 +451,7 @@ export class BankSyncService {
                 scraperJobIds.set(conn.id, scraperJob.id);
             }
 
-            const concurrency = Math.max(
-                1,
-                parseInt(this.configService.get<string>("BANK_SYNC_CONCURRENCY", "3"), 10) || 3,
-            );
+            const concurrency = bankSyncConcurrency(this.configService);
 
             // Phase 1: parallel scrape (bounded by concurrency cap)
             type ScrapeSuccess = {
@@ -488,6 +503,11 @@ export class BankSyncService {
                         },
                     });
                     await this.notifyConnectionFailed(source, result.item.id, errorCode);
+                    failedConnections.push({
+                        id: result.item.id,
+                        displayName: result.item.displayName,
+                        code: errorCode,
+                    });
                 }
             }
 
@@ -497,9 +517,6 @@ export class BankSyncService {
                 ok: true;
                 value: ScrapeSuccess;
             }>;
-
-            let totalTransactions = 0;
-            let totalAccounts = 0;
 
             for (const {
                 value: { connection, candidates, balances },
@@ -582,6 +599,7 @@ export class BankSyncService {
                             data: { lastSyncedAt: new Date() },
                         }),
                     ]);
+                    succeededConnectionIds.add(connection.id);
                 } catch (error) {
                     const errorMessage = (error as Error).message ?? "Unknown error";
                     this.logger.error(`Import failed for ${connection.displayName}: ${errorMessage}`);
@@ -595,6 +613,11 @@ export class BankSyncService {
                         },
                     });
                     await this.notifyConnectionFailed(source, connection.id, "IMPORT_FAILED");
+                    failedConnections.push({
+                        id: connection.id,
+                        displayName: connection.displayName,
+                        code: "IMPORT_FAILED",
+                    });
                 }
             }
 
@@ -616,23 +639,59 @@ export class BankSyncService {
                     finishedAt: new Date(),
                 },
             });
+
+            await this.notifySyncFinished(source, {
+                jobId,
+                status: overallStatus,
+                newTransactions: totalTransactions,
+                failedConnections,
+            });
         } catch (error) {
             // Catastrophic unexpected failure
             const message = (error as Error).message ?? "Unknown error";
             const finishedAt = new Date();
-            await this.prisma.syncJob.update({
-                where: { id: jobId },
-                data: { status: "failed", error: message, finishedAt },
-            });
-            // Close this run's unfinished scraper jobs so none is left pending or running.
-            await this.prisma.scraperJob.updateMany({
-                where: { syncJobId: jobId, status: "pending" },
-                data: { status: "failed", errorCode: "SYNC_START_FAILED", error: message, finishedAt },
-            });
-            await this.prisma.scraperJob.updateMany({
-                where: { syncJobId: jobId, status: "running" },
-                data: { status: "failed", errorCode: "UNKNOWN", error: message, finishedAt },
-            });
+            // Every connection that did not finish counts as failed, so an auto run's "Syncing…" notification closes.
+            const unfinished = connections
+                .filter(
+                    (connection) =>
+                        !succeededConnectionIds.has(connection.id) &&
+                        !failedConnections.some((failure) => failure.id === connection.id),
+                )
+                .map((connection) => ({
+                    id: connection.id,
+                    displayName: connection.displayName,
+                    code: "UNKNOWN" as const,
+                }));
+            try {
+                await this.prisma.syncJob.update({
+                    where: { id: jobId },
+                    data: {
+                        status: "failed",
+                        error: message,
+                        finishedAt,
+                        transactionsSynced: totalTransactions,
+                        accountsSynced: totalAccounts,
+                    },
+                });
+                // Close this run's unfinished scraper jobs so none is left pending or running.
+                await this.prisma.scraperJob.updateMany({
+                    where: { syncJobId: jobId, status: "pending" },
+                    data: { status: "failed", errorCode: "SYNC_START_FAILED", error: message, finishedAt },
+                });
+                await this.prisma.scraperJob.updateMany({
+                    where: { syncJobId: jobId, status: "running" },
+                    data: { status: "failed", errorCode: "UNKNOWN", error: message, finishedAt },
+                });
+            } finally {
+                // Sent after the job is marked failed, as on the happy path, and even when one of those writes
+                // throws, so transactions imported before the crash are still reported.
+                await this.notifySyncFinished(source, {
+                    jobId,
+                    status: "failed",
+                    newTransactions: totalTransactions,
+                    failedConnections: [...failedConnections, ...unfinished],
+                });
+            }
         }
     }
 

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsIn, IsOptional, IsString, Length, Matches, MaxLength, MinLength } from "class-validator";
+import { IsIn, IsOptional, IsString, IsUUID, Length, Matches, MaxLength, MinLength } from "class-validator";
 import { AUTO_SYNC_DURATIONS, type AutoSyncDurationDays } from "@badger/shared-data";
 import { AutoSyncScheduleDto } from "./auto-sync-schedule.dto";
 
@@ -23,6 +23,10 @@ export class EnableAutoSyncDto extends AutoSyncScheduleDto {
     @MinLength(1)
     @MaxLength(100)
     deviceLabel: string;
+
+    @ApiProperty({ description: "Push subscription that gets this grant's run and result pushes", format: "uuid" })
+    @IsUUID()
+    pushSubscriptionId: string;
 
     @ApiPropertyOptional({ enum: AUTO_SYNC_DURATIONS, description: "Days auto-sync stays on" })
     @IsOptional()

@@ -9,6 +9,7 @@ import { BankSyncService } from "./bank-sync.service";
 import type { CredentialSource } from "./credential-source";
 import { EnableAutoSyncDto } from "./dto/enable-auto-sync.dto";
 import { PrismaService } from "../prisma/prisma.service";
+import { PushService } from "../notifications/push.service";
 import { CredentialCryptoService } from "../crypto/credential-crypto.service";
 
 // Distinctive values, so a substring match cannot hit by accident.
@@ -18,6 +19,7 @@ const KEY = randomBytes(32).toString("base64url");
 const RUN_TOKEN = randomBytes(32).toString("base64url");
 const SECRETS = [PIN, KEY, RUN_TOKEN];
 const GRANT_ID = "00000000-0000-4000-8000-0000000000aa";
+const PUSH_ID = "00000000-0000-4000-8000-0000000000b1";
 const USER_ID = "user-leak";
 const NOW = new Date("2026-11-11T10:00:00.000Z");
 const DAY = 86_400_000;
@@ -45,6 +47,7 @@ describe("auto-sync secrets stay out of logs and errors (AC11)", () => {
             deleteMany: jest.fn(),
         },
         autoSyncCredential: { findMany: jest.fn(), createMany: jest.fn(), deleteMany: jest.fn() },
+        pushSubscription: { findFirst: jest.fn() },
         $transaction: jest.fn(),
     };
 
@@ -66,6 +69,7 @@ describe("auto-sync secrets stay out of logs and errors (AC11)", () => {
                 pin: PIN,
                 key: KEY,
                 deviceLabel: "Laptop",
+                pushSubscriptionId: PUSH_ID,
             },
             overrides,
         );
@@ -96,6 +100,7 @@ describe("auto-sync secrets stay out of logs and errors (AC11)", () => {
                 { provide: ConfigService, useValue: mockConfigService },
                 { provide: PrismaService, useValue: mockPrisma },
                 { provide: BankSyncService, useValue: mockBankSync },
+                { provide: PushService, useValue: { send: jest.fn() } },
             ],
         }).compile();
         service = module.get(AutoSyncService);
@@ -105,6 +110,7 @@ describe("auto-sync secrets stay out of logs and errors (AC11)", () => {
             if (pin !== PIN) throw new UnauthorizedException("Invalid PIN");
         });
         mockPrisma.$transaction.mockImplementation((cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma));
+        mockPrisma.pushSubscription.findFirst.mockResolvedValue({ id: PUSH_ID });
 
         for (const method of LOGGER_METHODS) {
             spies.push(jest.spyOn(Logger.prototype, method).mockImplementation(() => undefined));
@@ -156,6 +162,9 @@ describe("auto-sync secrets stay out of logs and errors (AC11)", () => {
                 id: GRANT_ID,
                 userId: USER_ID,
                 expiresAt,
+                pushSubscriptionId: "00000000-0000-4000-8000-0000000000a1",
+                intervalUnit: "hours",
+                intervalCount: 4,
                 keyCheckCt: check.ciphertext,
                 keyCheckIv: check.iv,
                 keyCheckAuthTag: check.authTag,
