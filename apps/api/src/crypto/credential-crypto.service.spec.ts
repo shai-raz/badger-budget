@@ -1,7 +1,8 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { CredentialCryptoService, EncryptedBlob } from "./credential-crypto.service";
+import { AUTO_SYNC_KEY_BYTES } from "@badger/shared-data";
+import { CredentialCryptoService, EncryptedBlob, GrantBlob, GrantDecryptError } from "./credential-crypto.service";
 
 describe("CredentialCryptoService", () => {
     let service: CredentialCryptoService;
@@ -168,6 +169,169 @@ describe("CredentialCryptoService", () => {
             expect(verifier).toHaveProperty("iv");
             expect(verifier).toHaveProperty("authTag");
             expect(verifier).toHaveProperty("salt");
+        });
+    });
+    describe("grant key crypto", () => {
+        const grantId = "grant-1";
+        const connectionId = "conn-1";
+        const deviceKey = Buffer.alloc(AUTO_SYNC_KEY_BYTES, 7);
+        const otherDeviceKey = Buffer.alloc(AUTO_SYNC_KEY_BYTES, 9);
+        const plaintext = JSON.stringify({ username: "user@bank.com", password: "s3cr3t!" });
+
+        const flipFirstByte = (b64: string): string => {
+            const bytes = Buffer.from(b64, "base64");
+            bytes[0] = bytes[0] ^ 0xff;
+            return bytes.toString("base64");
+        };
+
+        it("round-trips plaintext with the same device key, grant id and connection id (AC1)", () => {
+            const grantKey = service.deriveGrantKey(deviceKey, grantId);
+            const blob = service.encryptForGrant(plaintext, grantKey, grantId, connectionId);
+
+            expect(service.decryptForGrant(blob, grantKey, grantId, connectionId)).toBe(plaintext);
+        });
+
+        it("derives a 32-byte key that is deterministic for the same inputs", () => {
+            const first = service.deriveGrantKey(deviceKey, grantId);
+            const second = service.deriveGrantKey(deviceKey, grantId);
+
+            expect(first.length).toBe(32);
+            expect(first.equals(second)).toBe(true);
+        });
+
+        it("derives a different key for a different pepper", () => {
+            const otherService = new CredentialCryptoService({
+                get: () => "another-pepper-value",
+            } as unknown as ConfigService);
+
+            const a = service.deriveGrantKey(deviceKey, grantId);
+            const b = otherService.deriveGrantKey(deviceKey, grantId);
+
+            expect(a.equals(b)).toBe(false);
+        });
+
+        it("derives a different key for a different grant id", () => {
+            expect(
+                service.deriveGrantKey(deviceKey, "grant-1").equals(service.deriveGrantKey(deviceKey, "grant-2")),
+            ).toBe(false);
+        });
+
+        it("throws GrantDecryptError when decrypting with a different device key", () => {
+            const blob = service.encryptForGrant(
+                plaintext,
+                service.deriveGrantKey(deviceKey, grantId),
+                grantId,
+                connectionId,
+            );
+            const wrongKey = service.deriveGrantKey(otherDeviceKey, grantId);
+
+            expect(() => service.decryptForGrant(blob, wrongKey, grantId, connectionId)).toThrow(GrantDecryptError);
+        });
+
+        it("throws GrantDecryptError when decrypting with a different grant id", () => {
+            const grantKey = service.deriveGrantKey(deviceKey, grantId);
+            const blob = service.encryptForGrant(plaintext, grantKey, grantId, connectionId);
+
+            expect(() => service.decryptForGrant(blob, grantKey, "grant-2", connectionId)).toThrow(GrantDecryptError);
+        });
+
+        it("throws GrantDecryptError when decrypting with a different connection id", () => {
+            const grantKey = service.deriveGrantKey(deviceKey, grantId);
+            const blob = service.encryptForGrant(plaintext, grantKey, grantId, connectionId);
+
+            expect(() => service.decryptForGrant(blob, grantKey, grantId, "conn-2")).toThrow(GrantDecryptError);
+        });
+
+        it("throws GrantDecryptError when the ciphertext is tampered", () => {
+            const grantKey = service.deriveGrantKey(deviceKey, grantId);
+            const blob = service.encryptForGrant(plaintext, grantKey, grantId, connectionId);
+            const tampered: GrantBlob = { ...blob, ciphertext: flipFirstByte(blob.ciphertext) };
+
+            expect(() => service.decryptForGrant(tampered, grantKey, grantId, connectionId)).toThrow(GrantDecryptError);
+        });
+
+        it("throws GrantDecryptError when the auth tag is tampered", () => {
+            const grantKey = service.deriveGrantKey(deviceKey, grantId);
+            const blob = service.encryptForGrant(plaintext, grantKey, grantId, connectionId);
+            const tampered: GrantBlob = { ...blob, authTag: flipFirstByte(blob.authTag) };
+
+            expect(() => service.decryptForGrant(tampered, grantKey, grantId, connectionId)).toThrow(GrantDecryptError);
+        });
+
+        it("rejects a truncated auth tag, so the key check cannot be forged with a short tag", () => {
+            const grantKey = service.deriveGrantKey(deviceKey, grantId);
+            const blob = service.encryptForGrant(plaintext, grantKey, grantId, connectionId);
+            const truncated: GrantBlob = {
+                ...blob,
+                authTag: Buffer.from(blob.authTag, "base64").subarray(0, 4).toString("base64"),
+            };
+
+            expect(() => service.decryptForGrant(truncated, grantKey, grantId, connectionId)).toThrow(
+                GrantDecryptError,
+            );
+
+            const check = service.createGrantKeyCheck(grantKey, grantId);
+            const truncatedCheck: GrantBlob = {
+                ...check,
+                authTag: Buffer.from(check.authTag, "base64").subarray(0, 4).toString("base64"),
+            };
+            expect(service.verifyGrantKeyCheck(truncatedCheck, grantKey, grantId)).toBe(false);
+        });
+
+        it("rejects a device key of the wrong length", () => {
+            expect(() => service.deriveGrantKey(Buffer.alloc(16, 1), grantId)).toThrow(GrantDecryptError);
+            expect(() => service.deriveGrantKey(Buffer.alloc(AUTO_SYNC_KEY_BYTES + 1, 1), grantId)).toThrow(
+                GrantDecryptError,
+            );
+        });
+
+        it("verifies the key check for the right key and grant id (AC2)", () => {
+            const grantKey = service.deriveGrantKey(deviceKey, grantId);
+            const check = service.createGrantKeyCheck(grantKey, grantId);
+
+            expect(service.verifyGrantKeyCheck(check, grantKey, grantId)).toBe(true);
+        });
+
+        it("rejects the key check for a wrong key or grant id without throwing (AC2)", () => {
+            const grantKey = service.deriveGrantKey(deviceKey, grantId);
+            const check = service.createGrantKeyCheck(grantKey, grantId);
+            const wrongKey = service.deriveGrantKey(otherDeviceKey, grantId);
+
+            expect(service.verifyGrantKeyCheck(check, wrongKey, grantId)).toBe(false);
+            expect(service.verifyGrantKeyCheck(check, grantKey, "grant-2")).toBe(false);
+        });
+
+        it("keeps key material and plaintext out of error messages", () => {
+            const grantKey = service.deriveGrantKey(deviceKey, grantId);
+            const blob = service.encryptForGrant(plaintext, grantKey, grantId, connectionId);
+            const wrongKey = service.deriveGrantKey(otherDeviceKey, grantId);
+
+            const captured: Error[] = [];
+            for (const attempt of [
+                () => service.decryptForGrant(blob, wrongKey, grantId, connectionId),
+                () => service.deriveGrantKey(Buffer.from(deviceKey.toString("hex").slice(0, 10), "hex"), grantId),
+            ]) {
+                try {
+                    attempt();
+                } catch (err) {
+                    captured.push(err as Error);
+                }
+            }
+
+            expect(captured).toHaveLength(2);
+            const secrets = [
+                deviceKey.toString("base64"),
+                deviceKey.toString("hex"),
+                grantKey.toString("base64"),
+                grantKey.toString("hex"),
+                plaintext,
+            ];
+            for (const err of captured) {
+                expect(err.message).toBe("Auto-sync credentials could not be decrypted");
+                for (const secret of secrets) {
+                    expect(err.message).not.toContain(secret);
+                }
+            }
         });
     });
 });

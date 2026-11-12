@@ -13,8 +13,15 @@ import { ImportCandidate } from "../transactions/transaction-import.service";
 import { ScrapedAccountBalance } from "./scraped-balance.util";
 import { AccountBalanceService } from "../accounts/account-balance.service";
 import { AccountsService } from "../accounts/accounts.service";
-import { getBalanceKind, getScrapedAccountType, MAX_PASSKEYS, parseSyncErrorCode } from "@badger/shared-data";
+import {
+    getBalanceKind,
+    getScrapedAccountType,
+    MAX_PASSKEYS,
+    parseSyncErrorCode,
+    type SyncErrorCode,
+} from "@badger/shared-data";
 import { syncErrorCodeOf, withSyncErrorCode } from "./sync-error-code.util";
+import { CredentialSource, pinCredentialSource } from "./credential-source";
 
 const CONNECTION_SELECT = {
     id: true,
@@ -335,7 +342,8 @@ export class BankSyncService {
         });
         if (connections.length === 0) throw new BadRequestException("No active scraper connections");
 
-        return this.startSyncJob(userId, connections, pin, defaultCurrencyCode);
+        const source = pinCredentialSource(this.credentialCryptoService, pin);
+        return this.startSyncJob(userId, connections, source, defaultCurrencyCode);
     }
 
     async triggerConnectionSync(
@@ -350,13 +358,14 @@ export class BankSyncService {
         });
         if (!connection) throw new NotFoundException("Scraper connection not found");
         if (!connection.isActive) throw new BadRequestException("Resume this connection before syncing");
-        return this.startSyncJob(userId, [connection], pin, defaultCurrencyCode);
+        const source = pinCredentialSource(this.credentialCryptoService, pin);
+        return this.startSyncJob(userId, [connection], source, defaultCurrencyCode);
     }
 
-    private async startSyncJob(
+    async startSyncJob(
         userId: string,
         connections: ScraperConnection[],
-        pin: string,
+        source: CredentialSource,
         defaultCurrencyCode?: string,
     ): Promise<{ jobId: string }> {
         // Reserve before the first await so simultaneous entry points cannot both create a job.
@@ -370,7 +379,7 @@ export class BankSyncService {
             const job = await this.prisma.syncJob.create({
                 data: { userId, status: "pending" },
             });
-            this.runSyncJob(job.id, userId, connections, pin, defaultCurrencyCode).catch((err) =>
+            this.runSyncJob(job.id, userId, connections, source, defaultCurrencyCode).catch((err) =>
                 this.logger.error(`Sync job ${job.id} failed`, err),
             );
             return { jobId: job.id };
@@ -379,11 +388,24 @@ export class BankSyncService {
         }
     }
 
+    /** Lets the source react to a failed connection. A throw here must never fail the run. */
+    private async notifyConnectionFailed(
+        source: CredentialSource,
+        connectionId: string,
+        code: SyncErrorCode,
+    ): Promise<void> {
+        try {
+            await source.onConnectionFailed?.(connectionId, code);
+        } catch {
+            this.logger.error(`Failed to handle connection failure for ${connectionId}`);
+        }
+    }
+
     private async runSyncJob(
         jobId: string,
         userId: string,
         connections: ScraperConnection[],
-        pin: string,
+        source: CredentialSource,
         defaultCurrencyCode?: string,
     ): Promise<void> {
         const scraperJobIds = new Map<string, string>(); // connectionId → scraperJobId
@@ -427,17 +449,7 @@ export class BankSyncService {
 
                     let credentials: Record<string, string>;
                     try {
-                        credentials = JSON.parse(
-                            this.credentialCryptoService.decrypt(
-                                {
-                                    ciphertext: connection.credentialsCt,
-                                    iv: connection.credentialsIv,
-                                    authTag: connection.credentialsAuthTag,
-                                    salt: connection.credentialsSalt,
-                                },
-                                pin,
-                            ),
-                        );
+                        credentials = source.resolve(connection);
                     } catch (e) {
                         throw withSyncErrorCode(e, "CREDENTIALS_UNREADABLE");
                     }
@@ -458,15 +470,17 @@ export class BankSyncService {
                     const scraperJobId = scraperJobIds.get(result.item.id)!;
                     const errorMessage = result.error instanceof Error ? result.error.message : String(result.error);
                     this.logger.error(`Scrape failed for ${result.item.displayName}: ${errorMessage}`);
+                    const errorCode = syncErrorCodeOf(result.error);
                     await this.prisma.scraperJob.update({
                         where: { id: scraperJobId },
                         data: {
                             status: "failed",
                             error: errorMessage,
-                            errorCode: syncErrorCodeOf(result.error),
+                            errorCode,
                             finishedAt: new Date(),
                         },
                     });
+                    await this.notifyConnectionFailed(source, result.item.id, errorCode);
                 }
             }
 
@@ -573,6 +587,7 @@ export class BankSyncService {
                             finishedAt: new Date(),
                         },
                     });
+                    await this.notifyConnectionFailed(source, connection.id, "IMPORT_FAILED");
                 }
             }
 
