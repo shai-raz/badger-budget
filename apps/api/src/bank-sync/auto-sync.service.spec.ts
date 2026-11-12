@@ -67,6 +67,7 @@ describe("AutoSyncService", () => {
     const grantRow = (overrides: Record<string, unknown> = {}) => ({
         id: GRANT_ID,
         deviceLabel: "Laptop",
+        pushSubscriptionId: PUSH_ID,
         intervalUnit: "hours",
         intervalCount: 4,
         windowStartMinute: 420,
@@ -307,6 +308,7 @@ describe("AutoSyncService", () => {
             const status = await service.enable(USER_ID, enableDto(), NOW);
 
             expect(status).toMatchObject({
+                pushSubscriptionId: PUSH_ID,
                 intervalUnit: "hours",
                 durationDays: 30,
                 nextRunAt: "2026-11-11T13:00:00.000Z",
@@ -452,6 +454,16 @@ describe("AutoSyncService", () => {
             expect(status.includedConnections).toEqual([{ id: "c1", displayName: "Bank A" }]);
             expect(status.notIncludedConnections).toEqual([{ id: "c2", displayName: "Card B" }]);
             expect(status.nextRunAt).toBe("2026-11-11T13:00:00.000Z");
+        });
+
+        it("names the push subscription that holds the grant", async () => {
+            mockPrisma.autoSyncGrant.findFirst.mockResolvedValueOnce(grantRow());
+            mockPrisma.autoSyncCredential.findMany.mockResolvedValueOnce([]);
+            mockPrisma.scraperConnection.findMany.mockResolvedValueOnce([]);
+
+            const status = await service.getStatus(USER_ID, NOW);
+
+            expect(status.pushSubscriptionId).toBe(PUSH_ID);
         });
 
         it.each([

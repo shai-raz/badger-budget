@@ -54,6 +54,7 @@ export async function isGrantSubscriptionOwned(
 const GRANT_STATUS_SELECT = {
     id: true,
     deviceLabel: true,
+    pushSubscriptionId: true,
     intervalUnit: true,
     intervalCount: true,
     windowStartMinute: true,
@@ -71,6 +72,7 @@ const GRANT_STATUS_SELECT = {
 type GrantStatusRow = {
     id: string;
     deviceLabel: string;
+    pushSubscriptionId: string;
     intervalUnit: string;
     intervalCount: number;
     windowStartMinute: number | null;
@@ -185,6 +187,7 @@ function toStatus(
     return {
         id: grant.id,
         deviceLabel: grant.deviceLabel,
+        pushSubscriptionId: grant.pushSubscriptionId,
         intervalUnit: grant.intervalUnit,
         intervalCount: grant.intervalCount,
         windowStartMinute: grant.windowStartMinute,
