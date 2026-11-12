@@ -141,8 +141,20 @@ const startDate = timeModel(startMinute);
 const endDate = timeModel(endMinute);
 const runAtDate = timeModel(runAtMinute);
 
+// Schedule mode cannot change the grant's duration, so the interval must fit inside the one it already has.
+const durationConflict = computed(
+    () =>
+        !isEnable.value &&
+        status.value !== null &&
+        validCount.value !== null &&
+        !isAutoSyncDurationAllowed(status.value.durationDays, unit.value, validCount.value),
+);
+
 const canSubmit = computed(
-    () => schedule.value !== null && (!isEnable.value || passkeyMode.value || typedPin.value.length > 0),
+    () =>
+        schedule.value !== null &&
+        !durationConflict.value &&
+        (!isEnable.value || passkeyMode.value || typedPin.value.length > 0),
 );
 
 function reset() {
@@ -194,6 +206,9 @@ function errorMessage(error: unknown): string {
 
 // Unlocks with the passkey (or the typed PIN), then turns auto-sync on. False when the PIN fallback opened instead.
 async function submitEnable(next: AutoSyncSchedule): Promise<boolean> {
+    // Push permission needs this tap's user activation, which a passkey ceremony would use up, so the push
+    // subscription is taken before it.
+    const pushSubscriptionId = await props.autoSync.ensurePushSubscriptionId();
     let pin = typedPin.value;
     let fromPasskey = false;
     if (passkeyMode.value) {
@@ -210,7 +225,7 @@ async function submitEnable(next: AutoSyncSchedule): Promise<boolean> {
         }
     }
     try {
-        await props.autoSync.enable({ pin, schedule: next, durationDays: durationDays.value });
+        await props.autoSync.enable({ pin, schedule: next, durationDays: durationDays.value, pushSubscriptionId });
         return true;
     } catch (error: unknown) {
         const reason = unlockFallbackMessage(error, fromPasskey);
@@ -391,6 +406,14 @@ const saveLabel = computed(() => (isEnable.value ? "Unlock and turn on" : "Save"
             />
             <p class="text-xs text-muted-color">First sync {{ firstSyncLabel(runAtMinute) }}.</p>
         </div>
+
+        <small
+            v-if="durationConflict"
+            :class="errorClass"
+            role="alert"
+            >Auto-sync is kept on for {{ status?.durationDays }} days, too short for this schedule. Turn it off and on
+            again to choose a longer "Keep on for".</small
+        >
 
         <template v-if="isEnable">
             <div class="flex flex-col gap-1">

@@ -350,10 +350,12 @@ function createBankSyncFlow() {
     };
 
     // Silent renewal (AC16): an unlock on the device that holds auto-sync renews its grant. No UI, and errors are dropped.
+    // The status is reloaded every time: a move to another device, an expiry or a PIN change can all have happened since
+    // this page loaded, and a stale holdsGrant would let this device take the grant back.
     const renewAutoSyncGrant = (syncPin: string) => {
         void (async () => {
             try {
-                if (!autoSync.status.value) await autoSync.refresh();
+                await autoSync.refresh({ quiet: true });
                 if (autoSync.holdsGrant.value) await autoSync.renew(syncPin);
             } catch {
                 // Best effort: the grant keeps its current expiry, and the next unlock tries again.

@@ -76,7 +76,10 @@ export function useAutoSync() {
         () => status.value !== null && keyGrantId.value === status.value.id,
     );
 
-    /** Must be the first call in a tap handler: push permission needs user activation. */
+    /**
+     * Must be the first await in a tap handler: push permission needs user activation. Callers that also unlock a
+     * passkey take the id here first and pass it to `enable`.
+     */
     async function ensurePushSubscriptionId(): Promise<string> {
         const id = await pushDevice.enable();
         if (id) return id;
@@ -84,14 +87,15 @@ export function useAutoSync() {
         throw new AutoSyncError(denied ? "push-denied" : "push-unavailable");
     }
 
-    async function refresh(): Promise<void> {
-        loading.value = true;
+    /** `quiet` reloads without raising `loading`, for background checks that must not flash the card. */
+    async function refresh({ quiet = false }: { quiet?: boolean } = {}): Promise<void> {
+        if (!quiet) loading.value = true;
         try {
             const [state, record] = await Promise.all([apiClient.getAutoSync(), loadAutoSyncKey()]);
             status.value = state.autoSync;
             keyGrantId.value = record?.grantId ?? null;
         } finally {
-            loading.value = false;
+            if (!quiet) loading.value = false;
         }
     }
 
@@ -100,8 +104,10 @@ export function useAutoSync() {
         pin: string;
         schedule: AutoSyncSchedule;
         durationDays: AutoSyncDurationDays;
+        /** From `ensurePushSubscriptionId`, taken earlier in the same tap. Omitted, it is taken here. */
+        pushSubscriptionId?: string;
     }): Promise<IAutoSyncStatus> {
-        const pushSubscriptionId = await ensurePushSubscriptionId();
+        const pushSubscriptionId = input.pushSubscriptionId ?? (await ensurePushSubscriptionId());
         const key = toBase64Url(crypto.getRandomValues(new Uint8Array(AUTO_SYNC_KEY_BYTES)));
         const result = await apiClient.enableAutoSync({
             ...toScheduleFields(input.schedule),
@@ -143,7 +149,7 @@ export function useAutoSync() {
         return enable({ pin, schedule: scheduleOf(current), durationDays: current.durationDays });
     }
 
-    return { status, loading, holdsGrant, refresh, enable, updateSchedule, disable, renew };
+    return { status, loading, holdsGrant, ensurePushSubscriptionId, refresh, enable, updateSchedule, disable, renew };
 }
 
 /** The shape of `useAutoSync()`, passed down from the page so every auto-sync component shares one status. */

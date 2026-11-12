@@ -287,7 +287,10 @@ async function submitKeepPin() {
                     @click="openSchedule"
                 />
             </div>
-            <p class="flex items-center gap-1 text-xs text-muted-color md:hidden">
+            <p
+                v-if="daysLeft === null"
+                class="flex items-center gap-1 text-xs text-muted-color md:hidden"
+            >
                 On until {{ untilText }}
                 <SharedHintButton
                     icon="pi-info-circle"

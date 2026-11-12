@@ -517,7 +517,7 @@ describe("silent auto-sync renewal", () => {
         expect(flow.activeJobId.value).toBe("full-job");
     });
 
-    it("loads the auto-sync status first when it is not loaded yet", async () => {
+    it("reloads the auto-sync status quietly before renewing", async () => {
         mocks.autoSync.status.value = null;
         mocks.autoSync.refresh.mockImplementation(async () => {
             mocks.autoSync.status.value = { id: "grant-1" };
@@ -528,6 +528,24 @@ describe("silent auto-sync renewal", () => {
         await flow.submitSync();
         await vi.waitFor(() => expect(mocks.autoSync.renew).toHaveBeenCalledWith("1234"));
         expect(mocks.autoSync.refresh).toHaveBeenCalledTimes(1);
+        expect(mocks.autoSync.refresh).toHaveBeenCalledWith({ quiet: true });
+    });
+
+    it("does not renew from a stale status when another device now holds the grant", async () => {
+        // The status loaded at page mount still says this device holds it; the reload says another device took it.
+        mocks.autoSync.status.value = { id: "grant-1" };
+        mocks.autoSync.holdsGrant.value = true;
+        mocks.autoSync.refresh.mockImplementation(async () => {
+            mocks.autoSync.status.value = { id: "grant-2" };
+            mocks.autoSync.holdsGrant.value = false;
+        });
+        flow.requestSync({});
+        flow.pin.value = "1234";
+        await flow.submitSync();
+        await vi.waitFor(() => expect(mocks.autoSync.refresh).toHaveBeenCalledWith({ quiet: true }));
+        await settle();
+        expect(mocks.autoSync.renew).not.toHaveBeenCalled();
+        expect(flow.activeJobId.value).toBe("full-job");
     });
 
     it("keeps the sync running when the renewal is rejected", async () => {

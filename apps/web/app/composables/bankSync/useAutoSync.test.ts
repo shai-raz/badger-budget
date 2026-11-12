@@ -77,6 +77,22 @@ beforeEach(() => {
 });
 
 describe("useAutoSync.enable", () => {
+    it("uses a push subscription id taken earlier in the tap without asking for push again", async () => {
+        const autoSync = useAutoSync();
+        const pushSubscriptionId = await autoSync.ensurePushSubscriptionId();
+        pushDevice.enable.mockClear();
+
+        await autoSync.enable({
+            pin: "1234",
+            schedule: { ...HOURS_SCHEDULE },
+            durationDays: 30,
+            pushSubscriptionId,
+        });
+
+        expect(pushDevice.enable).not.toHaveBeenCalled();
+        expect(api.enableAutoSync.mock.calls[0]?.[0]).toMatchObject({ pushSubscriptionId: "sub-1" });
+    });
+
     it("sends the hours window and omits the run time", async () => {
         const autoSync = useAutoSync();
 
@@ -189,6 +205,18 @@ describe("useAutoSync.refresh and holdsGrant", () => {
         await autoSync.refresh();
 
         expect(autoSync.holdsGrant.value).toBe(false);
+    });
+
+    it("reloads quietly without raising the loading flag", async () => {
+        api.getAutoSync.mockResolvedValueOnce({ autoSync: HOURS_STATUS });
+        const autoSync = useAutoSync();
+
+        const pending = autoSync.refresh({ quiet: true });
+        expect(autoSync.loading.value).toBe(false);
+        await pending;
+
+        expect(autoSync.status.value).toEqual(HOURS_STATUS);
+        expect(autoSync.loading.value).toBe(false);
     });
 
     it("does not hold a grant when auto-sync is off", async () => {
