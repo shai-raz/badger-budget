@@ -1,6 +1,61 @@
 {
     "releases": [
         {
+            "version": "0.17.0",
+            "date": "2026-11-12",
+            "items": [
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "grant-key crypto and credential-source sync pipeline",
+                    "pr": 131
+                },
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "enable, view, reschedule and turn off auto-sync",
+                    "pr": 132
+                },
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "auto-sync run endpoint",
+                    "pr": 133
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "service-worker handler for auto-sync runs",
+                    "pr": 134
+                },
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "auto-sync push scheduler",
+                    "pr": 135
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "auto-sync card on the bank connections page",
+                    "pr": 136
+                },
+                {
+                    "type": "fix",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "limit wrong sync PIN attempts",
+                    "pr": 138
+                }
+            ]
+        },
+        {
             "version": "0.16.0",
             "date": "2026-11-11",
             "items": [
