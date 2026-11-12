@@ -290,7 +290,7 @@ const saveLabel = computed(() => (isEnable.value ? "Unlock and turn on" : "Save"
         <template #headerHint>
             <SharedHintButton
                 icon="pi-info-circle"
-                tooltip="Syncs on a schedule, even when Badger is closed. Only this device can unlock your bank logins."
+                tooltip="Syncs on a schedule, even when Badger is closed. Your bank logins are locked with a key kept on this device."
                 aria-label="About auto-sync"
                 class="h-11 w-11 justify-center md:h-auto md:w-auto"
             />
