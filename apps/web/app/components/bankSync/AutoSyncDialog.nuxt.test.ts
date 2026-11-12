@@ -255,7 +255,7 @@ describe("AutoSyncDialog enable", () => {
     it("asks for the PIN and the keep-on duration, and shows the notification line", async () => {
         await mountDialog({ mode: "enable", current: null });
         expect(body()).toContain("Keep on for");
-        expect(body()).toContain("Next, allow notifications when asked.");
+        expect(body()).toContain("Auto-sync uses notifications. Allow them when asked.");
         expect(body()).toContain("Sync PIN");
         expect(buttonWith("Unlock and turn on")?.disabled).toBe(true);
     });

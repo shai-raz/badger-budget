@@ -456,7 +456,7 @@ const saveLabel = computed(() => (isEnable.value ? "Unlock and turn on" : "Save"
                     class="pi pi-bell shrink-0"
                     aria-hidden="true"
                 ></i>
-                Next, allow notifications when asked.
+                Auto-sync uses notifications. Allow them when asked.
             </p>
 
             <div
