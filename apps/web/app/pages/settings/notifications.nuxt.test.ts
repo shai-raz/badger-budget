@@ -26,10 +26,17 @@ const m = await vi.hoisted(async () => {
         updatePreferences: { mutate: vi.fn(), isPending: ref(false) },
         removeSubscription: { mutateAsync: vi.fn(() => Promise.resolve()), isPending: ref(false) },
         sendTest: { mutate: vi.fn(), isPending: ref(false) },
-        getAutoSync: vi.fn(),
+        autoSync: {
+            status: ref<IAutoSyncStatus | null>(null),
+            holdsGrant: ref(false),
+            refresh: vi.fn(() => Promise.resolve()),
+            disable: vi.fn(() => Promise.resolve()),
+        },
         toastAdd: vi.fn(),
     };
 });
+
+const confirmRequire = vi.hoisted(() => vi.fn());
 
 vi.mock("../../composables/notifications/usePushDevice", () => ({ usePushDevice: () => m.device }));
 vi.mock("../../composables/useDevtoolsFlag", () => ({ useDevtoolsFlag: () => m.devtools }));
@@ -41,7 +48,8 @@ vi.mock("../../composables/notifications/useNotificationQueries", () => ({
     useSendTestNotificationMutation: () => m.sendTest,
 }));
 vi.mock("primevue/usetoast", () => ({ useToast: () => ({ add: m.toastAdd }) }));
-vi.mock("../../composables/useApiClient", () => ({ useApiClient: () => ({ getAutoSync: m.getAutoSync }) }));
+vi.mock("../../composables/bankSync/useAutoSync", () => ({ useAutoSync: () => m.autoSync }));
+vi.mock("primevue/useconfirm", () => ({ useConfirm: () => ({ require: confirmRequire }) }));
 
 const baseUser = {
     id: "u1",
@@ -128,7 +136,10 @@ beforeEach(() => {
     m.updatePreferences.isPending.value = false;
     m.removeSubscription.isPending.value = false;
     m.sendTest.isPending.value = false;
-    m.getAutoSync.mockResolvedValue({ autoSync: null });
+    m.autoSync.status.value = null;
+    m.autoSync.holdsGrant.value = false;
+    m.autoSync.refresh.mockImplementation(() => Promise.resolve());
+    m.autoSync.disable.mockImplementation(() => Promise.resolve());
 });
 
 async function mountPage(): Promise<VueWrapper> {
@@ -312,7 +323,7 @@ describe("settings notifications page", () => {
         });
 
         it("is shown as an always-on entry while auto-sync is on", async () => {
-            m.getAutoSync.mockResolvedValue({ autoSync: autoSyncStatus });
+            m.autoSync.status.value = autoSyncStatus;
             const wrapper = await mountPage();
             await flushPromises();
 
@@ -327,7 +338,7 @@ describe("settings notifications page", () => {
         });
 
         it("stays hidden when the auto-sync status cannot be loaded", async () => {
-            m.getAutoSync.mockRejectedValue(new Error("offline"));
+            m.autoSync.refresh.mockRejectedValue(new Error("offline"));
             const wrapper = await mountPage();
             await flushPromises();
 
@@ -485,6 +496,133 @@ describe("settings notifications page", () => {
 
             expect(m.toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: "error" }));
             expect(m.device.disable).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("turning off auto-sync", () => {
+        type ConfirmOptions = { accept?: () => void; reject?: () => void };
+        const confirmOptions = () => confirmRequire.mock.calls[0]?.[0] as ConfirmOptions | undefined;
+
+        // This device is on and holds the auto-sync grant, so switching notifications off has to ask first.
+        function setUpGrantHolder() {
+            m.device.state.value = "on";
+            m.autoSync.status.value = autoSyncStatus;
+            m.autoSync.holdsGrant.value = true;
+        }
+
+        async function switchOff(wrapper: VueWrapper) {
+            await wrapper.get('input[id="push-notifications"]').trigger("change");
+            await flushPromises();
+        }
+
+        it("asks before turning off notifications on the device that holds auto-sync", async () => {
+            setUpGrantHolder();
+            const wrapper = await mountPage();
+
+            await switchOff(wrapper);
+
+            expect(confirmRequire).toHaveBeenCalledTimes(1);
+            expect(confirmRequire).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    header: "Turn off notifications?",
+                    message: "This also turns off auto-sync.",
+                    acceptLabel: "Turn off",
+                    rejectLabel: "Cancel",
+                }),
+            );
+            expect(m.autoSync.disable).not.toHaveBeenCalled();
+            expect(m.device.disable).not.toHaveBeenCalled();
+        });
+
+        it("turns auto-sync off before notifications when the turn-off is accepted", async () => {
+            setUpGrantHolder();
+            const wrapper = await mountPage();
+            await switchOff(wrapper);
+
+            confirmOptions()?.accept?.();
+            await flushPromises();
+
+            expect(m.autoSync.disable).toHaveBeenCalledTimes(1);
+            expect(m.device.disable).toHaveBeenCalledTimes(1);
+            expect(m.autoSync.disable.mock.invocationCallOrder[0]).toBeLessThan(
+                m.device.disable.mock.invocationCallOrder[0] ?? Infinity,
+            );
+        });
+
+        it("leaves notifications on when the turn-off is cancelled", async () => {
+            setUpGrantHolder();
+            const wrapper = await mountPage();
+            await switchOff(wrapper);
+
+            confirmOptions()?.reject?.();
+            await flushPromises();
+
+            expect(m.autoSync.disable).not.toHaveBeenCalled();
+            expect(m.device.disable).not.toHaveBeenCalled();
+            expect(pushSwitch(wrapper).checked).toBe(true);
+        });
+
+        it("shows an error and leaves notifications on when auto-sync cannot be turned off", async () => {
+            setUpGrantHolder();
+            m.autoSync.disable.mockRejectedValueOnce(new Error("offline"));
+            const wrapper = await mountPage();
+            await switchOff(wrapper);
+
+            confirmOptions()?.accept?.();
+            await flushPromises();
+
+            expect(m.toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: "error" }));
+            expect(m.device.disable).not.toHaveBeenCalled();
+            expect(pushSwitch(wrapper).checked).toBe(true);
+        });
+
+        it("turns notifications off without asking when this device does not hold auto-sync", async () => {
+            setUpGrantHolder();
+            m.autoSync.holdsGrant.value = false;
+            const wrapper = await mountPage();
+
+            await switchOff(wrapper);
+
+            expect(confirmRequire).not.toHaveBeenCalled();
+            expect(m.device.disable).toHaveBeenCalledTimes(1);
+        });
+
+        it("asks before removing this device when it holds auto-sync, and turns auto-sync off first", async () => {
+            setUpGrantHolder();
+            m.device.endpoint.value = ENDPOINT_THIS;
+            m.subscriptions.data.value = [
+                subscription({ id: "sub-1", endpoint: ENDPOINT_THIS, deviceLabel: "Chrome on Windows" }),
+            ];
+            const wrapper = await mountPage();
+
+            const remove = await openRemoveItem(wrapper, "Chrome on Windows");
+            remove?.click();
+            await flushPromises();
+
+            expect(confirmRequire).toHaveBeenCalledWith(expect.objectContaining({ header: "Turn off notifications?" }));
+            expect(m.removeSubscription.mutateAsync).not.toHaveBeenCalled();
+
+            confirmOptions()?.accept?.();
+            await flushPromises();
+
+            expect(m.autoSync.disable.mock.invocationCallOrder[0]).toBeLessThan(
+                m.removeSubscription.mutateAsync.mock.invocationCallOrder[0] ?? Infinity,
+            );
+            expect(m.removeSubscription.mutateAsync).toHaveBeenCalledWith("sub-1");
+        });
+
+        it("removes another device directly without asking", async () => {
+            setUpGrantHolder();
+            m.subscriptions.data.value = [subscription({ id: "sub-2", deviceLabel: "Chrome on Windows" })];
+            const wrapper = await mountPage();
+
+            const remove = await openRemoveItem(wrapper, "Chrome on Windows");
+            remove?.click();
+            await flushPromises();
+
+            expect(confirmRequire).not.toHaveBeenCalled();
+            expect(m.autoSync.disable).not.toHaveBeenCalled();
+            expect(m.removeSubscription.mutateAsync).toHaveBeenCalledWith("sub-2");
         });
     });
 
