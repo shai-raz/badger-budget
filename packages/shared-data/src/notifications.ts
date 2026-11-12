@@ -60,21 +60,27 @@ export const NOTIFICATION_TYPE_REGISTRY: NotificationTypeRegistry = {
         mandatory: true,
         listed: false,
     },
+    // The one settings entry for all auto-sync notices. They can't be muted, because every auto-sync push must show
+    // a notice. The settings page shows this entry only while auto-sync is on.
     "auto-sync.result": {
-        label: "Auto-sync results",
-        description: "New transactions or a failed sync.",
+        label: "Auto-sync",
+        description: "Sync’s result, and a reminder to keep auto-sync on.",
         defaultEnabled: true,
-        mandatory: false,
+        mandatory: true,
         listed: true,
     },
+    // Covered by the Auto-sync entry.
     "auto-sync.expiring": {
         label: "Auto-sync ending",
         description: "When automatic sync is about to stop.",
         defaultEnabled: true,
-        mandatory: false,
-        listed: true,
+        mandatory: true,
+        listed: false,
     },
 };
+
+/** The settings entry that stands for every auto-sync notice. */
+export const AUTO_SYNC_SETTINGS_TYPE = "auto-sync.result" satisfies NotificationType;
 
 /** Payload data per type, keyed by NotificationType; extended together with NOTIFICATION_TYPES. */
 export interface NotificationDataMap {
