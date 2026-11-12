@@ -13,7 +13,6 @@ import { CredentialCryptoService, GrantDecryptError } from "../crypto/credential
 import { sha256Hex } from "../oauth/oauth-crypto";
 import type { CredentialSource, SyncJobSummary } from "./credential-source";
 import { PushService } from "../notifications/push.service";
-import { NotificationPreferencesService } from "../notifications/notification-preferences.service";
 import type { ScraperConnection } from "@prisma/client";
 
 const DAY = 86_400_000;
@@ -48,7 +47,6 @@ describe("AutoSyncService", () => {
 
     const mockBankSync = { verifyUserPin: jest.fn(), startSyncJob: jest.fn() };
     const mockPush = { send: jest.fn() };
-    const mockPreferences = { shouldSend: jest.fn() };
 
     const mockConfigService = {
         get: jest.fn((key: string) => (key === "CREDENTIAL_ENCRYPTION_PEPPER" ? PEPPER : undefined)),
@@ -126,14 +124,12 @@ describe("AutoSyncService", () => {
                 { provide: PrismaService, useValue: mockPrisma },
                 { provide: BankSyncService, useValue: mockBankSync },
                 { provide: PushService, useValue: mockPush },
-                { provide: NotificationPreferencesService, useValue: mockPreferences },
             ],
         }).compile();
 
         service = module.get(AutoSyncService);
         crypto = module.get(CredentialCryptoService);
         mockPush.send.mockResolvedValue([{ subscriptionId: PUSH_ID, outcome: "accepted" }]);
-        mockPreferences.shouldSend.mockResolvedValue(true);
         mockPrisma.user.findFirst.mockResolvedValue({ id: USER_ID, role: "user" });
 
         mockBankSync.verifyUserPin.mockImplementation(async (_userId: string, pin: string) => {
@@ -823,7 +819,7 @@ describe("AutoSyncService", () => {
                 await source.onFinished?.(summary);
             };
 
-            it("sends the quiet variant when nothing changed, so the progress notification closes", async () => {
+            it("sends the quiet variant when nothing changed, so the device replaces the progress notification", async () => {
                 await finishRun(summaryOf());
 
                 expect(mockPush.send).toHaveBeenCalledWith(
@@ -837,26 +833,20 @@ describe("AutoSyncService", () => {
                     },
                     { tag: "auto-sync", ttl: 3600 },
                 );
-                expect(mockPreferences.shouldSend).not.toHaveBeenCalled();
             });
 
-            it("sends the quiet variant to a user who muted results, and still closes the notification", async () => {
-                mockPreferences.shouldSend.mockResolvedValueOnce(false);
-
+            it("sends the real result even if the user muted auto-sync results", async () => {
                 await finishRun(summaryOf({ newTransactions: 3 }));
 
-                expect(mockPreferences.shouldSend).toHaveBeenCalledWith(
-                    { id: USER_ID, role: "user" },
-                    "auto-sync.result",
-                );
+                expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
                 expect(mockPush.send).toHaveBeenCalledWith(
                     { subscriptionId: PUSH_ID },
                     {
                         type: "auto-sync.result",
-                        title: "",
+                        title: "3 new transactions",
                         body: "",
-                        url: "/",
-                        data: { quiet: true, newTransactions: 3, failedConnectionCount: 0 },
+                        url: "/transactions",
+                        data: { quiet: false, newTransactions: 3, failedConnectionCount: 0 },
                     },
                     { tag: "auto-sync", ttl: 3600 },
                 );

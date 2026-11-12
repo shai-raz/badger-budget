@@ -23,7 +23,6 @@ import { UpdateAutoSyncScheduleDto } from "./dto/update-auto-sync-schedule.dto";
 import { canonicalTimeZone, jitterRunAt, nextScheduledRunAt, parseAutoSyncSchedule } from "./auto-sync-schedule";
 import { sha256Hex } from "../oauth/oauth-crypto";
 import { PushService } from "../notifications/push.service";
-import { NotificationPreferencesService } from "../notifications/notification-preferences.service";
 
 /** A grant is shown as unreachable once it has missed this many runs and none has run for this long. */
 export const AUTO_SYNC_UNREACHABLE_MISSES = 2;
@@ -97,7 +96,10 @@ type RunGrant = {
     intervalCount: number;
 };
 
-/** The quiet variant: it shows nothing and only closes the device's "Syncing…" notification. */
+/**
+ * The quiet variant, for a run that changed nothing: empty title and body; the device replaces "Syncing…" with a
+ * silent notice it writes itself.
+ */
 function quietResult(summary: SyncJobSummary): NotificationContent {
     return {
         type: "auto-sync.result",
@@ -210,7 +212,6 @@ export class AutoSyncService {
         private readonly credentialCryptoService: CredentialCryptoService,
         private readonly bankSyncService: BankSyncService,
         private readonly pushService: PushService,
-        private readonly preferences: NotificationPreferencesService,
     ) {}
 
     /** The live grant, or null when there is none or it has expired. */
@@ -533,9 +534,9 @@ export class AutoSyncService {
     }
 
     /**
-     * Pushes a run's result to the device that ran it. A quiet run, or a user who muted results, gets the quiet variant,
-     * so "Syncing…" always closes. Sent by subscription id, so the stored preferences are checked here, not by PushService.
-     * A subscription that was removed, or now belongs to another user, gets nothing: the grant is deleted instead.
+     * Pushes a run's result to the device that ran it, so "Syncing…" is always replaced. Auto-sync notices can't be
+     * muted, so stored preferences are not consulted. A subscription that was removed, or now belongs to another user,
+     * gets nothing: the grant is deleted instead.
      */
     private async sendRunResult(grant: RunGrant, summary: SyncJobSummary): Promise<void> {
         if (!(await isGrantSubscriptionOwned(this.prisma, grant))) {
@@ -544,8 +545,7 @@ export class AutoSyncService {
         }
 
         const quiet = summary.newTransactions === 0 && summary.failedConnections.length === 0;
-        const content =
-            quiet || !(await this.resultsWanted(grant.userId)) ? quietResult(summary) : changedResult(summary);
+        const content = quiet ? quietResult(summary) : changedResult(summary);
 
         const results = await this.pushService.send({ subscriptionId: grant.pushSubscriptionId }, content, {
             tag: "auto-sync",
@@ -565,14 +565,6 @@ export class AutoSyncService {
         } catch (err) {
             this.logger.error(`Could not close the auto-sync notification for grant ${grant.id}`, err);
         }
-    }
-
-    private async resultsWanted(userId: string): Promise<boolean> {
-        const user = await this.prisma.user.findFirst({
-            where: { id: userId, deletedAt: null },
-            select: { id: true, role: true },
-        });
-        return user !== null && (await this.preferences.shouldSend(user, "auto-sync.result"));
     }
 
     /** Splits the connections into those this grant covers and those it does not (added since, or never). */
