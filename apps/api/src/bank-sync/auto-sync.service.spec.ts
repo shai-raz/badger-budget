@@ -740,6 +740,22 @@ describe("AutoSyncService", () => {
                 );
             });
 
+            it("refuses a grant whose device was removed or moved, with the same 401, before the token is spent", async () => {
+                const token = await issue();
+                mockPrisma.pushSubscription.findFirst.mockResolvedValueOnce(null);
+
+                await expect(service.run({ grantId: GRANT_ID, key: KEY, runToken: token }, NOW)).rejects.toThrow(
+                    new UnauthorizedException("Auto-sync run rejected"),
+                );
+                expect(mockPrisma.pushSubscription.findFirst).toHaveBeenCalledWith({
+                    where: { id: PUSH_ID, userId: USER_ID, removedAt: null },
+                    select: { id: true },
+                });
+                expect(mockPrisma.autoSyncGrant.updateMany).not.toHaveBeenCalled();
+                expect(stored.runTokenHash).toBe(sha256Hex(token));
+                expect(mockBankSync.startSyncJob).not.toHaveBeenCalled();
+            });
+
             it("checks the device key before the token is touched", async () => {
                 const token = await issue();
 
@@ -919,7 +935,10 @@ describe("AutoSyncService", () => {
             });
 
             it("deletes the grant without a push when its device subscription was removed", async () => {
-                mockPrisma.pushSubscription.findFirst.mockResolvedValueOnce(null);
+                // The run's own ownership check passes; the result push then finds the subscription gone.
+                mockPrisma.pushSubscription.findFirst
+                    .mockResolvedValueOnce({ id: PUSH_ID })
+                    .mockResolvedValueOnce(null);
 
                 await finishRun(summaryOf({ newTransactions: 1 }));
 
@@ -928,7 +947,10 @@ describe("AutoSyncService", () => {
             });
 
             it("deletes the grant without a push when its subscription now belongs to another user", async () => {
-                mockPrisma.pushSubscription.findFirst.mockResolvedValueOnce(null);
+                // The run's own ownership check passes; the result push then finds the subscription gone.
+                mockPrisma.pushSubscription.findFirst
+                    .mockResolvedValueOnce({ id: PUSH_ID })
+                    .mockResolvedValueOnce(null);
 
                 await finishRun(summaryOf({ newTransactions: 1 }));
 

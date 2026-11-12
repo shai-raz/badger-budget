@@ -459,6 +459,9 @@ export class AutoSyncService {
             intervalCount: grant.intervalCount,
         };
 
+        // A device removed, or moved to another user, after the token was issued: refuse before the token is spent.
+        if (!(await isGrantSubscriptionOwned(this.prisma, runGrant))) throw runRejected();
+
         const rows = await this.prisma.autoSyncCredential.findMany({
             where: { grantId: grant.id, connection: { deletedAt: null, isActive: true } },
             include: { connection: true },

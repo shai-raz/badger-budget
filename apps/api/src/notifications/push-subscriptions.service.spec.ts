@@ -36,6 +36,9 @@ describe("PushSubscriptionsService", () => {
             updateMany: jest.Mock;
             deleteMany: jest.Mock;
         };
+        autoSyncGrant: { deleteMany: jest.Mock };
+        autoSyncCredential: { deleteMany: jest.Mock };
+        $transaction: jest.Mock;
     };
 
     beforeEach(async () => {
@@ -54,6 +57,9 @@ describe("PushSubscriptionsService", () => {
                 updateMany: jest.fn().mockResolvedValue({ count: 1 }),
                 deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
             },
+            autoSyncGrant: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+            autoSyncCredential: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+            $transaction: jest.fn(async (fn: (tx: unknown) => unknown) => fn(prisma)),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -106,6 +112,30 @@ describe("PushSubscriptionsService", () => {
             });
         });
 
+        it("deletes the grant of an endpoint moved from another user, before the move is written", async () => {
+            prisma.pushSubscription.findUnique.mockResolvedValue({ id: "sub-1", userId: "user-2", removedAt: null });
+
+            await service.register(USER, DTO);
+
+            expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+            expect(prisma.autoSyncCredential.deleteMany).toHaveBeenCalledWith({
+                where: { grant: { pushSubscriptionId: "sub-1" } },
+            });
+            expect(prisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({ where: { pushSubscriptionId: "sub-1" } });
+            expect(prisma.autoSyncGrant.deleteMany.mock.invocationCallOrder[0]).toBeLessThan(
+                prisma.pushSubscription.upsert.mock.invocationCallOrder[0],
+            );
+        });
+
+        it("keeps the grant when the caller already owns the endpoint", async () => {
+            prisma.pushSubscription.findUnique.mockResolvedValue({ id: "sub-1", userId: USER.id, removedAt: null });
+
+            await service.register(USER, DTO);
+
+            expect(prisma.pushSubscription.upsert).toHaveBeenCalled();
+            expect(prisma.autoSyncGrant.deleteMany).not.toHaveBeenCalled();
+        });
+
         it("rejects the demo account before writing", async () => {
             await expect(service.register(DEMO, DTO)).rejects.toBeInstanceOf(ForbiddenException);
             expect(prisma.pushSubscription.upsert).not.toHaveBeenCalled();
@@ -154,10 +184,21 @@ describe("PushSubscriptionsService", () => {
             expect(prisma.pushSubscription.deleteMany).not.toHaveBeenCalled();
         });
 
-        it("throws not found when the row belongs to someone else", async () => {
+        it("deletes the device's auto-sync grant and its credential copies in the same transaction", async () => {
+            await service.remove(USER.id, "sub-1");
+
+            expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+            expect(prisma.autoSyncCredential.deleteMany).toHaveBeenCalledWith({
+                where: { grant: { pushSubscriptionId: "sub-1" } },
+            });
+            expect(prisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({ where: { pushSubscriptionId: "sub-1" } });
+        });
+
+        it("throws not found when the row belongs to someone else, and deletes no grant", async () => {
             prisma.pushSubscription.updateMany.mockResolvedValue({ count: 0 });
 
             await expect(service.remove(USER.id, "sub-of-other-user")).rejects.toBeInstanceOf(NotFoundException);
+            expect(prisma.autoSyncGrant.deleteMany).not.toHaveBeenCalled();
         });
     });
 
@@ -179,7 +220,7 @@ describe("PushSubscriptionsService", () => {
         });
 
         it("upserts an endpoint that is not removed", async () => {
-            prisma.pushSubscription.findUnique.mockResolvedValue({ removedAt: null });
+            prisma.pushSubscription.findUnique.mockResolvedValue({ id: "sub-1", userId: USER.id, removedAt: null });
 
             await service.register(USER, DTO);
 

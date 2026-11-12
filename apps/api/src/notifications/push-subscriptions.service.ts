@@ -1,6 +1,7 @@
 import { ForbiddenException, GoneException, Injectable, NotFoundException } from "@nestjs/common";
 import type { IPushSubscription } from "@badger/types";
 import type { AuthUser } from "../auth/auth-user";
+import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import type { RegisterPushSubscriptionDto } from "./dto/register-push-subscription.dto";
 
@@ -22,6 +23,12 @@ interface PushSubscriptionView {
     createdAt: Date;
     lastSeenAt: Date;
     lastAcceptedAt: Date | null;
+}
+
+/** Deletes the auto-sync grants that push to a subscription, with their credential copies. */
+async function deleteGrantsOfSubscription(tx: Prisma.TransactionClient, subscriptionId: string): Promise<void> {
+    await tx.autoSyncCredential.deleteMany({ where: { grant: { pushSubscriptionId: subscriptionId } } });
+    await tx.autoSyncGrant.deleteMany({ where: { pushSubscriptionId: subscriptionId } });
 }
 
 /** Keys are write-only: they never leave the server. */
@@ -50,28 +57,32 @@ export class PushSubscriptionsService {
 
         const existing = await this.prisma.pushSubscription.findUnique({
             where: { endpoint: dto.endpoint },
-            select: { removedAt: true },
+            select: { id: true, userId: true, removedAt: true },
         });
         if (existing?.removedAt) throw new GoneException(REMOVED_ENDPOINT_MESSAGE);
 
-        const row = await this.prisma.pushSubscription.upsert({
-            where: { endpoint: dto.endpoint },
-            create: {
-                userId: user.id,
-                endpoint: dto.endpoint,
-                p256dh: dto.keys.p256dh,
-                auth: dto.keys.auth,
-                deviceLabel: dto.deviceLabel,
-                lastSeenAt: new Date(),
-            },
-            update: {
-                userId: user.id,
-                p256dh: dto.keys.p256dh,
-                auth: dto.keys.auth,
-                deviceLabel: dto.deviceLabel,
-                lastSeenAt: new Date(),
-            },
-            select: PUSH_SUBSCRIPTION_VIEW,
+        const row = await this.prisma.$transaction(async (tx) => {
+            // The grant belongs to the old owner, so it goes in the same write that moves the endpoint.
+            if (existing && existing.userId !== user.id) await deleteGrantsOfSubscription(tx, existing.id);
+            return tx.pushSubscription.upsert({
+                where: { endpoint: dto.endpoint },
+                create: {
+                    userId: user.id,
+                    endpoint: dto.endpoint,
+                    p256dh: dto.keys.p256dh,
+                    auth: dto.keys.auth,
+                    deviceLabel: dto.deviceLabel,
+                    lastSeenAt: new Date(),
+                },
+                update: {
+                    userId: user.id,
+                    p256dh: dto.keys.p256dh,
+                    auth: dto.keys.auth,
+                    deviceLabel: dto.deviceLabel,
+                    lastSeenAt: new Date(),
+                },
+                select: PUSH_SUBSCRIPTION_VIEW,
+            });
         });
         return toPushSubscription(row);
     }
@@ -85,13 +96,19 @@ export class PushSubscriptionsService {
         return rows.map(toPushSubscription);
     }
 
-    /** Keeps the row as a mark, so the endpoint's quiet re-register is refused (see register). */
+    /**
+     * Keeps the row as a mark, so the endpoint's quiet re-register is refused (see register). The device's auto-sync
+     * grant is deleted in the same transaction, so auto-sync stops on this device at once.
+     */
     async remove(userId: string, id: string): Promise<void> {
-        const { count } = await this.prisma.pushSubscription.updateMany({
-            where: { id, userId, removedAt: null },
-            data: { removedAt: new Date() },
+        await this.prisma.$transaction(async (tx) => {
+            const { count } = await tx.pushSubscription.updateMany({
+                where: { id, userId, removedAt: null },
+                data: { removedAt: new Date() },
+            });
+            if (count === 0) throw new NotFoundException("Push subscription not found");
+            await deleteGrantsOfSubscription(tx, id);
         });
-        if (count === 0) throw new NotFoundException("Push subscription not found");
     }
 
     /** Idempotent: an endpoint that is not registered for the caller is not an error. */
