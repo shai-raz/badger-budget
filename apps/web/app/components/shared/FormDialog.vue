@@ -4,6 +4,8 @@
  * the form, and Cancel / Save buttons pinned in the footer. The caller supplies the form
  * as the default slot and decides where focus starts with `initialFocus`.
  *
+ * `headerHint` slot: an inline element after the title, such as an info icon.
+ *
  * Focus: PrimeVue's `Dialog.focus()` moves focus to the first `[autofocus]` inside the
  * content, or else to the close button (which then shows a focus ring).
  * - `field`: the form marks its first input `autofocus`, so typing starts at once.
@@ -108,11 +110,12 @@ const dialogPt = computed(() => ({
         @hide="emit('hide')"
     >
         <template
-            v-if="backLabel"
+            v-if="backLabel || $slots.headerHint"
             #header
         >
             <div class="flex min-w-0 items-center gap-2">
                 <Button
+                    v-if="backLabel"
                     icon="pi pi-arrow-left"
                     text
                     rounded
@@ -123,6 +126,7 @@ const dialogPt = computed(() => ({
                     @click="emit('back')"
                 />
                 <span class="p-dialog-title truncate text-surface-900 dark:text-surface-0">{{ header }}</span>
+                <slot name="headerHint" />
             </div>
         </template>
 

@@ -19,6 +19,13 @@ const mocks = await vi.hoisted(async () => {
         activeJob: ref<ISyncJob | null>(null),
         // Lifecycle hooks the flow registers on mount; a test runs them to simulate the page mounting.
         mounted: [] as Array<() => unknown>,
+        // The shared auto-sync state. Tests set holdsGrant and the status; renew and refresh are checked.
+        autoSync: {
+            status: ref<{ id: string } | null>({ id: "grant-1" }),
+            holdsGrant: ref(false),
+            refresh: vi.fn(),
+            renew: vi.fn(),
+        },
     };
 });
 vi.mock("vue", async (original) => ({
@@ -42,6 +49,7 @@ vi.mock("./useSyncUnlock", () => ({
         register: vi.fn(),
     }),
 }));
+vi.mock("./useAutoSync", () => ({ useAutoSync: () => mocks.autoSync }));
 vi.mock("./useBankSync", () => ({
     bankSyncKeys: {
         passkeys: () => ["bank-sync", "passkeys"],
@@ -96,6 +104,10 @@ beforeEach(() => {
     mocks.single.mockResolvedValue({ jobId: "single-job" });
     mocks.unlock.mockResolvedValue("1234");
     mocks.available.mockReturnValue(false);
+    mocks.autoSync.status.value = { id: "grant-1" };
+    mocks.autoSync.holdsGrant.value = false;
+    mocks.autoSync.refresh.mockResolvedValue(undefined);
+    mocks.autoSync.renew.mockResolvedValue({});
     scope = effectScope();
     flow = scope.run(() => provideBankSyncFlow())!;
 });
@@ -474,5 +486,76 @@ describe("per-connection sync state on page load", () => {
         expect(flow.connectionSyncState("conn-b")).toBe("pending");
         expect(mocks.single).not.toHaveBeenCalled();
         expect(mocks.full).not.toHaveBeenCalled();
+    });
+});
+
+describe("silent auto-sync renewal", () => {
+    it("renews the grant once with the PIN when this device holds auto-sync", async () => {
+        mocks.autoSync.holdsGrant.value = true;
+        flow.requestSync({ defaultCurrencyCode: "ILS" });
+        flow.pin.value = "1234";
+        await flow.submitSync();
+        await vi.waitFor(() => expect(mocks.autoSync.renew).toHaveBeenCalledTimes(1));
+        expect(mocks.autoSync.renew).toHaveBeenCalledWith("1234");
+        expect(flow.activeJobId.value).toBe("full-job");
+    });
+
+    it("renews after a passkey unlock too", async () => {
+        mocks.autoSync.holdsGrant.value = true;
+        mocks.available.mockReturnValue(true);
+        mocks.unlock.mockResolvedValue("5678");
+        flow.requestSync({});
+        await vi.waitFor(() => expect(mocks.autoSync.renew).toHaveBeenCalledWith("5678"));
+    });
+
+    it("does not renew when another device holds auto-sync", async () => {
+        flow.requestSync({});
+        flow.pin.value = "1234";
+        await flow.submitSync();
+        await settle();
+        expect(mocks.autoSync.renew).not.toHaveBeenCalled();
+        expect(flow.activeJobId.value).toBe("full-job");
+    });
+
+    it("reloads the auto-sync status quietly before renewing", async () => {
+        mocks.autoSync.status.value = null;
+        mocks.autoSync.refresh.mockImplementation(async () => {
+            mocks.autoSync.status.value = { id: "grant-1" };
+            mocks.autoSync.holdsGrant.value = true;
+        });
+        flow.requestSync({});
+        flow.pin.value = "1234";
+        await flow.submitSync();
+        await vi.waitFor(() => expect(mocks.autoSync.renew).toHaveBeenCalledWith("1234"));
+        expect(mocks.autoSync.refresh).toHaveBeenCalledTimes(1);
+        expect(mocks.autoSync.refresh).toHaveBeenCalledWith({ quiet: true });
+    });
+
+    it("does not renew from a stale status when another device now holds the grant", async () => {
+        // The status loaded at page mount still says this device holds it; the reload says another device took it.
+        mocks.autoSync.status.value = { id: "grant-1" };
+        mocks.autoSync.holdsGrant.value = true;
+        mocks.autoSync.refresh.mockImplementation(async () => {
+            mocks.autoSync.status.value = { id: "grant-2" };
+            mocks.autoSync.holdsGrant.value = false;
+        });
+        flow.requestSync({});
+        flow.pin.value = "1234";
+        await flow.submitSync();
+        await vi.waitFor(() => expect(mocks.autoSync.refresh).toHaveBeenCalledWith({ quiet: true }));
+        await settle();
+        expect(mocks.autoSync.renew).not.toHaveBeenCalled();
+        expect(flow.activeJobId.value).toBe("full-job");
+    });
+
+    it("keeps the sync running when the renewal is rejected", async () => {
+        mocks.autoSync.holdsGrant.value = true;
+        mocks.autoSync.renew.mockRejectedValue(new Error("Push denied"));
+        flow.requestSync({});
+        flow.pin.value = "1234";
+        await flow.submitSync();
+        await vi.waitFor(() => expect(mocks.autoSync.renew).toHaveBeenCalledTimes(1));
+        expect(flow.activeJobId.value).toBe("full-job");
+        expect(mocks.addToast).not.toHaveBeenCalledWith(expect.objectContaining({ severity: "error" }));
     });
 });

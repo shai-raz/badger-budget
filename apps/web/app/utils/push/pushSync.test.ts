@@ -1,15 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
+import type { IPushSubscription } from "@badger/types";
 import { toBase64Url } from "../base64url";
 import {
     enablePushSubscription,
     syncPushSubscription,
     unregisterThisBrowser,
+    type EnablePushDeps,
     type PushRegistrationLike,
     type PushSubscriptionLike,
     type PushSyncDeps,
 } from "./pushSync";
 
 const ENDPOINT = "https://push.example/abc";
+const registered = (id: string): IPushSubscription => ({
+    id,
+    endpoint: ENDPOINT,
+    deviceLabel: "Chrome on Windows",
+    createdAt: "2026-11-12T00:00:00.000Z",
+    lastSeenAt: "2026-11-12T00:00:00.000Z",
+    lastAcceptedAt: null,
+});
 const NEW_KEY = toBase64Url(new Uint8Array([4, 9, 9, 9]));
 const DEVICE = { userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0", maxTouchPoints: 0 };
 
@@ -183,30 +193,32 @@ describe("syncPushSubscription with a removed endpoint", () => {
 });
 
 describe("enablePushSubscription", () => {
-    function enableDeps(registration: PushRegistrationLike, register: PushSyncDeps["register"]) {
+    function enableDeps(registration: PushRegistrationLike, register: EnablePushDeps["register"]) {
         return { registration, publicKey: NEW_KEY, register, device: DEVICE };
     }
 
-    it("registers the current subscription when the server accepts it", async () => {
+    it("registers the current subscription and resolves with the id the server assigned", async () => {
         const existing = fakeSubscription(new Uint8Array([4, 9, 9, 9]));
         const { registration } = fakeRegistration(existing);
-        const register = vi.fn<PushSyncDeps["register"]>(() => Promise.resolve({}));
+        const register = vi.fn<EnablePushDeps["register"]>(() => Promise.resolve(registered("sub-1")));
 
-        await enablePushSubscription(enableDeps(registration, register));
+        const id = await enablePushSubscription(enableDeps(registration, register));
 
+        expect(id).toBe("sub-1");
         expect(registration.pushManager.subscribe).not.toHaveBeenCalled();
         expect(existing.unsubscribe).not.toHaveBeenCalled();
         expect(register).toHaveBeenCalledTimes(1);
         expect(register).toHaveBeenCalledWith(expect.objectContaining({ endpoint: ENDPOINT }));
     });
 
-    it("drops a removed subscription and registers a new endpoint", async () => {
+    it("drops a removed subscription and resolves with the id of the new registration", async () => {
         const existing = fakeSubscription(new Uint8Array([4, 9, 9, 9]));
         const { registration, created } = fakeRegistration(existing);
-        const register = vi.fn<PushSyncDeps["register"]>();
-        register.mockRejectedValueOnce(apiError(410)).mockResolvedValueOnce({});
+        const register = vi.fn<EnablePushDeps["register"]>();
+        register.mockRejectedValueOnce(apiError(410)).mockResolvedValueOnce(registered("sub-2"));
 
-        await enablePushSubscription(enableDeps(registration, register));
+        const id = await enablePushSubscription(enableDeps(registration, register));
+        expect(id).toBe("sub-2");
 
         expect(existing.unsubscribe).toHaveBeenCalledTimes(1);
         expect(registration.pushManager.subscribe).toHaveBeenCalledWith(
@@ -219,7 +231,7 @@ describe("enablePushSubscription", () => {
     it("rethrows other register failures without re-subscribing", async () => {
         const existing = fakeSubscription(new Uint8Array([4, 9, 9, 9]));
         const { registration } = fakeRegistration(existing);
-        const register = vi.fn<PushSyncDeps["register"]>(() => Promise.reject(apiError(500)));
+        const register = vi.fn<EnablePushDeps["register"]>(() => Promise.reject(apiError(500)));
 
         await expect(enablePushSubscription(enableDeps(registration, register))).rejects.toThrow("HTTP 500");
         expect(existing.unsubscribe).not.toHaveBeenCalled();

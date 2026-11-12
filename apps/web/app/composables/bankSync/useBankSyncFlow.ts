@@ -32,6 +32,7 @@ import {
     type ConnectionSyncState,
 } from "~/utils/syncRuns";
 import { syncErrorCopy } from "~/utils/syncErrors";
+import { useAutoSync } from "./useAutoSync";
 
 export const SYNC_RESULT_TOAST_GROUP = "sync-result";
 
@@ -74,6 +75,8 @@ function createBankSyncFlow() {
     const toast = useToast();
     const queryClient = useQueryClient();
     const authStore = useAuthStore();
+    // One auto-sync state for the app: the bank connections page shows it, and a silent renewal updates it.
+    const autoSync = useAutoSync();
 
     // Typed PIN kept in memory only, so a successful sync can offer to wrap it in a passkey. Never a ref, storage or log.
     let offerPin: string | null = null;
@@ -346,12 +349,27 @@ function createBankSyncFlow() {
         });
     };
 
+    // Silent renewal (AC16): an unlock on the device that holds auto-sync renews its grant. No UI, and errors are dropped.
+    // The status is reloaded every time: a move to another device, an expiry or a PIN change can all have happened since
+    // this page loaded, and a stale holdsGrant would let this device take the grant back.
+    const renewAutoSyncGrant = (syncPin: string) => {
+        void (async () => {
+            try {
+                await autoSync.refresh({ quiet: true });
+                if (autoSync.holdsGrant.value) await autoSync.renew(syncPin);
+            } catch {
+                // Best effort: the grant keeps its current expiry, and the next unlock tries again.
+            }
+        })();
+    };
+
     const startSync = async (syncPin: string, { typed }: { typed: boolean }) => {
         const data = { pin: syncPin, defaultCurrencyCode: target.defaultCurrencyCode };
         const result = target.connectionId
             ? await triggerConnectionSyncMutation.mutateAsync({ ...data, connectionId: target.connectionId })
             : await triggerSyncMutation.mutateAsync(data);
         target = {};
+        renewAutoSyncGrant(syncPin);
         // A toast from an earlier sync must not outlive its PIN (removeGroup emits neither close nor life-end).
         toast.removeGroup(offerGroup);
         offerKnownPasskeys = undefined;
@@ -454,6 +472,7 @@ function createBankSyncFlow() {
         }
     });
     return {
+        autoSync,
         activeJobId,
         syncedCount,
         busy,

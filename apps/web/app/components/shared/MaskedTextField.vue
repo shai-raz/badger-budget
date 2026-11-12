@@ -6,6 +6,8 @@
 defineProps<{
     modelValue: string;
     placeholder?: string;
+    /** Set on the input itself, so a `<label for>` can point at it. */
+    inputId?: string;
 }>();
 
 defineEmits<{
@@ -19,6 +21,7 @@ const revealed = ref(false);
 <template>
     <IconField>
         <InputText
+            :id="inputId"
             :model-value="modelValue"
             type="text"
             autocomplete="off"

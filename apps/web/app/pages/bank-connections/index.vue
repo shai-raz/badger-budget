@@ -11,7 +11,7 @@ definePageMeta({
 });
 
 const toast = useToast();
-const { busy: syncBusy, requestSync, connectionSyncState } = useBankSyncFlow();
+const { busy: syncBusy, requestSync, connectionSyncState, autoSync } = useBankSyncFlow();
 const confirm = useConfirm();
 
 const {
@@ -22,6 +22,17 @@ const {
 const updateConnectionMutation = useUpdateScraperConnectionMutation();
 const deleteConnectionMutation = useDeleteScraperConnectionMutation();
 const { openCreate, openEdit } = useConnectionEditor();
+
+// The card below and the connection rows read the one auto-sync state the sync flow shares.
+const autoSyncError = ref<unknown>(null);
+const notIncludedIds = computed(() => new Set(autoSync.status.value?.notIncludedConnections.map((c) => c.id) ?? []));
+onMounted(async () => {
+    try {
+        await autoSync.refresh();
+    } catch (err) {
+        autoSyncError.value = err;
+    }
+});
 
 const connectionCountLabel = computed(() => {
     const count = scraperConnections.value?.length ?? 0;
@@ -163,11 +174,22 @@ const openMenu = ({ connection, event }: { connection: IScraperConnectionRespons
                     <div class="flex min-w-0 flex-1 flex-col gap-1">
                         <div class="flex min-w-0 items-center gap-2">
                             <span class="truncate font-semibold">{{ conn.displayName }}</span>
+                            <SharedStatusTag
+                                v-if="notIncludedIds.has(conn.id)"
+                                value="Not in auto-sync"
+                                class="shrink-0"
+                            />
                         </div>
                         <BankSyncConnectionSubtitle
                             :connection="conn"
                             :sync-state="connectionSyncState(conn.id)"
                         />
+                        <p
+                            v-if="notIncludedIds.has(conn.id)"
+                            class="text-xs text-muted-color"
+                        >
+                            Joins on your next unlock
+                        </p>
                     </div>
                     <!-- A connection in the running sync can't be paused or deleted, and its old failure is hidden while it retries. -->
                     <ToggleSwitch
@@ -194,6 +216,11 @@ const openMenu = ({ connection, event }: { connection: IScraperConnectionRespons
                 </div>
             </div>
         </SharedSectionBand>
+
+        <BankSyncAutoSyncCard
+            :auto-sync="autoSync"
+            :error="autoSyncError"
+        />
 
         <Menu
             ref="menu"

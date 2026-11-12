@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { IPushSubscription, INotificationPreference } from "@badger/types";
 import type { MenuItem } from "primevue/menuitem";
+import { useConfirm } from "primevue/useconfirm";
 import { useToast } from "primevue/usetoast";
 import { AUTO_SYNC_SETTINGS_TYPE } from "@badger/shared-data";
-import { useApiClient } from "../../composables/useApiClient";
+import { useAutoSync } from "../../composables/bankSync/useAutoSync";
 import { useDevtoolsFlag } from "../../composables/useDevtoolsFlag";
 import {
     useDeletePushSubscriptionMutation,
@@ -34,6 +35,7 @@ const PUSH_LINES: Record<PushDeviceState | "loading", string> = {
 };
 
 const toast = useToast();
+const confirm = useConfirm();
 const authStore = useAuthStore();
 const isDemo = computed(() => authStore.user?.isDemo === true);
 const devtoolsEnabled = useDevtoolsFlag();
@@ -52,8 +54,8 @@ const { data: preferences, isLoading: preferencesLoading, error: preferencesErro
 const updatePreferences = useUpdateNotificationPreferencesMutation();
 const removeSubscription = useDeletePushSubscriptionMutation();
 const sendTest = useSendTestNotificationMutation();
-const apiClient = useApiClient();
-const autoSyncOn = ref(false);
+const autoSync = useAutoSync();
+const autoSyncOn = computed(() => autoSync.status.value !== null);
 
 const devices = computed(() => subscriptions.value ?? []);
 // The Auto-sync entry is only shown while auto-sync is on.
@@ -69,14 +71,7 @@ const deviceCountLabel = computed(() => {
 onMounted(() => {
     void device.refresh();
     // The Auto-sync entry is only shown while auto-sync is on.
-    apiClient
-        .getAutoSync()
-        .then((state) => {
-            autoSyncOn.value = state.autoSync !== null;
-        })
-        .catch(() => {
-            autoSyncOn.value = false;
-        });
+    void autoSync.refresh({ quiet: true }).catch(() => undefined);
 });
 
 const isThisDevice = (subscription: IPushSubscription) =>
@@ -133,6 +128,58 @@ async function setThisDevicePush(on: boolean) {
     }
 }
 
+// Auto-sync cannot run without notifications on its device, so turning those off also turns auto-sync off.
+function confirmAutoSyncOff(accept: () => Promise<void>, onCancel?: () => void) {
+    confirm.require({
+        header: "Turn off notifications?",
+        message: "This also turns off auto-sync.",
+        acceptLabel: "Turn off",
+        acceptClass: "p-button-danger",
+        rejectLabel: "Cancel",
+        accept: () => void accept(),
+        reject: onCancel,
+        onHide: onCancel,
+    });
+}
+
+// The grant goes first: if it cannot be turned off, notifications stay on and auto-sync keeps running.
+async function turnOffAutoSyncFirst(): Promise<boolean> {
+    try {
+        await autoSync.disable();
+        return true;
+    } catch (error) {
+        toast.add({
+            severity: "error",
+            summary: "Error",
+            detail: getApiErrorMessage(error, "Couldn't turn off auto-sync"),
+            life: 5000,
+        });
+        return false;
+    }
+}
+
+// The switch is held off while the question is open. Cancelling clears the pending value, so it goes back on.
+function onThisDevicePushToggle(on: boolean) {
+    if (on || !autoSync.holdsGrant.value) {
+        void setThisDevicePush(on);
+        return;
+    }
+    pendingPush.value = false;
+    confirmAutoSyncOff(
+        async () => {
+            // Stays held off through the turn-off, so the switch never flips back on mid-request.
+            if (!(await turnOffAutoSyncFirst())) {
+                pendingPush.value = null;
+                return;
+            }
+            await setThisDevicePush(false);
+        },
+        () => {
+            pendingPush.value = null;
+        },
+    );
+}
+
 async function removeDevice(subscription: IPushSubscription) {
     const wasThisDevice = isThisDevice(subscription);
     try {
@@ -159,7 +206,22 @@ const deviceMenuItems = computed<MenuItem[]>(() => [
         icon: "pi pi-trash",
         class: "text-red-500",
         command: () => {
-            if (selectedDevice.value) void removeDevice(selectedDevice.value);
+            const subscription = selectedDevice.value;
+            if (!subscription) return;
+            // The grant belongs to one push subscription, on whichever device it is.
+            if (autoSync.status.value?.pushSubscriptionId === subscription.id) {
+                confirmAutoSyncOff(async () => {
+                    if (isThisDevice(subscription)) {
+                        if (await turnOffAutoSyncFirst()) await removeDevice(subscription);
+                        return;
+                    }
+                    // The server revokes the grant with its device. Refresh the card; disable() would clear this browser's key.
+                    await removeDevice(subscription);
+                    void autoSync.refresh({ quiet: true }).catch(() => undefined);
+                });
+                return;
+            }
+            void removeDevice(subscription);
         },
     },
 ]);
@@ -229,7 +291,7 @@ function sendTestNotification() {
                         :model-value="pushOn"
                         :disabled="!canToggle || device.busy.value"
                         class="shrink-0"
-                        @update:model-value="(value) => setThisDevicePush(value === true)"
+                        @update:model-value="(value) => onThisDevicePushToggle(value === true)"
                     />
                 </div>
 

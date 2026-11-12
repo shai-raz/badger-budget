@@ -3,16 +3,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { IAuthUser } from "@badger/types";
 import { useAuthStore } from "./auth";
 
-const { api } = vi.hoisted(() => ({
+const { api, keyStore } = vi.hoisted(() => ({
     api: {
         logout: vi.fn(),
         getVapidPublicKey: vi.fn(),
         registerPushSubscription: vi.fn(),
         unregisterPushSubscription: vi.fn(),
+        disableAutoSync: vi.fn(),
+        getAutoSync: vi.fn(),
     },
+    keyStore: { load: vi.fn(), clear: vi.fn() },
 }));
 
 vi.mock("../composables/useApiClient", () => ({ useApiClient: () => api }));
+vi.mock("../utils/push/autoSyncKeyStore", () => ({
+    loadAutoSyncKey: (...args: unknown[]) => keyStore.load(...args),
+    clearAutoSyncKey: (...args: unknown[]) => keyStore.clear(...args),
+}));
 
 const baseUser = {
     id: "u1",
@@ -88,6 +95,10 @@ describe("auth store logout", () => {
         vi.stubGlobal("navigator", { userAgent: "", maxTouchPoints: 0, serviceWorker: { getRegistration } });
         api.logout.mockResolvedValue(undefined);
         api.unregisterPushSubscription.mockResolvedValue(undefined);
+        api.disableAutoSync.mockResolvedValue(undefined);
+        api.getAutoSync.mockResolvedValue({ autoSync: { id: "grant-1" } });
+        keyStore.load.mockResolvedValue(null);
+        keyStore.clear.mockResolvedValue(undefined);
     });
 
     afterEach(() => {
@@ -137,6 +148,74 @@ describe("auth store logout", () => {
         await pending;
 
         expect(api.logout).toHaveBeenCalledWith("refresh");
+        expect(localStorage.getItem("access_token")).toBeNull();
+        expect(store.isAuthenticated).toBe(false);
+    });
+
+    const HELD_GRANT = { grantId: "grant-1", key: "device-key", apiBaseUrl: "/api/v1" };
+
+    it("turns auto-sync off on the server before the sign-out call when this device holds the grant", async () => {
+        keyStore.load.mockResolvedValue(HELD_GRANT);
+        const store = signIn();
+        await store.logout();
+
+        expect(api.disableAutoSync).toHaveBeenCalledTimes(1);
+        const disableCalledAt = api.disableAutoSync.mock.invocationCallOrder[0] ?? Infinity;
+        const logoutCalledAt = api.logout.mock.invocationCallOrder[0] ?? 0;
+        expect(disableCalledAt).toBeLessThan(logoutCalledAt);
+    });
+
+    it("leaves auto-sync alone when this device holds no grant", async () => {
+        const store = signIn();
+        await store.logout();
+
+        expect(api.disableAutoSync).not.toHaveBeenCalled();
+    });
+
+    it("leaves the current holder's auto-sync alone when this device's stored grant has moved away", async () => {
+        keyStore.load.mockResolvedValue(HELD_GRANT);
+        api.getAutoSync.mockResolvedValue({ autoSync: { id: "grant-2" } });
+        const store = signIn();
+        await store.logout();
+
+        expect(api.disableAutoSync).not.toHaveBeenCalled();
+        expect(keyStore.clear).toHaveBeenCalledTimes(1);
+        expect(api.logout).toHaveBeenCalledWith("refresh");
+        expect(store.isAuthenticated).toBe(false);
+    });
+
+    it("clears the device key even when turning auto-sync off fails", async () => {
+        keyStore.load.mockResolvedValue(HELD_GRANT);
+        api.disableAutoSync.mockRejectedValue(new Error("server down"));
+        const store = signIn();
+        await store.logout();
+
+        expect(keyStore.clear).toHaveBeenCalledTimes(1);
+        expect(api.logout).toHaveBeenCalledWith("refresh");
+        expect(store.isAuthenticated).toBe(false);
+    });
+
+    it("still signs out when turning auto-sync off never answers, once the cleanup timeout passes", async () => {
+        vi.useFakeTimers();
+        keyStore.load.mockResolvedValue(HELD_GRANT);
+        api.disableAutoSync.mockReturnValue(new Promise(() => undefined));
+        const store = signIn();
+
+        const pending = store.logout();
+        await vi.advanceTimersByTimeAsync(3000);
+        await pending;
+
+        expect(api.logout).toHaveBeenCalledWith("refresh");
+        expect(localStorage.getItem("access_token")).toBeNull();
+        expect(keyStore.clear).toHaveBeenCalledTimes(1);
+    });
+
+    it("clears the device key when the sign-out call fails", async () => {
+        api.logout.mockRejectedValue(new Error("network down"));
+        const store = signIn();
+        await store.logout();
+
+        expect(keyStore.clear).toHaveBeenCalledTimes(1);
         expect(localStorage.getItem("access_token")).toBeNull();
         expect(store.isAuthenticated).toBe(false);
     });

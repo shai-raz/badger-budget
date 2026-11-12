@@ -1,9 +1,36 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
+import type { ApiClient } from "@badger/api-client";
 import type { IAuthUser } from "@badger/types";
 import { useApiClient } from "../composables/useApiClient";
 import { getApiErrorMessage } from "../utils/apiError";
+import { clearAutoSyncKey, loadAutoSyncKey } from "../utils/push/autoSyncKeyStore";
 import { unregisterThisBrowserPush } from "../utils/push/pushDeps";
+
+const AUTO_SYNC_CLEANUP_TIMEOUT_MS = 3000;
+
+/**
+ * Turns auto-sync off on the server when this browser holds a grant. Time-bounded. It can reject, so callers ignore
+ * failures and sign-out still proceeds.
+ */
+async function disableAutoSyncOnThisDevice(apiClient: ApiClient): Promise<void> {
+    const record = await loadAutoSyncKey();
+    if (!record) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, AUTO_SYNC_CLEANUP_TIMEOUT_MS);
+    });
+    // The server's DELETE turns off every grant of the user, so only disable when this device still holds the grant.
+    const disableIfHeld = async () => {
+        const { autoSync } = await apiClient.getAutoSync();
+        if (autoSync?.id === record.grantId) await apiClient.disableAutoSync();
+    };
+    try {
+        await Promise.race([disableIfHeld().catch(() => undefined), timeout]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
 
 export const useAuthStore = defineStore("auth", () => {
     // State
@@ -114,8 +141,9 @@ export const useAuthStore = defineStore("auth", () => {
     async function logout() {
         const apiClient = useApiClient();
 
-        // Before the tokens are dropped: the unregister call needs the JWT. Time-bounded, and it never rejects,
-        // so logout always proceeds. Demo users never have push rows.
+        // Before the tokens are dropped: these calls need the JWT. Both are time-bounded, so logout always proceeds.
+        await disableAutoSyncOnThisDevice(apiClient).catch(() => undefined);
+        // Demo users never have push rows.
         if (user.value?.isDemo !== true) {
             await unregisterThisBrowserPush(apiClient).catch(() => undefined);
         }
@@ -135,6 +163,8 @@ export const useAuthStore = defineStore("auth", () => {
             user.value = null;
             isAuthenticated.value = false;
             error.value = null;
+            // Always, so a signed-out browser never keeps the key for the next person.
+            await clearAutoSyncKey().catch(() => undefined);
         }
     }
 
