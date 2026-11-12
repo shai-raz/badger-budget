@@ -142,11 +142,18 @@ export function useAutoSync() {
             pushSubscriptionId,
             durationDays: input.durationDays,
         });
-        await saveAutoSyncKey({
-            grantId: result.id,
-            key,
-            apiBaseUrl: useRuntimeConfig().public.apiBaseUrl as string,
-        });
+        try {
+            await saveAutoSyncKey({
+                grantId: result.id,
+                key,
+                apiBaseUrl: useRuntimeConfig().public.apiBaseUrl as string,
+            });
+        } catch (error) {
+            // The grant already replaced any previous one on the server. Without its key here it could never run, so
+            // turn it off rather than leave credential copies on the server.
+            await disable().catch(() => undefined);
+            throw error;
+        }
         status.value = result;
         keyGrantId.value = result.id;
         return result;

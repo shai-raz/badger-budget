@@ -365,6 +365,43 @@ describe("useAutoSync.renew", () => {
     });
 });
 
+describe("useAutoSync.enable when the key cannot be stored", () => {
+    it("turns the new grant off on the API and rethrows the storage error", async () => {
+        keyStore.save.mockRejectedValueOnce(new Error("quota exceeded"));
+        const autoSync = useAutoSync();
+
+        await expect(
+            autoSync.enable({ pin: "1234", schedule: { ...HOURS_SCHEDULE }, durationDays: 30 }),
+        ).rejects.toThrow("quota exceeded");
+
+        expect(api.disableAutoSync).toHaveBeenCalledTimes(1);
+        expect(autoSync.status.value).toBeNull();
+        expect(autoSync.holdsGrant.value).toBe(false);
+    });
+
+    it("turns a silently renewed grant off too, and does not keep the old key", async () => {
+        api.getAutoSync.mockResolvedValueOnce({ autoSync: HOURS_STATUS });
+        const autoSync = useAutoSync();
+        await autoSync.refresh();
+        keyStore.save.mockRejectedValueOnce(new Error("quota exceeded"));
+
+        await expect(autoSync.renew("1234")).rejects.toThrow("quota exceeded");
+
+        expect(api.disableAutoSync).toHaveBeenCalledTimes(1);
+        expect(keyStore.clear).toHaveBeenCalled();
+    });
+
+    it("still rethrows the storage error when turning the grant off also fails", async () => {
+        keyStore.save.mockRejectedValueOnce(new Error("quota exceeded"));
+        api.disableAutoSync.mockRejectedValueOnce(new Error("offline"));
+        const autoSync = useAutoSync();
+
+        await expect(
+            autoSync.enable({ pin: "1234", schedule: { ...HOURS_SCHEDULE }, durationDays: 30 }),
+        ).rejects.toThrow("quota exceeded");
+    });
+});
+
 describe("autoSyncErrorMessage", () => {
     it("maps an AutoSyncError to its copy, a server message to itself, and anything else to the fallback", () => {
         expect(autoSyncErrorMessage(new AutoSyncError("push-failed"), "Fallback")).toBe(
