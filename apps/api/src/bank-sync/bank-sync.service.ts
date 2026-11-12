@@ -1,4 +1,11 @@
-import { Injectable, BadRequestException, NotFoundException, ConflictException, Logger } from "@nestjs/common";
+import {
+    Injectable,
+    BadRequestException,
+    NotFoundException,
+    ConflictException,
+    Logger,
+    UnauthorizedException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../prisma/prisma.service";
 import { CredentialCryptoService, EncryptedBlob } from "../crypto/credential-crypto.service";
@@ -22,6 +29,7 @@ import {
 } from "@badger/shared-data";
 import { syncErrorCodeOf, withSyncErrorCode } from "./sync-error-code.util";
 import { CredentialSource, pinCredentialSource, SyncJobSummary } from "./credential-source";
+import { PinAttemptLimiter } from "./pin-attempt-limiter";
 
 const CONNECTION_SELECT = {
     id: true,
@@ -90,6 +98,7 @@ export function bankSyncConcurrency(configService: ConfigService): number {
 export class BankSyncService {
     private readonly logger = new Logger(BankSyncService.name);
     private readonly startingSyncs = new Set<string>();
+    private readonly pinAttempts = new PinAttemptLimiter();
 
     constructor(
         private readonly prisma: PrismaService,
@@ -108,13 +117,18 @@ export class BankSyncService {
             throw new BadRequestException("Set a sync PIN first");
         }
 
-        this.verifyPinAgainst(secret, pin);
+        this.verifyPinAgainst(userId, secret, pin);
     }
 
+    // Every sync-PIN check must go through this method, never credentialCryptoService.verifyPin directly:
+    // this is what enforces the wrong-PIN limit. Synchronous, so no await can let parallel requests slip past it.
     private verifyPinAgainst(
+        userId: string,
         secret: { verifierCt: string; verifierIv: string; verifierAuthTag: string; kdfSalt: string },
         pin: string,
     ): void {
+        this.pinAttempts.assertAllowed(userId); // before any scrypt work
+
         const verifierBlob: EncryptedBlob = {
             ciphertext: secret.verifierCt,
             iv: secret.verifierIv,
@@ -122,7 +136,12 @@ export class BankSyncService {
             salt: secret.kdfSalt,
         };
 
-        this.credentialCryptoService.verifyPin(verifierBlob, pin);
+        try {
+            this.credentialCryptoService.verifyPin(verifierBlob, pin);
+        } catch (error) {
+            if (error instanceof UnauthorizedException) this.pinAttempts.recordFailure(userId);
+            throw error;
+        }
     }
 
     listPasskeys(userId: string) {
@@ -256,7 +275,7 @@ export class BankSyncService {
                 },
             });
         } else {
-            this.verifyPinAgainst(secret, dto.pin);
+            this.verifyPinAgainst(userId, secret, dto.pin);
         }
 
         const encrypted = this.credentialCryptoService.encrypt(JSON.stringify(dto.credentials), dto.pin);

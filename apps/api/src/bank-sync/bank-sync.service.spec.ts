@@ -1,5 +1,11 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { BadRequestException, ConflictException, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import {
+    BadRequestException,
+    ConflictException,
+    HttpException,
+    NotFoundException,
+    UnauthorizedException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Prisma } from "@prisma/client";
 import { BankSyncService } from "./bank-sync.service";
@@ -11,6 +17,7 @@ import { AccountBalanceService } from "../accounts/account-balance.service";
 import { AccountsService } from "../accounts/accounts.service";
 import { MAX_PASSKEYS } from "@badger/shared-data";
 import { RegisterSyncPasskeyDto } from "./dto/register-sync-passkey.dto";
+import { PIN_ATTEMPT_WINDOW_MS, TOO_MANY_PIN_ATTEMPTS_MESSAGE } from "./pin-attempt-limiter";
 
 describe("BankSyncService passkeys", () => {
     let service: BankSyncService;
@@ -489,6 +496,110 @@ describe("BankSyncService passkeys", () => {
             const page = await service.listJobs(userId, { limit: 5 });
 
             expect(page.items[0].scraperJobs[0].errorCode).toBe("UNKNOWN");
+        });
+    });
+
+    describe("wrong PIN attempt limit", () => {
+        const creds = { username: "u", password: "p" };
+        let verifySpy: jest.SpyInstance;
+        let nowSpy: jest.SpyInstance | undefined;
+
+        const failWrongPin = async (times: number) => {
+            for (let i = 0; i < times; i++) {
+                await expect(service.triggerSync(userId, "9999")).rejects.toThrow(UnauthorizedException);
+            }
+        };
+
+        const expectTooManyPinAttempts = async (promise: Promise<unknown>) => {
+            const error = await promise.then(
+                () => undefined,
+                (e: unknown) => e,
+            );
+            expect(error).toBeInstanceOf(HttpException);
+            expect((error as HttpException).getStatus()).toBe(429);
+            expect((error as HttpException).message).toBe(TOO_MANY_PIN_ATTEMPTS_MESSAGE);
+        };
+
+        beforeEach(() => {
+            mockPrisma.scraperConnection.findMany.mockResolvedValue([]);
+            verifySpy = jest.spyOn(crypto, "verifyPin");
+        });
+
+        afterEach(() => {
+            nowSpy?.mockRestore();
+            nowSpy = undefined;
+            verifySpy.mockRestore();
+            mockPrisma.scraperConnection.findMany.mockReset();
+        });
+
+        it("blocks the correct PIN with 429 after 5 wrong attempts, without running scrypt", async () => {
+            await failWrongPin(5);
+            verifySpy.mockClear();
+
+            await expectTooManyPinAttempts(service.triggerSync(userId, PIN));
+            expect(verifySpy).not.toHaveBeenCalled();
+        });
+
+        it("accepts the correct PIN again once the 15-minute window has passed", async () => {
+            nowSpy = jest.spyOn(Date, "now").mockReturnValue(1_000_000);
+            await failWrongPin(5);
+
+            nowSpy.mockReturnValue(1_000_000 + PIN_ATTEMPT_WINDOW_MS - 1);
+            await expectTooManyPinAttempts(service.triggerSync(userId, PIN));
+
+            nowSpy.mockReturnValue(1_000_000 + PIN_ATTEMPT_WINDOW_MS);
+            await expect(service.triggerSync(userId, PIN)).rejects.toThrow(
+                new BadRequestException("No active scraper connections"),
+            );
+        });
+
+        it("does not let user-1's wrong PINs block user-2", async () => {
+            await failWrongPin(5);
+            await expectTooManyPinAttempts(service.triggerSync(userId, PIN));
+
+            await expect(service.triggerSync("user-2", PIN)).rejects.toThrow(
+                new BadRequestException("No active scraper connections"),
+            );
+        });
+
+        it("never counts correct PINs, and does not reset the window on them", async () => {
+            await failWrongPin(4);
+            for (let i = 0; i < 3; i++) {
+                await expect(service.triggerSync(userId, PIN)).rejects.toThrow(
+                    new BadRequestException("No active scraper connections"),
+                );
+            }
+            await expect(service.triggerSync(userId, "9999")).rejects.toThrow(UnauthorizedException);
+
+            await expectTooManyPinAttempts(service.triggerSync(userId, PIN));
+        });
+
+        it.each([
+            ["POST /bank-sync/passkeys (registerPasskey)", () => service.registerPasskey(userId, dto)],
+            [
+                "POST /bank-sync/connections (createConnection, PIN already set)",
+                () =>
+                    service.createConnection(userId, {
+                        companyId: "x",
+                        displayName: "d",
+                        pin: PIN,
+                        credentials: creds,
+                    } as never),
+            ],
+            [
+                "PATCH /bank-sync/connections/:id (updateConnection with pin and credentials)",
+                () => service.updateConnection(userId, "c1", { pin: PIN, credentials: creds } as never),
+            ],
+            ["POST /bank-sync/sync (triggerSync)", () => service.triggerSync(userId, PIN)],
+            [
+                "POST /bank-sync/connections/:id/sync (triggerConnectionSync)",
+                () => service.triggerConnectionSync(userId, "c1", PIN),
+            ],
+        ])("%s rejects with 429 once the limit is reached", async (_route, call) => {
+            mockPrisma.scraperConnection.findFirst.mockResolvedValue({ id: "c1", userId, isActive: true });
+            await failWrongPin(5);
+
+            await expectTooManyPinAttempts(call());
         });
     });
 });

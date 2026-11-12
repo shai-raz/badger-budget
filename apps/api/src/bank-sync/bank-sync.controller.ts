@@ -61,6 +61,7 @@ export class BankSyncController {
     @ApiResponse({ status: 400, description: "Invalid input, no PIN set, or passkey limit reached" })
     @ApiResponse({ status: 401, description: "Invalid PIN" })
     @ApiResponse({ status: 409, description: "Passkey already registered" })
+    @ApiResponse({ status: 429, description: "Too many wrong PIN attempts" })
     registerPasskey(@Body() dto: RegisterSyncPasskeyDto, @CurrentUser() user: any) {
         return this.bankSyncService.registerPasskey(user.id, dto);
     }
@@ -85,6 +86,7 @@ export class BankSyncController {
     @HttpCode(HttpStatus.CREATED)
     @ApiOperation({ summary: "Create a new scraper connection" })
     @ApiResponse({ status: 201, description: "Scraper connection created successfully" })
+    @ApiResponse({ status: 429, description: "Too many wrong PIN attempts" })
     createConnection(@Body() dto: CreateScraperConnectionDto, @CurrentUser() user: any) {
         return this.bankSyncService.createConnection(user.id, dto);
     }
@@ -92,6 +94,7 @@ export class BankSyncController {
     @Patch("connections/:id")
     @ApiOperation({ summary: "Update a scraper connection" })
     @ApiResponse({ status: 200, description: "Scraper connection updated successfully" })
+    @ApiResponse({ status: 429, description: "Too many wrong PIN attempts" })
     @ApiResponse({ status: 404, description: "Scraper connection not found" })
     updateConnection(@Param("id") id: string, @Body() dto: UpdateScraperConnectionDto, @CurrentUser() user: any) {
         return this.bankSyncService.updateConnection(user.id, id, dto);
@@ -112,6 +115,7 @@ export class BankSyncController {
     @ApiResponse({ status: 400, description: "Connection paused or no PIN configured" })
     @ApiResponse({ status: 401, description: "Invalid PIN" })
     @ApiResponse({ status: 404, description: "Connection not found" })
+    @ApiResponse({ status: 429, description: "Too many wrong PIN attempts" })
     @ApiResponse({ status: 409, description: "A sync is already in progress" })
     triggerConnectionSync(
         @Param("id", ParseUUIDPipe) id: string,
@@ -128,6 +132,7 @@ export class BankSyncController {
         description: "Sync job created",
         schema: { properties: { jobId: { type: "string" } } },
     })
+    @ApiResponse({ status: 429, description: "Too many wrong PIN attempts" })
     async triggerSync(@CurrentUser() user: any, @Body() body: TriggerSyncDto) {
         return this.bankSyncService.triggerSync(user.id, body.pin, body.defaultCurrencyCode);
     }

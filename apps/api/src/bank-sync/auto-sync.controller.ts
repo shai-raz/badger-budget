@@ -19,6 +19,7 @@ export class AutoSyncController {
     @ApiResponse({ status: 200, description: "Auto-sync is on; returns its status" })
     @ApiResponse({ status: 400, description: "Invalid schedule, time zone or duration, or no active connections" })
     @ApiResponse({ status: 401, description: "Invalid PIN" })
+    @ApiResponse({ status: 429, description: "Too many wrong PIN attempts" })
     enable(@Body() dto: EnableAutoSyncDto, @CurrentUser() user: { id: string }): Promise<IAutoSyncStatus> {
         return this.autoSyncService.enable(user.id, dto);
     }
