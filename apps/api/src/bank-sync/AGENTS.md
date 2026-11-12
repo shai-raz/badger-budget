@@ -2,7 +2,8 @@
 
 Scrapes Israeli banks with `israeli-bank-scrapers` (IBS) + `puppeteer-extra` (stealth). Overview in `apps/api/ARCHITECTURE.md`.
 
-- Credentials are encrypted with the user's sync **PIN** (see `crypto/AGENTS.md`); no connection can be created before a PIN is set. Changing the PIN re-encrypts the verifier and deletes the user's `SyncPasskey` rows, but does **not** re-encrypt stored connection credentials: check that interaction before touching the flow.
+- Credentials are encrypted with the user's sync **PIN** (see `crypto/AGENTS.md`); no connection can be created before a PIN is set. Changing the PIN re-encrypts the verifier and deletes `SyncPasskey` rows, but not stored connection credentials.
+- An `AutoSyncCredential` row must be deleted wherever a connection's credentials change or it is deleted (soft delete: the cascade won't fire). A PIN change deletes the auto-sync grant with the passkeys.
 - `SyncPasskey` rows hold only a browser-wrapped PIN; there is no server-side WebAuthn. Registration needs `verifyPin` and is capped at `MAX_PASSKEYS`.
 - Scraped rows go through `transactions/transaction-import.service.ts`, never straight to `Transaction`.
 - Without `BROWSERLESS_URL`, `scrapeConnection` launches Chromium itself through `puppeteer-extra` and hands it to IBS (IBS alone would launch plain puppeteer, without stealth). `BANK_SYNC_CONCURRENCY` caps sessions.

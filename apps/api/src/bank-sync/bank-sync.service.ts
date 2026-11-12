@@ -96,7 +96,7 @@ export class BankSyncService {
         private readonly configService: ConfigService,
     ) {}
 
-    private async verifyUserPin(userId: string, pin: string): Promise<void> {
+    async verifyUserPin(userId: string, pin: string): Promise<void> {
         const secret = await this.prisma.userSyncSecret.findUnique({ where: { userId } });
 
         if (!secret) {
@@ -189,6 +189,9 @@ export class BankSyncService {
 
             if (existing) {
                 await tx.syncPasskey.deleteMany({ where: { userId } });
+                // Auto-sync grants are tied to the old PIN, so they go with the passkeys.
+                await tx.autoSyncCredential.deleteMany({ where: { grant: { userId } } });
+                await tx.autoSyncGrant.deleteMany({ where: { userId } });
             }
         });
     }
@@ -306,6 +309,8 @@ export class BankSyncService {
             updateData.credentialsIv = encrypted.iv;
             updateData.credentialsAuthTag = encrypted.authTag;
             updateData.credentialsSalt = encrypted.salt;
+            // The auto-sync copy holds the old credentials.
+            await this.prisma.autoSyncCredential.deleteMany({ where: { connectionId: id } });
         }
 
         const updated = await this.prisma.scraperConnection.update({
@@ -326,6 +331,8 @@ export class BankSyncService {
             throw new NotFoundException(`ScraperConnection with ID ${id} not found`);
         }
 
+        // Soft delete, so the FK cascade does not remove the auto-sync copy.
+        await this.prisma.autoSyncCredential.deleteMany({ where: { connectionId: id } });
         await this.prisma.scraperConnection.update({
             where: { id },
             data: { deletedAt: new Date() },

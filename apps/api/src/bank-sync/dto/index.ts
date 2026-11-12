@@ -4,3 +4,6 @@ export { UpdateScraperConnectionDto } from "./update-scraper-connection.dto";
 export { TriggerSyncDto } from "./trigger-sync.dto";
 export { RegisterSyncPasskeyDto } from "./register-sync-passkey.dto";
 export { ListSyncJobsQueryDto } from "./list-sync-jobs-query.dto";
+export { AutoSyncScheduleDto } from "./auto-sync-schedule.dto";
+export { EnableAutoSyncDto } from "./enable-auto-sync.dto";
+export { UpdateAutoSyncScheduleDto } from "./update-auto-sync-schedule.dto";
