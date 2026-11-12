@@ -286,6 +286,7 @@ describe("AutoSyncCard expiring grant", () => {
         expect(bodyText()).toContain("Keep auto-sync on");
 
         const pinInput = document.querySelector<HTMLInputElement>('input[placeholder="Enter your sync PIN"]');
+        expect(pinInput!.id).toBe("auto-sync-keep-pin");
         pinInput!.value = "9876";
         pinInput!.dispatchEvent(new Event("input"));
         await nextTick();

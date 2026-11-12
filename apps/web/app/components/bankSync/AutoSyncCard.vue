@@ -406,6 +406,7 @@ async function submitKeepPin() {
         >
         <SharedMaskedTextField
             v-model="keepPin.pin"
+            input-id="auto-sync-keep-pin"
             placeholder="Enter your sync PIN"
             @keyup-enter="submitKeepPin"
         />
