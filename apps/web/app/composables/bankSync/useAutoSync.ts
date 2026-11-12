@@ -83,8 +83,13 @@ export function useAutoSync() {
     async function ensurePushSubscriptionId(): Promise<string> {
         const id = await pushDevice.enable();
         if (id) return id;
-        const denied = pushDevice.state.value === "denied";
-        throw new AutoSyncError(denied ? "push-denied" : "push-unavailable");
+        const state = pushDevice.state.value;
+        if (state === "unsupported" || state === "ios-install") throw new AutoSyncError("push-unavailable");
+        // A failed subscribe or register call is kept in pushDevice.error: surface its real cause.
+        if (pushDevice.error.value) throw pushDevice.error.value;
+        // A dismissed permission prompt leaves the state at "off", so the user is asked to allow notifications.
+        if (state === "denied" || state === "off") throw new AutoSyncError("push-denied");
+        throw new AutoSyncError("push-unavailable");
     }
 
     /** `quiet` reloads without raising `loading`, for background checks that must not flash the card. */

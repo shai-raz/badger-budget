@@ -9,7 +9,7 @@ const { api, pushDevice, keyStore } = vi.hoisted(() => ({
         updateAutoSyncSchedule: vi.fn(),
         disableAutoSync: vi.fn(),
     },
-    pushDevice: { enable: vi.fn(), state: { value: "off" as string } },
+    pushDevice: { enable: vi.fn(), state: { value: "off" as string }, error: { value: null as Error | null } },
     keyStore: { save: vi.fn(), load: vi.fn(), clear: vi.fn() },
 }));
 
@@ -66,6 +66,7 @@ beforeEach(() => {
     vi.stubGlobal("useRuntimeConfig", () => ({ public: { apiBaseUrl: "https://api.test/api/v1" } }));
     pushDevice.enable.mockResolvedValue("sub-1");
     pushDevice.state.value = "on";
+    pushDevice.error.value = null;
     api.enableAutoSync.mockImplementation((body: { intervalUnit: string }) =>
         Promise.resolve(body.intervalUnit === "hours" ? HOURS_STATUS : DAYS_STATUS),
     );
@@ -180,6 +181,43 @@ describe("useAutoSync.enable", () => {
         ).rejects.toMatchObject({
             reason: "push-unavailable",
         });
+        expect(api.enableAutoSync).not.toHaveBeenCalled();
+    });
+
+    it("throws a typed denied error when the permission prompt was dismissed (state off)", async () => {
+        pushDevice.enable.mockResolvedValueOnce(null);
+        pushDevice.state.value = "off";
+        const autoSync = useAutoSync();
+
+        await expect(
+            autoSync.enable({ pin: "1234", schedule: { ...HOURS_SCHEDULE }, durationDays: 30 }),
+        ).rejects.toMatchObject({ reason: "push-denied" });
+        expect(api.enableAutoSync).not.toHaveBeenCalled();
+    });
+
+    it("rethrows the real push failure instead of the device copy", async () => {
+        const failure = new Error("register failed: 500");
+        pushDevice.enable.mockResolvedValueOnce(null);
+        pushDevice.state.value = "off";
+        pushDevice.error.value = failure;
+        const autoSync = useAutoSync();
+
+        const attempt = autoSync.enable({ pin: "1234", schedule: { ...HOURS_SCHEDULE }, durationDays: 30 });
+
+        await expect(attempt).rejects.toBe(failure);
+        await expect(attempt).rejects.not.toBeInstanceOf(AutoSyncError);
+        expect(api.enableAutoSync).not.toHaveBeenCalled();
+    });
+
+    it("keeps push-unavailable for an unsupported device even when a push error was recorded", async () => {
+        pushDevice.enable.mockResolvedValueOnce(null);
+        pushDevice.state.value = "unsupported";
+        pushDevice.error.value = new Error("Push is not available in this browser");
+        const autoSync = useAutoSync();
+
+        await expect(
+            autoSync.enable({ pin: "1234", schedule: { ...HOURS_SCHEDULE }, durationDays: 30 }),
+        ).rejects.toMatchObject({ reason: "push-unavailable" });
         expect(api.enableAutoSync).not.toHaveBeenCalled();
     });
 });
