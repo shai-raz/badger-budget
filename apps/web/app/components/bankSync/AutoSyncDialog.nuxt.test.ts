@@ -89,6 +89,7 @@ beforeEach(() => {
 afterEach(() => {
     wrapper?.unmount();
     wrapper = null;
+    vi.unstubAllGlobals();
 });
 
 describe("AutoSyncDialog schedule", () => {
@@ -168,7 +169,8 @@ describe("AutoSyncDialog schedule", () => {
 
 const passkeyRow = { id: "pk-1" };
 
-async function mountWithPasskey() {
+async function mountWithPasskey(permission: NotificationPermission = "granted") {
+    vi.stubGlobal("Notification", { permission });
     webAuthn.available = true;
     api.getSyncPasskeys.mockResolvedValue([passkeyRow] as never);
     api.getSyncPinStatus.mockResolvedValue({ hasPinSet: true } as never);
@@ -180,8 +182,8 @@ async function mountWithPasskey() {
 const pinInput = () => document.querySelector<HTMLInputElement>('input[placeholder="Enter your sync PIN"]');
 
 describe("AutoSyncDialog enable with a passkey", () => {
-    it("takes the push subscription before the passkey unlock, then turns auto-sync on with the unlocked PIN", async () => {
-        const autoSync = await mountWithPasskey();
+    it("unlocks with the passkey first when notifications are already allowed, then takes the push subscription", async () => {
+        const autoSync = await mountWithPasskey("granted");
         const order: string[] = [];
         vi.mocked(autoSync.ensurePushSubscriptionId).mockImplementation(async () => {
             order.push("push");
@@ -195,13 +197,32 @@ describe("AutoSyncDialog enable with a passkey", () => {
         buttonWith("Unlock and turn on")!.click();
         await vi.waitFor(() => expect(autoSync.enable).toHaveBeenCalledTimes(1));
 
-        expect(order).toEqual(["push", "unlock"]);
+        expect(order).toEqual(["unlock", "push"]);
         expect(autoSync.enable).toHaveBeenCalledWith({
             pin: "5678",
             schedule: { intervalUnit: "hours", intervalCount: 4, windowStartMinute: 420, windowEndMinute: 1320 },
             durationDays: 30,
             pushSubscriptionId: "sub-1",
         });
+    });
+
+    it("takes the push subscription first, with no passkey call in the same tap, when notifications still need allowing", async () => {
+        const autoSync = await mountWithPasskey("default");
+        const order: string[] = [];
+        vi.mocked(autoSync.ensurePushSubscriptionId).mockImplementation(async () => {
+            order.push("push");
+            return "sub-1";
+        });
+
+        buttonWith("Unlock and turn on")!.click();
+        await vi.waitFor(() =>
+            expect(body()).toContain("Notifications are on. Enter your PIN, or try your passkey again."),
+        );
+
+        expect(order).toEqual(["push"]);
+        expect(unlock).not.toHaveBeenCalled();
+        expect(autoSync.enable).not.toHaveBeenCalled();
+        expect(pinInput()).toBeTruthy();
     });
 
     it("shows the reason and the PIN field when the passkey unlock is cancelled", async () => {

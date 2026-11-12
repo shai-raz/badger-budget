@@ -204,11 +204,23 @@ function errorMessage(error: unknown): string {
     return getApiErrorMessage(error, isEnable.value ? "Couldn't turn on auto-sync" : "Couldn't save the schedule");
 }
 
+// Push permission still at "default" needs this tap's user activation, so it is only read here, before any await.
+// A granted permission resolves without a prompt.
+function pushPermissionGranted(): boolean {
+    return typeof Notification !== "undefined" && Notification.permission === "granted";
+}
+
+const PUSH_FIRST_PASSKEY_REASON = "Notifications are on. Enter your PIN, or try your passkey again.";
+
 // Unlocks with the passkey (or the typed PIN), then turns auto-sync on. False when the PIN fallback opened instead.
 async function submitEnable(next: AutoSyncSchedule): Promise<boolean> {
-    // Push permission needs this tap's user activation, which a passkey ceremony would use up, so the push
-    // subscription is taken before it.
-    const pushSubscriptionId = await props.autoSync.ensurePushSubscriptionId();
+    // The passkey ceremony and a permission prompt both need this tap's user activation, and Safari drops it at the
+    // first await. So with permission still "default", push goes first and the passkey waits for the next tap.
+    if (passkeyMode.value && !pushPermissionGranted()) {
+        await props.autoSync.ensurePushSubscriptionId();
+        usePin(PUSH_FIRST_PASSKEY_REASON);
+        return false;
+    }
     let pin = typedPin.value;
     let fromPasskey = false;
     if (passkeyMode.value) {
@@ -224,6 +236,7 @@ async function submitEnable(next: AutoSyncSchedule): Promise<boolean> {
             throw error;
         }
     }
+    const pushSubscriptionId = await props.autoSync.ensurePushSubscriptionId();
     try {
         await props.autoSync.enable({ pin, schedule: next, durationDays: durationDays.value, pushSubscriptionId });
         return true;
