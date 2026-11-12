@@ -93,6 +93,7 @@ const preferences: INotificationPreference[] = [
 const autoSyncStatus: IAutoSyncStatus = {
     id: "auto-sync-1",
     deviceLabel: "Chrome on Windows",
+    pushSubscriptionId: "sub-1",
     durationDays: 30,
     expiresAt: "2026-12-12T00:00:00.000Z",
     intervalUnit: "days",
