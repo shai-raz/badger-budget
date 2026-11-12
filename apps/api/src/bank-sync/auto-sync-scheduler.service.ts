@@ -8,7 +8,6 @@ import {
     type NotificationContent,
 } from "@badger/shared-data";
 import { PrismaService } from "../prisma/prisma.service";
-import { NotificationPreferencesService } from "../notifications/notification-preferences.service";
 import { PushService } from "../notifications/push.service";
 import { AutoSyncService, deleteAutoSyncGrant, isGrantSubscriptionOwned } from "./auto-sync.service";
 import { jitterRunAt, nextScheduledRunAt, parseAutoSyncSchedule } from "./auto-sync-schedule";
@@ -66,7 +65,6 @@ export class AutoSyncSchedulerService {
         private readonly configService: ConfigService,
         private readonly autoSync: AutoSyncService,
         private readonly pushService: PushService,
-        private readonly preferences: NotificationPreferencesService,
     ) {}
 
     /** Skips the tick while the previous one is still running. */
@@ -125,22 +123,16 @@ export class AutoSyncSchedulerService {
         }
     }
 
-    /** Marked warned even when preferences mute the push, so the decision is made once per grant. */
+    /** Sent once per grant (expiryWarnedAt). Auto-sync notices can't be muted, so preferences are not consulted. */
     private async warnExpiring(grant: ExpiringGrant, now: Date): Promise<void> {
-        const user = await this.prisma.user.findFirst({
-            where: { id: grant.userId, deletedAt: null },
-            select: { id: true, role: true },
-        });
-        if (user && (await this.preferences.shouldSend(user, "auto-sync.expiring"))) {
-            const content: NotificationContent = {
-                type: "auto-sync.expiring",
-                title: `Auto-sync stops on ${formatExpiryDate(grant.expiresAt, grant.timeZone)}`,
-                body: "Tap to keep it on.",
-                url: AUTO_SYNC_PATH,
-                data: { expiresAt: grant.expiresAt.toISOString() },
-            };
-            await this.pushService.send({ subscriptionId: grant.pushSubscriptionId }, content);
-        }
+        const content: NotificationContent = {
+            type: "auto-sync.expiring",
+            title: `Auto-sync stops on ${formatExpiryDate(grant.expiresAt, grant.timeZone)}`,
+            body: "Tap to keep it on.",
+            url: AUTO_SYNC_PATH,
+            data: { expiresAt: grant.expiresAt.toISOString() },
+        };
+        await this.pushService.send({ subscriptionId: grant.pushSubscriptionId }, content);
 
         await this.prisma.autoSyncGrant.updateMany({
             where: { id: grant.id, expiryWarnedAt: null },

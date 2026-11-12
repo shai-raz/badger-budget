@@ -2,7 +2,6 @@ import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../prisma/prisma.service";
 import { PushService } from "../notifications/push.service";
-import { NotificationPreferencesService } from "../notifications/notification-preferences.service";
 import { AutoSyncService } from "./auto-sync.service";
 import { AUTO_SYNC_TICK_MS, AutoSyncSchedulerService } from "./auto-sync-scheduler.service";
 
@@ -55,11 +54,9 @@ describe("AutoSyncSchedulerService", () => {
         autoSyncCredential: { deleteMany: jest.fn() },
         pushSubscription: { findFirst: jest.fn() },
         syncJob: { count: jest.fn(), findFirst: jest.fn() },
-        user: { findFirst: jest.fn() },
     };
     const mockAutoSync = { issueRunToken: jest.fn() };
     const mockPush = { send: jest.fn() };
-    const mockPreferences = { shouldSend: jest.fn() };
     const mockConfig = { get: jest.fn() };
 
     /** The due query gets `due`; the expiry-warning query gets `expiring`. */
@@ -86,13 +83,11 @@ describe("AutoSyncSchedulerService", () => {
         mockPrisma.autoSyncCredential.deleteMany.mockResolvedValue({ count: 1 });
         mockPrisma.syncJob.count.mockResolvedValue(0);
         mockPrisma.syncJob.findFirst.mockResolvedValue(null);
-        mockPrisma.user.findFirst.mockResolvedValue({ id: "user-1", role: "USER" });
         mockAutoSync.issueRunToken.mockImplementation(async (grantId: string) => ({
             token: `token-${grantId}`,
             expiresAt: new Date(),
         }));
         mockPush.send.mockResolvedValue([{ subscriptionId: "sub-1", outcome: "accepted" }]);
-        mockPreferences.shouldSend.mockResolvedValue(true);
         mockPrisma.pushSubscription.findFirst.mockResolvedValue({ id: "sub-1" });
         givenGrants([]);
 
@@ -103,7 +98,6 @@ describe("AutoSyncSchedulerService", () => {
                 { provide: ConfigService, useValue: mockConfig },
                 { provide: AutoSyncService, useValue: mockAutoSync },
                 { provide: PushService, useValue: mockPush },
-                { provide: NotificationPreferencesService, useValue: mockPreferences },
             ],
         }).compile();
 
@@ -328,10 +322,6 @@ describe("AutoSyncSchedulerService", () => {
                     },
                 }),
             );
-            expect(mockPreferences.shouldSend).toHaveBeenCalledWith(
-                { id: "user-1", role: "USER" },
-                "auto-sync.expiring",
-            );
             expect(mockPush.send).toHaveBeenCalledWith(
                 { subscriptionId: "sub-1" },
                 {
@@ -348,13 +338,15 @@ describe("AutoSyncSchedulerService", () => {
             });
         });
 
-        it("marks the grant warned without sending when the user has the warning muted", async () => {
+        it("sends the warning even if the user muted the old Auto-sync ending preference", async () => {
             givenGrants([], [expiringGrant]);
-            mockPreferences.shouldSend.mockResolvedValue(false);
 
             await service.tick(NOW);
 
-            expect(mockPush.send).not.toHaveBeenCalled();
+            expect(mockPush.send).toHaveBeenCalledWith(
+                { subscriptionId: "sub-1" },
+                expect.objectContaining({ type: "auto-sync.expiring" }),
+            );
             expect(mockPrisma.autoSyncGrant.updateMany).toHaveBeenCalledWith({
                 where: { id: "grant-exp", expiryWarnedAt: null },
                 data: { expiryWarnedAt: NOW },
