@@ -1,6 +1,7 @@
 // Push and notification-click listeners, bundled to sw-push.js (modules/sw-push.ts) and imported by the generated
 // worker through workbox.importScripts. Logic lives in app/utils/push/swHandlers.ts; this file is wiring only.
 import { loadAutoSyncKey } from "../app/utils/push/autoSyncKeyStore";
+import { closeTaggedNotifications } from "../app/utils/push/autoSyncNotices";
 import { handleNotificationClick, handlePush } from "../app/utils/push/swHandlers";
 
 declare const self: ServiceWorkerGlobalScope;
@@ -12,10 +13,7 @@ self.addEventListener("push", (event) =>
             showNotification: (title, options) => self.registration.showNotification(title, options),
             fetch: self.fetch.bind(self),
             loadAutoSyncKey,
-            closeNotifications: async (tag) => {
-                const notifications = await self.registration.getNotifications({ tag });
-                for (const notification of notifications) notification.close();
-            },
+            closeNotifications: (tag) => closeTaggedNotifications(self.registration, tag),
             origin: self.location.origin,
         }),
     ),

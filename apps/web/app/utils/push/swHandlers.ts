@@ -8,6 +8,9 @@ import {
     type PushMessage,
 } from "@badger/shared-data";
 import type { AutoSyncKeyRecord } from "./autoSyncKeyStore";
+import { AUTO_SYNC_TAG } from "./autoSyncNotices";
+
+export { AUTO_SYNC_TAG };
 
 // Pure push and click logic for the service worker. Structural interfaces stand in for the DOM and
 // WebWorker globals so this compiles under both libs and runs under node tests (see reloadToNewBuild.ts).
@@ -152,9 +155,6 @@ export function defaultHandler(message: PushMessage): { title: string; options: 
         },
     };
 }
-
-/** Every auto-sync notification shares this tag, so the result replaces the "Syncing…" notification. */
-export const AUTO_SYNC_TAG = "auto-sync";
 
 /** /run only starts a job and returns a jobId, so a hanging API must not hold the push event open. */
 const RUN_REQUEST_TIMEOUT_MS = 20_000;
