@@ -167,8 +167,12 @@ function onThisDevicePushToggle(on: boolean) {
     pendingPush.value = false;
     confirmAutoSyncOff(
         async () => {
-            pendingPush.value = null;
-            if (await turnOffAutoSyncFirst()) await setThisDevicePush(false);
+            // Stays held off through the turn-off, so the switch never flips back on mid-request.
+            if (!(await turnOffAutoSyncFirst())) {
+                pendingPush.value = null;
+                return;
+            }
+            await setThisDevicePush(false);
         },
         () => {
             pendingPush.value = null;

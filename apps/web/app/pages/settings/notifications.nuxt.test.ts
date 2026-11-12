@@ -549,6 +549,29 @@ describe("settings notifications page", () => {
             );
         });
 
+        it("keeps the switch off while auto-sync is being turned off", async () => {
+            setUpGrantHolder();
+            let finishDisable: () => void = () => undefined;
+            m.autoSync.disable.mockImplementationOnce(
+                () =>
+                    new Promise<void>((resolve) => {
+                        finishDisable = resolve;
+                    }),
+            );
+            const wrapper = await mountPage();
+            await switchOff(wrapper);
+
+            confirmOptions()?.accept?.();
+            await flushPromises();
+
+            expect(pushSwitch(wrapper).checked).toBe(false);
+            expect(m.device.disable).not.toHaveBeenCalled();
+
+            finishDisable();
+            await flushPromises();
+            expect(m.device.disable).toHaveBeenCalledTimes(1);
+        });
+
         it("leaves notifications on when the turn-off is cancelled", async () => {
             setUpGrantHolder();
             const wrapper = await mountPage();
