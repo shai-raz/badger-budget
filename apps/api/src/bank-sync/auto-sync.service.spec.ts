@@ -1,7 +1,14 @@
 import { randomBytes } from "crypto";
 import { validate } from "class-validator";
 import { Test, TestingModule } from "@nestjs/testing";
-import { BadRequestException, ConflictException, NotFoundException, UnauthorizedException } from "@nestjs/common";
+import {
+    BadRequestException,
+    ConflictException,
+    HttpException,
+    HttpStatus,
+    NotFoundException,
+    UnauthorizedException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { AUTO_SYNC_JITTER_MS } from "./auto-sync-schedule";
 import { AUTO_SYNC_UNREACHABLE_AFTER_MS, AutoSyncService } from "./auto-sync.service";
@@ -14,6 +21,7 @@ import { sha256Hex } from "../oauth/oauth-crypto";
 import type { CredentialSource, SyncJobSummary } from "./credential-source";
 import { PushService } from "../notifications/push.service";
 import type { ScraperConnection } from "@prisma/client";
+import { TOO_MANY_PIN_ATTEMPTS_MESSAGE } from "./pin-attempt-limiter";
 
 const DAY = 86_400_000;
 const PIN = "1234";
@@ -176,6 +184,21 @@ describe("AutoSyncService", () => {
             await expect(service.enable(USER_ID, enableDto({ pin: "9999" }), NOW)).rejects.toThrow(
                 UnauthorizedException,
             );
+            expectNoWrites();
+        });
+
+        it("rejects a PIN blocked by the wrong-PIN limit with 429 and writes nothing", async () => {
+            mockPrisma.scraperConnection.findMany.mockResolvedValueOnce([storedConnection("c1", "Bank A")]);
+            mockBankSync.verifyUserPin.mockRejectedValueOnce(
+                new HttpException(TOO_MANY_PIN_ATTEMPTS_MESSAGE, HttpStatus.TOO_MANY_REQUESTS),
+            );
+
+            const error = await service.enable(USER_ID, enableDto(), NOW).then(
+                () => undefined,
+                (e: unknown) => e,
+            );
+            expect(error).toBeInstanceOf(HttpException);
+            expect((error as HttpException).getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
             expectNoWrites();
         });
 

@@ -49,3 +49,6 @@ export function parseSyncErrorCode(raw: string | null | undefined): SyncErrorCod
     if (raw === null || raw === undefined) return null;
     return isSyncErrorCode(raw) ? raw : "UNKNOWN";
 }
+
+/** Message of the 401 the API returns for a wrong sync PIN (the api-client must not treat it as an expired session). */
+export const INVALID_PIN_MESSAGE = "Invalid PIN";
