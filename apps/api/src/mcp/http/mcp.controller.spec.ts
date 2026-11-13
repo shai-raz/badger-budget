@@ -137,6 +137,11 @@ describe("McpController (http)", () => {
             await post("bdg_at_userA", rpc("tools/list")).set("Origin", "https://evil.example").expect(403);
         });
 
+        it("answers claude.ai with the 401 OAuth challenge, not 403", async () => {
+            const res = await post(null, rpc("tools/list")).set("Origin", "https://claude.ai").expect(401);
+            expect(res.headers["www-authenticate"]).toContain("resource_metadata=");
+        });
+
         it("allows requests without an Origin", async () => {
             await post("bdg_at_userA", rpc("tools/list")).expect(200);
         });
