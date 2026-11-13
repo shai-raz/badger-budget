@@ -13,15 +13,24 @@ describe("McpOriginGuard", () => {
         },
     );
 
+    it.each(["https://claude.ai", "https://claude.com"])("allows the Claude client origin %s", (origin) => {
+        expect(check(origin)).toBe(true);
+    });
+
     it("allows an allowlisted app origin", () => {
         expect(check("http://localhost:3001")).toBe(true);
     });
 
-    it.each(["https://evil.example", "http://localhost.evil.example", "http://localhost:3001.evil.example", "null"])(
-        "rejects %s with 403",
-        (origin) => {
-            expect(() => check(origin)).toThrow(ForbiddenException);
-            expect(() => check(origin)).toThrow("Origin not allowed");
-        },
-    );
+    it.each([
+        "https://evil.example",
+        "https://claude.ai.evil.example",
+        "https://evil.claude.ai",
+        "http://claude.ai",
+        "http://localhost.evil.example",
+        "http://localhost:3001.evil.example",
+        "null",
+    ])("rejects %s with 403", (origin) => {
+        expect(() => check(origin)).toThrow(ForbiddenException);
+        expect(() => check(origin)).toThrow("Origin not allowed");
+    });
 });
