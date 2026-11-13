@@ -41,7 +41,7 @@ describe("Connection sync", () => {
         prisma.scraperJob.findMany.mockResolvedValue([{ status: "success" }]);
         crypto.decrypt.mockReturnValue('{"username":"bank-user"}');
         scraper.scrapeConnection.mockResolvedValue({ candidates: [], balances: [] });
-        importer.importTransactions.mockResolvedValue({ transactionsSynced: 2, accountsCreated: 0 });
+        importer.importTransactions.mockResolvedValue({ success: true, transactionsSynced: 2, accountsCreated: 0 });
         const module = await Test.createTestingModule({
             providers: [
                 BankSyncService,
@@ -193,6 +193,33 @@ describe("Connection sync", () => {
         expect(prisma.scraperJob.update).toHaveBeenCalledWith({
             where: { id: "child-1" },
             data: expect.objectContaining({ status: "failed", errorCode: "IMPORT_FAILED", error: "db down" }),
+        });
+    });
+
+    it("saves IMPORT_FAILED and leaves lastSyncedAt alone when the importer reports a failure", async () => {
+        importer.importTransactions.mockResolvedValue({
+            success: false,
+            error: "1 transaction(s) could not be saved: bad row",
+            transactionsSynced: 3,
+            accountsCreated: 0,
+        });
+        prisma.scraperJob.findMany.mockResolvedValue([{ status: "failed" }]);
+        await service.triggerConnectionSync("user-1", connection.id, "1234");
+        await finish();
+        expect(prisma.scraperJob.update).toHaveBeenCalledWith({
+            where: { id: "child-1" },
+            data: expect.objectContaining({
+                status: "failed",
+                errorCode: "IMPORT_FAILED",
+                error: "1 transaction(s) could not be saved: bad row",
+                transactionsSynced: 3,
+            }),
+        });
+        expect(prisma.scraperConnection.update).not.toHaveBeenCalled();
+        // The rows that did save are still counted on the run.
+        expect(prisma.syncJob.update).toHaveBeenLastCalledWith({
+            where: { id: "job-1" },
+            data: expect.objectContaining({ status: "failed", transactionsSynced: 3 }),
         });
     });
 

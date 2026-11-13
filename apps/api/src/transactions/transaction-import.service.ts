@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { CardPayoffPatternsService } from "../card-payoff-patterns/card-payoff-patterns.service";
 import { SyncResultDto } from "../google-sheets/dto";
+import type { Prisma } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { runRules } from "@badger/utils";
 import { DEFAULT_CURRENCY_CODE, defaultCategoryIcon } from "@badger/shared-data";
@@ -9,6 +10,7 @@ import { resolveCategoryId } from "../google-sheets/category-resolution";
 import { resolveDefaultAccountCurrencyId } from "../accounts/default-account-currency";
 import { loadMatchableRules } from "../rules/rule-mapping";
 import { loadUserSettings } from "../auth/user-settings";
+import { DEDUP_TIERS, DedupTier, StoredRow, matchStoredRows } from "./import-dedup";
 
 export interface ImportCandidate {
     externalId: string;
@@ -26,8 +28,8 @@ export interface ImportCandidate {
     paymentType: string | null; // 'normal' | 'installments' | null
     /**
      * What bank-sync stored for this row before #9 (UTC-truncated Israel-midnight instant). Set only by the IBS
-     * adapter; when an existing row with the same externalId and account still holds exactly this value (and it differs from
-     * transactionDate), the importer rewrites it. Undefined = no healing (e.g. Google Sheets).
+     * adapter; when the stored row this candidate matches (same account) still holds exactly this value (and it differs
+     * from transactionDate), the importer rewrites it. Undefined = no healing (e.g. Google Sheets).
      */
     legacyTransactionDate?: Date;
     /** Same as legacyTransactionDate, for postedDate. */
@@ -36,7 +38,9 @@ export interface ImportCandidate {
 
 const BATCH_SIZE = 100;
 
-type ExistingImportedRow = { id: string; accountId: string; transactionDate: Date; postedDate: Date | null };
+const MAX_ERROR_LENGTH = 300;
+const MAX_LOGGED_WARNINGS = 20;
+
 type DateFields = { transactionDate?: Date; postedDate?: Date };
 /** `from` holds the legacy values the row must still have; `to` the corrected ones. */
 type DateCorrection = { from: DateFields; to: DateFields };
@@ -45,7 +49,7 @@ type DateCorrection = { from: DateFields; to: DateFields };
  * Importer stays timezone-agnostic: it only replaces a stored value that exactly equals the adapter's legacy value.
  * Anything else (e.g. a user edit) is left alone.
  */
-function dateCorrection(row: ExistingImportedRow, c: ImportCandidate): DateCorrection | null {
+function dateCorrection(row: StoredRow, c: ImportCandidate): DateCorrection | null {
     const data: DateFields = {};
     const from: DateFields = {};
     if (
@@ -96,28 +100,6 @@ export class TransactionImportService {
         try {
             this.logger.log(`Starting import for user ${userId}: ${candidates.length} candidates`);
 
-            // Load existing imported rows (dedup by externalId; dates feed the day-early self-heal)
-            const existingRows = await this.prisma.transaction.findMany({
-                where: { userId, externalId: { not: null } },
-                select: { id: true, accountId: true, externalId: true, transactionDate: true, postedDate: true },
-            });
-            // externalId is not unique in the schema, so keep a list per id
-            const existingByExternalId = new Map<string, ExistingImportedRow[]>();
-            for (const row of existingRows) {
-                if (row.externalId === null) continue;
-                const entry = {
-                    id: row.id,
-                    accountId: row.accountId,
-                    transactionDate: row.transactionDate,
-                    postedDate: row.postedDate,
-                };
-                const list = existingByExternalId.get(row.externalId);
-                if (list) list.push(entry);
-                else existingByExternalId.set(row.externalId, [entry]);
-            }
-
-            this.logger.log(`Found ${existingRows.length} existing transactions by externalId`);
-
             // Get categories, accounts, currencies for in-memory lookup
             const userCategories = await this.prisma.category.findMany({
                 where: {
@@ -163,29 +145,48 @@ export class TransactionImportService {
                     .map((a) => [a.accountNumber as string, { id: a.id, currencyId: a.currencyId as string | null }]),
             );
 
-            const transactionsToCreate: any[] = [];
+            // Dedup: pair candidates with stored rows one-to-one (see import-dedup.ts). Loaded once, up front.
+            const storedRows = await this.loadStoredRows(userId, new Set(userAccounts.map((account) => account.id)));
+            const storedExternalIds = new Set(storedRows.map((row) => row.externalId));
+            const matches = matchStoredRows(
+                candidates.map((candidate) => ({
+                    externalId: candidate.externalId,
+                    accountId: accountByNumber.get(candidate.accountNumber)?.id,
+                    transactionDate: candidate.transactionDate,
+                    legacyTransactionDate: candidate.legacyTransactionDate,
+                    amount: candidate.amount,
+                    description: candidate.description,
+                })),
+                storedRows,
+            );
+            const matchedByTier = Object.fromEntries(DEDUP_TIERS.map((tier) => [tier, 0])) as Record<DedupTier, number>;
+            // Rows the old id-only check dropped: new, although their externalId is already stored.
+            let insertedWithStoredId = 0;
+
+            const transactionsToCreate: Prisma.TransactionCreateManyInput[] = [];
             const dateCorrections: { id: string; data: DateCorrection }[] = [];
-            const healedIds = new Set<string>();
+            const failures = { count: 0, firstError: "" };
+            const flush = async () => {
+                if (transactionsToCreate.length === 0) return;
+                const batch = transactionsToCreate.splice(0);
+                const inserted = await this.insertBatch(batch, failures);
+                result.transactionsSynced += inserted;
+                result.rowsSkipped += batch.length - inserted;
+            };
 
             for (let i = 0; i < candidates.length; i++) {
                 const candidate = candidates[i];
 
-                // Dedup by externalId
-                const existingRowsForId = existingByExternalId.get(candidate.externalId);
-                if (existingRowsForId) {
-                    if (candidate.legacyTransactionDate !== undefined || candidate.legacyPostedDate !== undefined) {
-                        const healAccountId = accountByNumber.get(candidate.accountNumber)?.id;
-                        for (const row of existingRowsForId) {
-                            if (row.accountId !== healAccountId || healedIds.has(row.id)) continue;
-                            const data = dateCorrection(row, candidate);
-                            if (data) {
-                                dateCorrections.push({ id: row.id, data });
-                                healedIds.add(row.id);
-                            }
-                        }
+                const match = matches[i];
+                if (match) {
+                    matchedByTier[match.tier]++;
+                    if (match.row.accountId === accountByNumber.get(candidate.accountNumber)?.id) {
+                        const data = dateCorrection(match.row, candidate);
+                        if (data) dateCorrections.push({ id: match.row.id, data });
                     }
                     continue;
                 }
+                if (storedExternalIds.has(candidate.externalId)) insertedWithStoredId++;
 
                 // Resolve charged currency (account currency)
                 let chargedCurrencyId =
@@ -233,24 +234,6 @@ export class TransactionImportService {
                 if (!accountId) {
                     result.rowsSkipped++;
                     result.warnings.push(`Candidate ${i}: Missing or invalid account number`);
-                    continue;
-                }
-
-                // Composite natural-key dedup check (safety net for hash mismatches)
-                const naturalKeyExists = await this.prisma.transaction.findFirst({
-                    where: {
-                        userId,
-                        accountId,
-                        transactionDate: candidate.transactionDate,
-                        amount: new Decimal(candidate.amount),
-                        description: candidate.description,
-                        deletedAt: null,
-                    },
-                    select: { id: true },
-                });
-
-                if (naturalKeyExists) {
-                    // Already imported via different path — skip silently
                     continue;
                 }
 
@@ -339,21 +322,9 @@ export class TransactionImportService {
                     postedDate: candidate.postedDate,
                 });
 
-                // Flush batch when full
-                if (transactionsToCreate.length >= BATCH_SIZE) {
-                    await this.prisma.transaction.createMany({ data: transactionsToCreate });
-                    result.transactionsSynced += transactionsToCreate.length;
-                    this.logger.log(`Inserted batch of ${transactionsToCreate.length} transactions`);
-                    transactionsToCreate.length = 0;
-                }
+                if (transactionsToCreate.length >= BATCH_SIZE) await flush();
             }
-
-            // Flush remaining
-            if (transactionsToCreate.length > 0) {
-                await this.prisma.transaction.createMany({ data: transactionsToCreate });
-                result.transactionsSynced += transactionsToCreate.length;
-                this.logger.log(`Inserted final batch of ${transactionsToCreate.length} transactions`);
-            }
+            await flush();
 
             // Best-effort: a heal failure must never fail an otherwise-good import
             let datesCorrected = 0;
@@ -387,10 +358,23 @@ export class TransactionImportService {
                 result.warnings.push(message);
             }
 
-            result.success = true;
+            const alreadyStored = DEDUP_TIERS.map((tier) => `${tier}=${matchedByTier[tier]}`).join(" ");
             this.logger.log(
-                `Import completed: ${result.transactionsSynced} transactions, ${result.categoriesCreated} categories, ${result.accountsCreated} accounts, ${datesCorrected} row(s) with corrected dates`,
+                `Import completed: ${result.transactionsSynced} transactions (${insertedWithStoredId} new with an externalId that was already stored), ${result.categoriesCreated} categories, ${result.accountsCreated} accounts, ${datesCorrected} row(s) with corrected dates; already stored: ${alreadyStored}`,
             );
+            if (result.warnings.length > 0) {
+                this.logger.warn(
+                    `Import warnings (${result.warnings.length}): ${result.warnings.slice(0, MAX_LOGGED_WARNINGS).join("; ")}`,
+                );
+            }
+
+            if (failures.count > 0) {
+                // The rows that did save stay; a repeated import only adds what is still missing.
+                result.error = `${failures.count} transaction(s) could not be saved: ${failures.firstError}`;
+                this.logger.error(`Import incomplete: ${result.error}`);
+            } else {
+                result.success = true;
+            }
         } catch (error) {
             this.logger.error("Import failed", error);
             result.success = false;
@@ -399,4 +383,60 @@ export class TransactionImportService {
 
         return result;
     }
+
+    /** Every row with an externalId, deleted ones too, so a transaction the user deleted stays deleted. */
+    private async loadStoredRows(userId: string, liveAccountIds: Set<string>): Promise<StoredRow[]> {
+        const rows = await this.prisma.transaction.findMany({
+            where: { userId, externalId: { not: null } },
+            select: {
+                id: true,
+                accountId: true,
+                externalId: true,
+                transactionDate: true,
+                postedDate: true,
+                amount: true,
+                description: true,
+                deletedAt: true,
+            },
+        });
+        // Accounts are loaded live-only, so a row under any other account belongs to a deleted one.
+        return rows.map((row) => ({ ...row, accountDeleted: !liveAccountIds.has(row.accountId) }));
+    }
+
+    /**
+     * Inserts a batch and returns how many rows were saved. When the batch is rejected, its rows are retried one
+     * by one, so a single bad row can't take the rest of the batch (and every later sync of it) down with it.
+     */
+    private async insertBatch(
+        rows: Prisma.TransactionCreateManyInput[],
+        failures: { count: number; firstError: string },
+    ): Promise<number> {
+        try {
+            await this.prisma.transaction.createMany({ data: rows });
+            this.logger.log(`Inserted batch of ${rows.length} transactions`);
+            return rows.length;
+        } catch (batchError) {
+            this.logger.warn(`Batch insert of ${rows.length} failed, retrying row by row: ${errorReason(batchError)}`);
+        }
+
+        let inserted = 0;
+        for (const row of rows) {
+            try {
+                await this.prisma.transaction.create({ data: row });
+                inserted++;
+            } catch (rowError) {
+                failures.count++;
+                if (!failures.firstError) failures.firstError = errorReason(rowError);
+            }
+        }
+        this.logger.warn(`Row-by-row retry saved ${inserted} of ${rows.length} transactions`);
+        return inserted;
+    }
+}
+
+/** Prisma errors echo the whole query (row values included) before the reason; keep only the reason. */
+function errorReason(error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error);
+    const lines = message.split("\n").filter((line) => line.trim() !== "");
+    return (lines[lines.length - 1] ?? "Unknown error").trim().slice(0, MAX_ERROR_LENGTH);
 }

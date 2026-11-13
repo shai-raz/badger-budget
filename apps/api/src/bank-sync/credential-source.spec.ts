@@ -68,7 +68,7 @@ describe("startSyncJob with a credential source", () => {
         prisma.scraperJob.create.mockResolvedValueOnce({ id: "child-A" }).mockResolvedValueOnce({ id: "child-B" });
         prisma.scraperJob.findMany.mockResolvedValue([{ status: "failed" }, { status: "success" }]);
         scraper.scrapeConnection.mockResolvedValue({ candidates: [], balances: [] });
-        importer.importTransactions.mockResolvedValue({ transactionsSynced: 0, accountsCreated: 0 });
+        importer.importTransactions.mockResolvedValue({ success: true, transactionsSynced: 0, accountsCreated: 0 });
         const module = await Test.createTestingModule({
             providers: [
                 BankSyncService,
@@ -152,8 +152,8 @@ describe("startSyncJob with a credential source", () => {
     it("reports a successful run's imported count and no failures to onFinished", async () => {
         prisma.scraperJob.findMany.mockResolvedValueOnce([{ status: "success" }, { status: "success" }]);
         importer.importTransactions
-            .mockResolvedValueOnce({ transactionsSynced: 3, accountsCreated: 0 })
-            .mockResolvedValueOnce({ transactionsSynced: 2, accountsCreated: 0 });
+            .mockResolvedValueOnce({ success: true, transactionsSynced: 3, accountsCreated: 0 })
+            .mockResolvedValueOnce({ success: true, transactionsSynced: 2, accountsCreated: 0 });
         const source: CredentialSource = {
             resolve: () => ({ username: "bank-user" }),
             onFinished: jest.fn().mockResolvedValue(undefined),
@@ -172,7 +172,7 @@ describe("startSyncJob with a credential source", () => {
     });
 
     it("reports a partial run with the failed connection and the imports that succeeded to onFinished", async () => {
-        importer.importTransactions.mockResolvedValueOnce({ transactionsSynced: 4, accountsCreated: 0 });
+        importer.importTransactions.mockResolvedValueOnce({ success: true, transactionsSynced: 4, accountsCreated: 0 });
         const source: CredentialSource = {
             resolve: (conn) => {
                 if (conn.id === "A") throw new Error("bad key");
@@ -240,8 +240,8 @@ describe("startSyncJob with a credential source", () => {
 
     it("reports the transactions imported before the run dies afterwards, with no failure", async () => {
         importer.importTransactions
-            .mockResolvedValueOnce({ transactionsSynced: 3, accountsCreated: 0 })
-            .mockResolvedValueOnce({ transactionsSynced: 2, accountsCreated: 0 });
+            .mockResolvedValueOnce({ success: true, transactionsSynced: 3, accountsCreated: 0 })
+            .mockResolvedValueOnce({ success: true, transactionsSynced: 2, accountsCreated: 0 });
         prisma.syncJob.update.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error("db down"));
         const source: CredentialSource = {
             resolve: () => ({ username: "bank-user" }),
