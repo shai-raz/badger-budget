@@ -29,6 +29,8 @@ export interface StoredRow {
     amount: Decimal | number | string;
     description: string;
     deletedAt: Date | null;
+    /** The row's account is soft-deleted (its transactions stay stored). */
+    accountDeleted: boolean;
 }
 
 /**
@@ -38,7 +40,9 @@ export interface StoredRow {
  * - identical: same account, day, amount and description. Keeps a repeated import a no-op.
  * - sameDay: same account and day (a bank may change the amount when a pending row settles).
  * - legacyDate: same account, stored on the day-early date bank-sync used to write.
- * - otherAccount: another account, same day and amount (e.g. a sheet row under another account number).
+ * - otherAccount: a deleted account, same day and amount. Deleting an account keeps its transactions, and
+ *   the next sync re-creates the account, so without this its rows would all be imported again. Two live
+ *   accounts never match: a transaction can't move between accounts.
  * - nearDate: same account, within NEAR_DATE_DAYS (the bank or sheet shifted the date).
  * - lookAlike: a different externalId; same account, day, amount and description (a row whose id the
  *   provider changed). Never a row with no externalId: those were added by hand, and a visible duplicate
@@ -113,6 +117,7 @@ export function matchStoredRows(candidates: DedupCandidate[], storedRows: Stored
             return sameId(c).find(
                 (r) =>
                     free(r) &&
+                    r.accountDeleted &&
                     r.accountId !== c.accountId &&
                     days.includes(dayOf(r.transactionDate)) &&
                     sameStoredAmount(c.amount, r.amount),

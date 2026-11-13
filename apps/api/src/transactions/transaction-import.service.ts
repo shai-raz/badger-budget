@@ -146,7 +146,7 @@ export class TransactionImportService {
             );
 
             // Dedup: pair candidates with stored rows one-to-one (see import-dedup.ts). Loaded once, up front.
-            const storedRows = await this.loadStoredRows(userId);
+            const storedRows = await this.loadStoredRows(userId, new Set(userAccounts.map((account) => account.id)));
             const storedExternalIds = new Set(storedRows.map((row) => row.externalId));
             const matches = matchStoredRows(
                 candidates.map((candidate) => ({
@@ -385,8 +385,8 @@ export class TransactionImportService {
     }
 
     /** Every row with an externalId, deleted ones too, so a transaction the user deleted stays deleted. */
-    private loadStoredRows(userId: string): Promise<StoredRow[]> {
-        return this.prisma.transaction.findMany({
+    private async loadStoredRows(userId: string, liveAccountIds: Set<string>): Promise<StoredRow[]> {
+        const rows = await this.prisma.transaction.findMany({
             where: { userId, externalId: { not: null } },
             select: {
                 id: true,
@@ -399,6 +399,8 @@ export class TransactionImportService {
                 deletedAt: true,
             },
         });
+        // Accounts are loaded live-only, so a row under any other account belongs to a deleted one.
+        return rows.map((row) => ({ ...row, accountDeleted: !liveAccountIds.has(row.accountId) }));
     }
 
     /**

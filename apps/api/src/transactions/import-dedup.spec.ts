@@ -22,6 +22,7 @@ const stored = (overrides: Partial<StoredRow> = {}): StoredRow => ({
     amount: new Decimal(100),
     description: "Salary",
     deletedAt: null,
+    accountDeleted: false,
     ...overrides,
 });
 
@@ -83,8 +84,20 @@ describe("matchStoredRows", () => {
         expect(tiers([candidate({ legacyTransactionDate: day("2026-06-14") })], [legacy])).toEqual(["legacyDate"]);
     });
 
-    it("matches a sheet row stored under another account number when the day and amount agree", () => {
-        expect(tiers([candidate()], [stored({ accountId: "sheet-account" })])).toEqual(["otherAccount"]);
+    describe("a row stored under another account", () => {
+        const underDeleted = () => stored({ accountId: "deleted-account", accountDeleted: true });
+
+        it("matches when that account is deleted and the day and amount agree", () => {
+            expect(tiers([candidate()], [underDeleted()])).toEqual(["otherAccount"]);
+        });
+
+        it("matches before the re-created account exists", () => {
+            expect(tiers([candidate({ accountId: undefined })], [underDeleted()])).toEqual(["otherAccount"]);
+        });
+
+        it("never matches when that account is live", () => {
+            expect(tiers([candidate()], [stored({ accountId: "other-live-account" })])).toEqual([null]);
+        });
     });
 
     it("matches a row whose date the bank moved by a few days", () => {
@@ -177,7 +190,10 @@ describe("matchStoredRows", () => {
             const pick = <T>(values: T[]): T => values[Math.floor(next() * values.length)];
             const rows: StoredRow[] = Array.from({ length: Math.floor(next() * 9) }, (_, i) => ({
                 id: `stored-${seed}-${i}`,
-                accountId: pick(ACCOUNTS),
+                ...pick<Pick<StoredRow, "accountId" | "accountDeleted">>([
+                    ...ACCOUNTS.map((accountId) => ({ accountId, accountDeleted: false })),
+                    { accountId: "account-deleted", accountDeleted: true },
+                ]),
                 externalId: next() < 0.2 ? null : pick(IDS),
                 transactionDate: dayAt(Math.floor(next() * DAYS)),
                 postedDate: null,
@@ -221,6 +237,7 @@ describe("matchStoredRows", () => {
             amount: new Decimal(c.amount),
             description: storedDescription(c.description),
             deletedAt: null,
+            accountDeleted: false,
         });
 
         const SEEDS = Array.from({ length: 3000 }, (_, i) => i + 1);
