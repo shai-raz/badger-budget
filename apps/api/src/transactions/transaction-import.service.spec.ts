@@ -511,10 +511,16 @@ describe("TransactionImportService", () => {
             expect((await importedRow()).transactionDate).toEqual(new Date("2026-05-02"));
         });
 
-        it("skips a row that looks like a stored manual one", async () => {
-            const result = await run([makeCandidate({})], [storedRow({ externalId: null })]);
+        it("skips a row stored under a different externalId that otherwise looks the same", async () => {
+            const result = await run([makeCandidate({})], [storedRow({ externalId: "old-format-id" })]);
 
             expect(result.transactionsSynced).toBe(0);
+        });
+
+        it("imports a bank row even when a hand-added row looks the same", async () => {
+            const result = await run([makeCandidate({})], [storedRow({ externalId: null })]);
+
+            expect(result.transactionsSynced).toBe(1);
         });
 
         it("keeps a deleted transaction deleted", async () => {
@@ -523,29 +529,12 @@ describe("TransactionImportService", () => {
             expect(result.transactionsSynced).toBe(0);
         });
 
-        it("loads the stored rows once: every row with an externalId, and the live rows on the candidates' days", async () => {
-            await run(
-                [
-                    makeCandidate({ externalId: "ext-1", transactionDate: new Date("2026-06-20") }),
-                    makeCandidate({ externalId: "ext-2", transactionDate: new Date("2026-06-03") }),
-                ],
-                [],
-            );
+        it("loads the stored rows once: every row with an externalId, deleted ones included", async () => {
+            await run([makeCandidate({ externalId: "ext-1" }), makeCandidate({ externalId: "ext-2" })], []);
 
             expect(mockPrismaService.transaction.findMany).toHaveBeenCalledTimes(1);
             expect(mockPrismaService.transaction.findMany).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    where: {
-                        userId: "user-1",
-                        OR: [
-                            { externalId: { not: null } },
-                            {
-                                deletedAt: null,
-                                transactionDate: { gte: new Date("2026-06-03"), lte: new Date("2026-06-20") },
-                            },
-                        ],
-                    },
-                }),
+                expect.objectContaining({ where: { userId: "user-1", externalId: { not: null } } }),
             );
         });
     });

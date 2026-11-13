@@ -40,8 +40,9 @@ export interface StoredRow {
  * - legacyDate: same account, stored on the day-early date bank-sync used to write.
  * - otherAccount: another account, same day and amount (e.g. a sheet row under another account number).
  * - nearDate: same account, within NEAR_DATE_DAYS (the bank or sheet shifted the date).
- * - lookAlike: any externalId or none; same account, day, amount and description (a manual row, or a
- *   row whose id the provider changed).
+ * - lookAlike: a different externalId; same account, day, amount and description (a row whose id the
+ *   provider changed). Never a row with no externalId: those were added by hand, and a visible duplicate
+ *   beats a bank row that silently never arrives.
  */
 export const DEDUP_TIERS = ["identical", "sameDay", "legacyDate", "otherAccount", "nearDate", "lookAlike"] as const;
 export type DedupTier = (typeof DEDUP_TIERS)[number];
@@ -80,7 +81,7 @@ export function matchStoredRows(candidates: DedupCandidate[], storedRows: Stored
     // A fixed row order (the query has none) keeps the pairing the same from one import to the next.
     for (const row of [...storedRows].sort((a, b) => compare(a.id, b.id))) {
         if (row.externalId !== null) push(byExternalId, row.externalId, row);
-        if (!row.deletedAt) {
+        if (row.externalId !== null && !row.deletedAt) {
             push(byLookAlike, lookAlikeKey(row.accountId, dayOf(row.transactionDate), row.description), row);
         }
     }

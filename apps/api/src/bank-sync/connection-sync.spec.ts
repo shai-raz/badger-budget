@@ -212,6 +212,7 @@ describe("Connection sync", () => {
                 status: "failed",
                 errorCode: "IMPORT_FAILED",
                 error: "1 transaction(s) could not be saved: bad row",
+                transactionsSynced: 3,
             }),
         });
         expect(prisma.scraperConnection.update).not.toHaveBeenCalled();

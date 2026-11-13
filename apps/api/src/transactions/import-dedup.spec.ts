@@ -97,8 +97,8 @@ describe("matchStoredRows", () => {
         expect(tiers([candidate()], [far])).toEqual([null]);
     });
 
-    it("matches a manual row with no externalId that looks the same", () => {
-        expect(tiers([candidate()], [stored({ externalId: null })])).toEqual(["lookAlike"]);
+    it("imports a bank row even when a hand-added row (no externalId) looks the same", () => {
+        expect(tiers([candidate()], [stored({ externalId: null })])).toEqual([null]);
     });
 
     it("matches a row whose id the provider changed", () => {
@@ -142,8 +142,8 @@ describe("matchStoredRows", () => {
     });
 
     it("never matches a candidate whose account does not exist yet by account", () => {
-        const manual = stored({ externalId: null });
-        expect(tiers([candidate({ accountId: undefined })], [manual])).toEqual([null]);
+        const otherId = stored({ externalId: "other" });
+        expect(tiers([candidate({ accountId: undefined })], [otherId])).toEqual([null]);
     });
 
     it("compares the amount as stored, rounded to 2 decimals", () => {

@@ -38,7 +38,6 @@ export interface ImportCandidate {
 
 const BATCH_SIZE = 100;
 
-const MS_PER_DAY = 86_400_000;
 const MAX_ERROR_LENGTH = 300;
 const MAX_LOGGED_WARNINGS = 20;
 
@@ -147,7 +146,7 @@ export class TransactionImportService {
             );
 
             // Dedup: pair candidates with stored rows one-to-one (see import-dedup.ts). Loaded once, up front.
-            const storedRows = await this.loadStoredRows(userId, candidates);
+            const storedRows = await this.loadStoredRows(userId);
             const storedExternalIds = new Set(storedRows.map((row) => row.externalId));
             const matches = matchStoredRows(
                 candidates.map((candidate) => ({
@@ -385,31 +384,10 @@ export class TransactionImportService {
         return result;
     }
 
-    /**
-     * Everything a candidate could already be stored as: every row with an externalId (deleted ones too, so a
-     * transaction the user deleted stays deleted), plus the live rows on the candidates' days for the look-alike tier.
-     */
-    private loadStoredRows(userId: string, candidates: ImportCandidate[]): Promise<StoredRow[]> {
-        const withExternalId = { externalId: { not: null } };
-        const days = candidates.map((c) => Math.floor(c.transactionDate.getTime() / MS_PER_DAY));
-        const where =
-            days.length === 0
-                ? { userId, ...withExternalId }
-                : {
-                      userId,
-                      OR: [
-                          withExternalId,
-                          {
-                              deletedAt: null,
-                              transactionDate: {
-                                  gte: new Date(days.reduce((a, b) => Math.min(a, b)) * MS_PER_DAY),
-                                  lte: new Date(days.reduce((a, b) => Math.max(a, b)) * MS_PER_DAY),
-                              },
-                          },
-                      ],
-                  };
+    /** Every row with an externalId, deleted ones too, so a transaction the user deleted stays deleted. */
+    private loadStoredRows(userId: string): Promise<StoredRow[]> {
         return this.prisma.transaction.findMany({
-            where,
+            where: { userId, externalId: { not: null } },
             select: {
                 id: true,
                 accountId: true,
