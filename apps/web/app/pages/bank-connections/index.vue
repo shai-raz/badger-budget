@@ -38,6 +38,8 @@ const connectionCountLabel = computed(() => {
     const count = scraperConnections.value?.length ?? 0;
     return count === 1 ? "1 connection" : `${count} connections`;
 });
+// Auto-sync schedules syncs for connections, so the card waits until there is at least one (and not while loading).
+const hasConnections = computed(() => (scraperConnections.value?.length ?? 0) > 0);
 
 const handleAddConnection = () => openCreate();
 
@@ -147,6 +149,12 @@ const openMenu = ({ connection, event }: { connection: IScraperConnectionRespons
             </template>
         </LayoutPageHeader>
 
+        <BankSyncAutoSyncCard
+            v-if="hasConnections"
+            :auto-sync="autoSync"
+            :error="autoSyncError"
+        />
+
         <SharedSectionBand
             title="Connections"
             :meta="connectionCountLabel"
@@ -216,11 +224,6 @@ const openMenu = ({ connection, event }: { connection: IScraperConnectionRespons
                 </div>
             </div>
         </SharedSectionBand>
-
-        <BankSyncAutoSyncCard
-            :auto-sync="autoSync"
-            :error="autoSyncError"
-        />
 
         <Menu
             ref="menu"

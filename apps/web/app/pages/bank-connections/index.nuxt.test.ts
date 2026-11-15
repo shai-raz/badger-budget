@@ -210,3 +210,34 @@ describe("bank connections page auto-sync", () => {
         expect(wrapper.text().split("Not in auto-sync").length - 1).toBe(1);
     });
 });
+
+describe("bank connections page auto-sync card", () => {
+    const offCopy = "Sync on a schedule, even when Badger is closed.";
+
+    it("renders the card above Connections once there is a connection", async () => {
+        api.getScraperConnections.mockResolvedValue([connection(true)]);
+        const wrapper = await mountSuspended(BankConnections);
+        await vi.waitFor(() => expect(wrapper.text()).toContain(offCopy));
+
+        const headings = wrapper.findAll("h2").map((heading) => heading.text());
+        expect(headings.findIndex((t) => t.includes("Auto-sync"))).toBeLessThan(
+            headings.findIndex((t) => t.includes("Connections")),
+        );
+        wrapper.unmount();
+    });
+
+    it("hides the card while the connections are loading", async () => {
+        api.getScraperConnections.mockReturnValue(new Promise(() => {}));
+        const wrapper = await mountSuspended(BankConnections);
+        expect(wrapper.text()).not.toContain(offCopy);
+        wrapper.unmount();
+    });
+
+    it("hides the card when there are no connections", async () => {
+        api.getScraperConnections.mockResolvedValue([]);
+        const wrapper = await mountSuspended(BankConnections);
+        await vi.waitFor(() => expect(wrapper.text()).toContain("Connect a bank to sync transactions automatically"));
+        expect(wrapper.text()).not.toContain(offCopy);
+        wrapper.unmount();
+    });
+});

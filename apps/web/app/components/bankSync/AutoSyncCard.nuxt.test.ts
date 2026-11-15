@@ -98,30 +98,49 @@ describe("AutoSyncCard", () => {
         wrapper.unmount();
     });
 
-    it("shows the schedule, next sync and the turn-off actions on this device", async () => {
+    it("shows the on-until date in the header and the schedule as the last row", async () => {
         const wrapper = await mountSuspended(AutoSyncCard, {
             props: { autoSync: fakeAutoSync(status(), true) },
         });
         const copy = text(wrapper);
         expect(copy).toContain("Sync automatically");
         expect(copy).toContain("From this device");
-        expect(copy).toContain("Every 4 hours / 07:00–22:00");
-        expect(copy).toContain("Runs from Chrome on Windows");
         expect(copy).toContain("On until");
-        expect(buttonIn(wrapper, "Turn off auto-sync")).toBeDefined();
-        expect(buttonIn(wrapper, "Change schedule")).toBeDefined();
+        expect(copy).toContain("Every 4 hours, 07:00–22:00");
+        expect(copy).toContain("Next sync");
+        expect(copy).not.toContain("Runs from");
+        expect(buttonIn(wrapper, "Turn off auto-sync")).toBeUndefined();
+        expect(wrapper.findAll('button[aria-label="Change schedule"]')).toHaveLength(1);
+        // The section heading itself has a mobile and desktop label; the card body must not.
+        expect(wrapper.find(".transition-opacity").html()).not.toMatch(/md:hidden|hidden md:/);
         wrapper.unmount();
     });
 
     it("opens the schedule form from Change schedule", async () => {
         const autoSync = fakeAutoSync(status(), true);
         const wrapper = await mountSuspended(AutoSyncCard, { props: { autoSync } });
-        buttonIn(wrapper, "Change schedule")!.trigger("click");
+        wrapper.get('button[aria-label="Change schedule"]').trigger("click");
         await nextTick();
         expect(document.body.textContent).toContain("Change schedule");
         expect(Array.from(document.querySelectorAll("button")).some((b) => b.textContent?.trim() === "Save")).toBe(
             true,
         );
+        wrapper.unmount();
+    });
+
+    it("shows the schedule and the next sync in one row that opens the schedule form", async () => {
+        const nextRun = new Date();
+        nextRun.setHours(13, 0, 0, 0);
+        const autoSync = fakeAutoSync(
+            status({ intervalCount: 6, windowEndMinute: 1380, nextRunAt: nextRun.toISOString() }),
+            true,
+        );
+        const wrapper = await mountSuspended(AutoSyncCard, { props: { autoSync } });
+        expect(text(wrapper)).toContain("Every 6 hours, 07:00–23:00");
+        expect(text(wrapper)).toContain("Next sync today at 13:00");
+        wrapper.get('button[aria-label="Change schedule"]').trigger("click");
+        await nextTick();
+        expect(document.body.textContent).toContain("Change schedule");
         wrapper.unmount();
     });
 
@@ -131,7 +150,8 @@ describe("AutoSyncCard", () => {
         });
         const copy = text(wrapper);
         expect(copy).toContain("On, from Safari on iPhone");
-        expect(copy).toContain("Every 4 hours / 07:00–22:00");
+        expect(copy).not.toContain("On until");
+        expect(copy).toContain("Every 4 hours, 07:00–22:00");
         expect(buttonIn(wrapper, "Move here")).toBeDefined();
         expect(buttonIn(wrapper, "Turn off auto-sync")).toBeUndefined();
         wrapper.unmount();
@@ -140,7 +160,7 @@ describe("AutoSyncCard", () => {
     it("asks before turning auto-sync off", async () => {
         const autoSync = fakeAutoSync(status(), true);
         const wrapper = await mountSuspended(AutoSyncCard, { props: { autoSync } });
-        buttonIn(wrapper, "Turn off auto-sync")!.trigger("click");
+        wrapper.get('[role="switch"]').trigger("change");
         expect(confirmRequire).toHaveBeenCalledTimes(1);
         expect(autoSync.disable).not.toHaveBeenCalled();
         const options = confirmRequire.mock.calls[0]?.[0] as { accept: () => Promise<void> };
@@ -156,7 +176,9 @@ describe("AutoSyncCard iOS outside the Home Screen", () => {
         const wrapper = await mountSuspended(AutoSyncCard, {
             props: { autoSync: fakeAutoSync(null, false) },
         });
-        expect(text(wrapper)).toContain("First add Badger to your Home Screen: Share › Add to Home Screen.");
+        expect(text(wrapper)).toContain("Add Badger to your Home Screen first");
+        expect(text(wrapper)).toContain("On iPhone and iPad, auto-sync only runs from the Home Screen app.");
+        expect(text(wrapper)).toContain("Tap Share, then Add to Home Screen.");
         expect(buttonIn(wrapper, "Turn on auto-sync")!.attributes("disabled")).toBeDefined();
         wrapper.unmount();
     });
@@ -235,6 +257,15 @@ describe("AutoSyncCard expiring grant", () => {
         wrapper.unmount();
     });
 
+    it("hides the on-until header while the grant is expiring", async () => {
+        const wrapper = await mountSuspended(AutoSyncCard, {
+            props: { autoSync: fakeAutoSync(status({ expiresAt: daysFromNow(2) }), true) },
+        });
+        expect(text(wrapper)).not.toContain("On until");
+        expect(text(wrapper)).toContain("Stops on");
+        wrapper.unmount();
+    });
+
     it("uses the singular for one day left", async () => {
         const wrapper = await mountSuspended(AutoSyncCard, {
             props: { autoSync: fakeAutoSync(status({ expiresAt: daysFromNow(1) }), true) },
@@ -260,6 +291,7 @@ describe("AutoSyncCard expiring grant", () => {
         const wrapper = await mountSuspended(AutoSyncCard, {
             props: { autoSync: fakeAutoSync(status({ expiresAt: daysFromNow(10) }), true) },
         });
+        expect(text(wrapper)).toContain("On until");
         expect(text(wrapper)).not.toContain("days left");
         expect(buttonIn(wrapper, "Keep on")).toBeUndefined();
         wrapper.unmount();
