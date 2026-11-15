@@ -8,7 +8,8 @@ Release tooling for Badger Budget. It is private and has no dependencies beyond 
   `pr-title.yml` workflow runs it.
 - `bin/release.mjs` finds the commits since the last `v*` tag, picks the next version, updates
   `apps/api/changelog.json`, `CHANGELOG.md` and the three `package.json` files, and writes the release notes. The
-  `release.yml` workflow runs it on every push to main and then commits, tags and publishes the release.
+  `release.yml` workflow runs it on every push to main, then commits and tags the release, builds its image and
+  publishes the GitHub release.
 
 ## Dry run
 
@@ -31,9 +32,13 @@ escapes in `src/changelog.mjs` only have to render titles as typed on GitHub.
 
 ## Recovering a release whose GitHub release failed
 
-The push is atomic, so a tag on main means the release commit landed too. If `Create the GitHub release` fails after
-that, the next run finds the tag and releases nothing, so create the GitHub release by hand from the newest entry in
-`apps/api/changelog.json` (run from a fresh checkout of main):
+If the image build or the publish job fails, re-run the failed jobs of that Release run: the draft is published once
+the image is pushed.
+
+The push is atomic, so a tag on main means the release commit landed too. If `Create the GitHub release as a draft`
+fails after that, re-running only repeats a run that finds the tag and releases nothing. Run the Docker publish workflow
+by hand with the tag, and once it succeeds create the GitHub release from the newest entry in `apps/api/changelog.json`
+(run from a fresh checkout of main):
 
 ```bash
 node --input-type=module --eval "
