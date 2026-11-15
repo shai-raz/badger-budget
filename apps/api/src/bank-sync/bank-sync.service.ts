@@ -541,6 +541,8 @@ export class BankSyncService {
                 value: { connection, candidates, balances },
             } of successfulScrapes) {
                 const scraperJobId = scraperJobIds.get(connection.id)!;
+                // Rows saved before a failure stay, so the failed job reports them too.
+                let transactionsSaved = 0;
                 try {
                     const result = await this.transactionImportService.importTransactions(
                         userId,
@@ -549,7 +551,12 @@ export class BankSyncService {
                     );
 
                     totalTransactions += result.transactionsSynced;
+                    transactionsSaved = result.transactionsSynced;
                     totalAccounts += result.accountsCreated;
+
+                    // The importer reports its own failures instead of throwing. The rows it did save stay
+                    // (the next sync adds only what is missing), but the connection must not read as synced.
+                    if (!result.success) throw new Error(result.error ?? "Import failed");
 
                     // Balances are secondary to transactions: never let a balance failure flip an
                     // otherwise-successful scraper job to `failed`. Runs after the import so account
@@ -628,6 +635,7 @@ export class BankSyncService {
                             status: "failed",
                             error: errorMessage,
                             errorCode: "IMPORT_FAILED",
+                            transactionsSynced: transactionsSaved,
                             finishedAt: new Date(),
                         },
                     });
