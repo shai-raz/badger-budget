@@ -1,36 +1,21 @@
-# Builds the production image (see Dockerfile) for linux/amd64 and linux/arm64 and pushes it to
-# ghcr.io/<owner>/badger-budget: :latest and a sha tag on every push to main, plus X.Y.Z and X.Y when the commit
-# carries a v*.*.* tag.
-# Releases build once: release.yml pushes the release commit and its tag atomically, so the main-push run for that
-# commit already sees the tag and publishes the semver tags too. Tag pushes do not trigger a second build of the
-# same commit. To rebuild a release by hand, run this workflow on its tag (workflow_dispatch).
-# Images carry APP_VERSION (from `git describe --tags`) and GIT_SHA build args: release builds report vX.Y.Z (the
-# API strips the v), main builds after a tag report vX.Y.Z-N-g<sha>.
-# Pull requests build without pushing, so a broken Dockerfile fails the PR.
-# Both triggers share one paths list: the files the image is built from. Docs, CI-only and README merges skip the
-# build. Release commits always touch apps/api/changelog.json and the package.json files, so every release builds.
-# Keep the two lists identical, and add any new file the Dockerfile copies.
+# Builds the production image (see Dockerfile) for linux/amd64 and linux/arm64.
+#
+# Releases: release.yml calls this workflow (workflow_call) with the release tag after pushing it, and publishes the
+# GitHub release only once this succeeds, so nothing announces a version whose image is missing. It pushes
+# ghcr.io/<owner>/badger-budget:X.Y.Z, plus :X.Y and :latest when the tag is the newest in its minor line or overall.
+# Main pushes build nothing: :latest is always the latest release.
+# To rebuild a release by hand, run this workflow (workflow_dispatch) with its tag.
+# Images carry APP_VERSION (from `git describe --tags`, so vX.Y.Z; the API strips the v) and GIT_SHA build args.
+#
+# Pull requests touching the files the image is built from build without pushing, so a broken Dockerfile fails the
+# PR. Add any new file the Dockerfile copies to the paths list.
 # The Dockerfile's JS build stage runs on $BUILDPLATFORM, so only native deps run under QEMU.
-# The repository.private guards below only matter if the repo is made private again: pushes then skip the job
+# The repository.private guards below only matter if the repo is made private again: releases then skip the job
 # (no GHCR push, no multi-arch build), and PRs build linux/amd64 only and skip QEMU, to save Actions minutes.
 
 name: Docker publish
 
 on:
-    push:
-        branches: [main]
-        paths:
-            - Dockerfile
-            - .dockerignore
-            - .npmrc
-            - docker/**
-            - apps/**
-            - packages/**
-            - package.json
-            - pnpm-lock.yaml
-            - pnpm-workspace.yaml
-            - turbo.json
-            - .github/workflows/docker-publish.yml
     pull_request:
         paths:
             - Dockerfile
@@ -44,31 +29,89 @@ on:
             - pnpm-workspace.yaml
             - turbo.json
             - .github/workflows/docker-publish.yml
+    workflow_call:
+        inputs:
+            tag:
+                description: Release tag to build and push, e.g. v1.2.3
+                required: true
+                type: string
     workflow_dispatch:
-
-# Cancel superseded runs on the same branch/PR.
-concurrency:
-    group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
-    cancel-in-progress: true
-
-permissions:
-    contents: read
-    packages: write
+        inputs:
+            tag:
+                description: Release tag to rebuild and push, e.g. v1.2.3
+                required: true
+                type: string
 
 jobs:
     build:
         name: Build & publish image
-        # Pushes from a private repo skip the job entirely (no QEMU build either). Pull requests always run.
+        # A private repo builds only pull requests (no QEMU build, no push). Pull requests always run.
         if: github.event_name == 'pull_request' || github.event.repository.private == false
         runs-on: ubuntu-latest
+        # Job-level so a call from release.yml (whose `github` context is the caller's) cannot share a group with it.
+        # PRs cancel superseded runs; a release build is never cancelled.
+        concurrency:
+            group: docker-publish-${{ github.event_name == 'pull_request' && github.head_ref || inputs.tag }}
+            cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+        permissions:
+            contents: read
+            packages: write
+        env:
+            RELEASE_TAG: ${{ inputs.tag }}
+            PUSH: ${{ github.event_name != 'pull_request' }}
         steps:
             - uses: actions/checkout@v4
               with:
+                  # The release tag for releases; the PR merge commit otherwise.
+                  ref: ${{ inputs.tag }}
                   fetch-depth: 0 # full history and tags, so `git describe` can name the version
 
             # GHCR requires a lowercase owner; derive it from the repo so forks publish to their own namespace.
             - name: Compute image name
               run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/badger-budget" >> "$GITHUB_ENV"
+
+            - id: version
+              name: Resolve app version, commit and image tags
+              run: |
+                  echo "app_version=$(git describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
+                  echo "git_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+                  if [ "$PUSH" != "true" ]; then
+                      exit 0
+                  fi
+
+                  if ! [[ "$RELEASE_TAG" =~ ^v([0-9]+)\.([0-9]+)\.[0-9]+$ ]]; then
+                      echo "::error::'$RELEASE_TAG' is not a vX.Y.Z tag"
+                      exit 1
+                  fi
+                  major_minor="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+                  if ! git tag --points-at HEAD | grep -qxF "$RELEASE_TAG"; then
+                      echo "::error::$RELEASE_TAG is not a tag on the checked-out commit"
+                      exit 1
+                  fi
+
+                  newest_tag() { git tag --list "$1" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1; }
+                  newest_in_minor=false
+                  newest=false
+                  if [ "$RELEASE_TAG" = "$(newest_tag "v$major_minor.*")" ]; then newest_in_minor=true; fi
+                  if [ "$RELEASE_TAG" = "$(newest_tag 'v*')" ]; then newest=true; fi
+                  {
+                      echo "version=${RELEASE_TAG#v}"
+                      echo "major_minor=$major_minor"
+                      echo "newest_in_minor=$newest_in_minor"
+                      echo "newest=$newest"
+                  } >> "$GITHUB_OUTPUT"
+
+            # X.Y and latest move only to the newest tag, so rebuilding an old release cannot move them back.
+            - id: meta
+              uses: docker/metadata-action@v5
+              with:
+                  images: ${{ env.IMAGE }}
+                  flavor: latest=false
+                  tags: |
+                      type=raw,value=${{ steps.version.outputs.version }},enable=${{ env.PUSH == 'true' }}
+                      type=raw,value=${{ steps.version.outputs.major_minor }},enable=${{ steps.version.outputs.newest_in_minor == 'true' }}
+                      type=raw,value=latest,enable=${{ steps.version.outputs.newest == 'true' }}
+                      type=ref,event=pr
 
             - uses: docker/setup-qemu-action@v3
               if: github.event.repository.private == false
@@ -76,35 +119,17 @@ jobs:
             - uses: docker/setup-buildx-action@v3
 
             - uses: docker/login-action@v3
-              if: github.event_name != 'pull_request' && github.event.repository.private == false
+              if: env.PUSH == 'true'
               with:
                   registry: ghcr.io
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
 
-            - id: version
-              name: Resolve app version and commit
-              run: |
-                  echo "app_version=$(git describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || true)" >> "$GITHUB_OUTPUT"
-                  echo "git_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-                  # The release tag on this exact commit, if any (empty for ordinary main pushes and PRs).
-                  echo "release_tag=$(git tag --points-at HEAD --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -V | tail -n 1)" >> "$GITHUB_OUTPUT"
-
-            - id: meta
-              uses: docker/metadata-action@v5
-              with:
-                  images: ${{ env.IMAGE }}
-                  tags: |
-                      type=raw,value=latest,enable={{is_default_branch}}
-                      type=semver,pattern={{version}},value=${{ steps.version.outputs.release_tag }},enable=${{ steps.version.outputs.release_tag != '' }}
-                      type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.release_tag }},enable=${{ steps.version.outputs.release_tag != '' }}
-                      type=sha
-
             - uses: docker/build-push-action@v6
               with:
                   context: .
                   platforms: ${{ github.event.repository.private && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
-                  push: ${{ github.event_name != 'pull_request' && github.event.repository.private == false }}
+                  push: ${{ env.PUSH == 'true' }}
                   build-args: |
                       APP_VERSION=${{ steps.version.outputs.app_version }}
                       GIT_SHA=${{ steps.version.outputs.git_sha }}

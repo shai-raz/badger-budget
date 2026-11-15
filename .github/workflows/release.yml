@@ -3,7 +3,6 @@
 #
 # Why a deploy key: main is protected by a ruleset that requires a pull request, so GITHUB_TOKEN cannot push the
 # release commit. Deploy keys can be ruleset bypass actors, so the push uses the SSH key in RELEASE_DEPLOY_KEY.
-# Unlike GITHUB_TOKEN pushes, deploy-key pushes trigger other workflows, so docker-publish.yml builds the release.
 #
 # Why a 30s sleep and a checkout of main's current tip: a stack that lands as several pushes becomes one release
 # instead of several, and each release covers everything on main, not only the commit that triggered the run.
@@ -13,8 +12,11 @@
 # releases everything since the last tag. The release commit re-triggers this workflow; that run finds no
 # user-facing commits and does nothing.
 #
-# docker-publish.yml builds the release commit once from its main push: the tag is already on that commit, so the
-# same run publishes `latest` and the semver tags.
+# Order: the release job pushes the tag and creates the GitHub release as a draft; the image job builds and pushes the
+# image for that tag (docker-publish.yml); only then does the publish job make the release public and latest. The
+# update check reads GitHub's latest release, which skips drafts, so no instance is offered a version before its image
+# exists. A failed build leaves the draft: re-run the failed jobs. Runs queue instead of cancelling, so nothing ever
+# cancels a release build; a run lasts about as long as the image build.
 
 name: Release
 
@@ -28,15 +30,19 @@ concurrency:
     group: release
     cancel-in-progress: false
 
-permissions:
-    contents: write
-    pull-requests: read
+permissions: {}
 
 jobs:
     release:
         name: Release
         if: github.event.repository.fork == false
         runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            pull-requests: read
+        outputs:
+            version: ${{ steps.plan.outputs.version }}
+            pushed: ${{ steps.push.outputs.pushed }}
         steps:
             # Without the deploy key the release cannot be pushed, so skip with a warning instead of failing every push.
             - id: key
@@ -125,11 +131,35 @@ jobs:
                       exit 1
                   fi
 
-            - name: Create the GitHub release
+            - name: Create the GitHub release as a draft
               if: steps.key.outputs.skip != 'true' && steps.push.outputs.pushed == 'true'
               env:
                   GH_TOKEN: ${{ github.token }}
                   GH_REPO: ${{ github.repository }}
                   VERSION: ${{ steps.plan.outputs.version }}
                   NOTES_FILE: ${{ steps.plan.outputs.notes_file }}
-              run: gh release create "v$VERSION" --title "v$VERSION" --notes-file "$NOTES_FILE" --verify-tag --latest
+              run: gh release create "v$VERSION" --title "v$VERSION" --notes-file "$NOTES_FILE" --verify-tag --draft
+
+    image:
+        name: Image
+        needs: release
+        if: needs.release.outputs.pushed == 'true'
+        permissions:
+            contents: read
+            packages: write
+        uses: ./.github/workflows/docker-publish.yml
+        with:
+            tag: v${{ needs.release.outputs.version }}
+
+    publish:
+        name: Publish the GitHub release
+        needs: [release, image]
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+                  VERSION: ${{ needs.release.outputs.version }}
+              run: gh release edit "v$VERSION" --draft=false --latest

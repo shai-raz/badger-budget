@@ -34,7 +34,7 @@ docker build -t badger-budget .   # Production image: API + bundled SPA on one p
 
 - **App architecture**: [apps/api/ARCHITECTURE.md](apps/api/ARCHITECTURE.md) and [apps/web/ARCHITECTURE.md](apps/web/ARCHITECTURE.md): stack and cross-cutting rules. Each app's `AGENTS.md` imports its own; read the other too when a change crosses the API/web boundary (DTOs, `api-client`, auth).
 - **UI design system** (`apps/web/DESIGN.md`): read before any UI change.
-- **Docker image:** `.github/workflows/docker-publish.yml` builds on main pushes touching its `paths` list, release commits included (tag pushes build nothing), and stamps `APP_VERSION` and `GIT_SHA`.
+- **Docker image:** built only per release: `release.yml` calls `docker-publish.yml` (stamps `APP_VERSION`, `GIT_SHA`), then publishes the GitHub release.
 - **Shared packages** (`packages/`): `types` (TS source), `api-client` (typed Axios client), `shared-data` (constants and enums) and `utils` (runtime helpers, compiled to CJS).
 
 ## Environment Setup

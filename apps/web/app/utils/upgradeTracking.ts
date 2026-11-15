@@ -23,7 +23,7 @@ export interface PendingUpgrade {
 export type UpgradePhase = "upgrading" | "ready" | "stalled" | "done";
 export type UpgradeActionState = "hidden" | "enabled" | "disabled";
 
-/** Base X.Y.Z of a version string; `:latest` builds report `X.Y.Z-N-g<sha>`. */
+/** Base X.Y.Z of a version string; a build between releases reports `X.Y.Z-N-g<sha>`. */
 function baseOf(version: string): [number, number, number] | null {
     const match = /^v?(\d+)\.(\d+)\.(\d+)/.exec(version);
     if (!match) return null;
