@@ -1,6 +1,19 @@
 {
     "releases": [
         {
+            "version": "0.17.1",
+            "date": "2026-11-15",
+            "items": [
+                {
+                    "type": "fix",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "stop bank sync dropping transactions that reuse a provider id",
+                    "pr": 140
+                }
+            ]
+        },
+        {
             "version": "0.17.0",
             "date": "2026-11-12",
             "items": [
