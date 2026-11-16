@@ -2,6 +2,7 @@
 /**
  * A small focusable icon that shows a tooltip on hover or focus: the lock beside a field the bank sets,
  * or the ⓘ beside a section title. Focus opens the tooltip, so tapping it on touch works too.
+ * The visible button is the icon's size. Its ::before is a transparent 44px hit area, so call sites never size it.
  */
 interface Props {
     /** Tooltip text, shown on hover and focus. */
@@ -21,7 +22,7 @@ defineProps<Props>();
     <button
         v-tooltip.top.focus="tooltipHtml ? { value: tooltip, escape: false } : tooltip"
         type="button"
-        class="inline-flex items-center rounded-full text-surface-500 dark:text-surface-400"
+        class="relative inline-flex items-center rounded-full text-surface-500 dark:text-surface-400 before:absolute before:-inset-[15px] before:content-['']"
         :aria-label="ariaLabel"
         @mouseenter="($event.currentTarget as HTMLElement).focus()"
         @mouseleave="($event.currentTarget as HTMLElement).blur()"

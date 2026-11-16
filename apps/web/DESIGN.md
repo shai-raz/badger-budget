@@ -43,6 +43,7 @@ Rules and tokens for the web UI. Read before any UI change. How the app is built
 - A band's or box's own action is `severity="secondary" outlined size="small"`.
 - Borderless `text` buttons are only for dialog Cancel, a mode's Cancel beside its Done, and icon-only buttons.
 - Inside a form, a small link-style action beside a field label is allowed. Buttons in a form look heavy.
+- Small icon controls beside text (`SharedHintButton` ⓘ or lock) get their 44px tap target from an invisible hit area, never a bigger visible box. Sizing the button (`h-11 w-11`, padding) pushes the icon away from its label. `SharedHintButton` has the hit area built in; call sites never size it (contract test).
 
 ## Colour
 

@@ -12,6 +12,17 @@ describe("HintButton", () => {
         expect(wrapper.find("i").classes()).toContain("pi-lock");
     });
 
+    it("keeps the visible button unsized and gives it a 44px hit area that adds no layout", async () => {
+        const wrapper = await mountSuspended(HintButton, {
+            props: { icon: "pi-lock", ariaLabel: "Locked: from your bank", tooltip: "From your bank" },
+        });
+
+        expect(wrapper.classes()).toEqual(
+            expect.arrayContaining(["relative", "before:absolute", "before:-inset-[15px]"]),
+        );
+        expect(wrapper.classes().filter((token) => /^(h|w|p)-/.test(token))).toEqual([]);
+    });
+
     it("shows the tooltip as HTML only when tooltipHtml is set", async () => {
         const wrapper = await mountSuspended(HintButton, {
             props: { icon: "pi-info-circle", ariaLabel: "How", tooltip: "Runs on <b>synced</b>", tooltipHtml: true },

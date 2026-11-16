@@ -791,6 +791,35 @@ describe("design contract: sync error action button", () => {
     });
 });
 
+describe("design contract: hint buttons", () => {
+    // SharedHintButton owns its 44px tap target as an invisible hit area. A call site that sizes it pushes the icon away from its label.
+    const HINT_TAG = /<SharedHintButton\b[^>]*>/g;
+    const SIZING_TOKEN = /^(h|w|p|px|py|pt|pr|pb|pl|size|justify)-/;
+    const sizingOffenders = (rel: string, source: string) =>
+        [...source.matchAll(HINT_TAG)].flatMap((tag) =>
+            classTokens(tag[0])
+                .filter((token) => SIZING_TOKEN.test(token))
+                .map((token) => `${rel}: SharedHintButton is sized with "${token}"; the component owns its tap target`),
+        );
+
+    it("sizes no SharedHintButton at any call site", () => {
+        const offenders = vueFiles(appDir).flatMap((rel) =>
+            sizingOffenders(rel, readFileSync(`${appDir}/${rel}`, "utf8")),
+        );
+        expect(offenders).toEqual([]);
+    });
+
+    it("flags a sized SharedHintButton and allows a bare one", () => {
+        expect(
+            sizingOffenders(
+                "fixture.vue",
+                '<SharedHintButton icon="pi-info-circle" class="h-11 w-11 justify-center md:h-auto" />',
+            ),
+        ).toHaveLength(4);
+        expect(sizingOffenders("fixture.vue", '<SharedHintButton icon="pi-info-circle" tooltip="Hi" />')).toEqual([]);
+    });
+});
+
 describe("design contract: PrimeVue widgets rule", () => {
     // DESIGN.md's Surfaces rule: interactive widgets are PrimeVue, and a hand-built one needs a reason in a comment.
     const WIDGETS_RULE =

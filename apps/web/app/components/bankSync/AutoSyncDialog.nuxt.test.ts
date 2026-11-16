@@ -294,3 +294,14 @@ describe("AutoSyncDialog enable", () => {
         });
     });
 });
+
+describe("AutoSyncDialog hint buttons", () => {
+    it("leaves both ⓘ hints unsized so each icon sits beside its label", async () => {
+        await mountDialog({ mode: "enable", current: null });
+        for (const name of ["About auto-sync", "About keeping auto-sync on"]) {
+            const hint = document.querySelector(`[aria-label="${name}"]`);
+            expect(hint).not.toBeNull();
+            expect(hint!.className).not.toMatch(/(^|\s)(md:)?(h|w|p|justify)-/);
+        }
+    });
+});
