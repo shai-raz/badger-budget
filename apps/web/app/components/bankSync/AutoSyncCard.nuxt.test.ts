@@ -116,6 +116,23 @@ describe("AutoSyncCard", () => {
         wrapper.unmount();
     });
 
+    it("puts the on-until hint in the header with its tooltip and default size", async () => {
+        const wrapper = await mountSuspended(AutoSyncCard, {
+            props: { autoSync: fakeAutoSync(status(), true) },
+        });
+        const hint = wrapper.get('[aria-label="About keeping auto-sync on"]');
+        expect(hint.element.closest("p")?.textContent).toContain("On until");
+        expect(hint.classes()).not.toContain("h-11");
+        expect(hint.classes()).not.toContain("w-11");
+        await hint.trigger("focus");
+        await vi.waitFor(() =>
+            expect(document.querySelector(".p-tooltip-text")?.textContent).toBe(
+                "Each unlock on this device restarts the countdown.",
+            ),
+        );
+        wrapper.unmount();
+    });
+
     it("opens the schedule form from Change schedule", async () => {
         const autoSync = fakeAutoSync(status(), true);
         const wrapper = await mountSuspended(AutoSyncCard, { props: { autoSync } });
@@ -179,6 +196,9 @@ describe("AutoSyncCard iOS outside the Home Screen", () => {
         expect(text(wrapper)).toContain("Add Badger to your Home Screen first");
         expect(text(wrapper)).toContain("On iPhone and iPad, auto-sync only runs from the Home Screen app.");
         expect(text(wrapper)).toContain("Tap Share, then Add to Home Screen.");
+        const message = wrapper.get(".p-message.p-message-secondary");
+        expect(message.text()).toContain("Add Badger to your Home Screen first");
+        expect(text(wrapper)).not.toContain("First add Badger to your Home Screen: Share › Add to Home Screen.");
         expect(buttonIn(wrapper, "Turn on auto-sync")!.attributes("disabled")).toBeDefined();
         wrapper.unmount();
     });

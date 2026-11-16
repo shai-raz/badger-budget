@@ -304,7 +304,7 @@ async function submitKeepPin() {
             <button
                 type="button"
                 aria-label="Change schedule"
-                class="flex w-full items-center gap-3 border-t border-surface-200 px-4 py-3 text-left outline-none hover:bg-surface-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary dark:border-surface-700 dark:hover:bg-surface-800 md:-mx-5 md:-mb-5 md:rounded-b-xl md:px-5"
+                class="flex items-center gap-3 border-t border-surface-200 px-4 py-3 text-left outline-none hover:bg-surface-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary dark:border-surface-700 dark:hover:bg-surface-800 md:-mx-5 md:-mb-5 md:rounded-b-xl md:px-5"
                 @click="openSchedule"
             >
                 <span

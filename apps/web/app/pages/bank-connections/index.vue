@@ -23,7 +23,7 @@ const updateConnectionMutation = useUpdateScraperConnectionMutation();
 const deleteConnectionMutation = useDeleteScraperConnectionMutation();
 const { openCreate, openEdit } = useConnectionEditor();
 
-// The card below and the connection rows read the one auto-sync state the sync flow shares.
+// The auto-sync card and the connection rows read the one auto-sync state the sync flow shares.
 const autoSyncError = ref<unknown>(null);
 const notIncludedIds = computed(() => new Set(autoSync.status.value?.notIncludedConnections.map((c) => c.id) ?? []));
 onMounted(async () => {
@@ -38,8 +38,9 @@ const connectionCountLabel = computed(() => {
     const count = scraperConnections.value?.length ?? 0;
     return count === 1 ? "1 connection" : `${count} connections`;
 });
-// Auto-sync schedules syncs for connections, so the card waits until there is at least one (and not while loading).
-const hasConnections = computed(() => (scraperConnections.value?.length ?? 0) > 0);
+// Auto-sync schedules syncs for connections, so the card waits until there is at least one. It also hides while
+// loading and once the query errors, since TanStack Query keeps the last good data after a failed refetch.
+const hasConnections = computed(() => !connectionsError.value && (scraperConnections.value?.length ?? 0) > 0);
 
 const handleAddConnection = () => openCreate();
 
