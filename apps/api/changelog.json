@@ -1,6 +1,26 @@
 {
     "releases": [
         {
+            "version": "0.18.0",
+            "date": "2026-11-17",
+            "items": [
+                {
+                    "type": "ci",
+                    "scope": null,
+                    "breaking": false,
+                    "subject": "build the image only for releases, and publish the release after it",
+                    "pr": 143
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "redesign the auto-sync card and move it above connections",
+                    "pr": 145
+                }
+            ]
+        },
+        {
             "version": "0.17.1",
             "date": "2026-11-15",
             "items": [
