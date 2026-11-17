@@ -16,4 +16,23 @@ describe("StatusTag", () => {
 
         expect(wrapper.classes()).toContain("p-tag-success");
     });
+
+    it("renders the optional PrimeIcons icon before the value", async () => {
+        const wrapper = await mountSuspended(StatusTag, {
+            props: { value: "Hidden on Overview", icon: "pi pi-eye-slash" },
+        });
+
+        const icon = wrapper.find(".pi-eye-slash");
+        expect(icon.exists()).toBe(true);
+        expect(wrapper.text()).toContain("Hidden on Overview");
+        // The icon element comes first, before the text, in the tag's DOM order.
+        expect(wrapper.element.firstElementChild).toBe(icon.element);
+    });
+
+    it("renders no icon element when no icon is given", async () => {
+        const wrapper = await mountSuspended(StatusTag, { props: { value: "Synced" } });
+
+        expect(wrapper.find(".p-tag-icon").exists()).toBe(false);
+        expect(wrapper.find("[class*='pi-']").exists()).toBe(false);
+    });
 });
