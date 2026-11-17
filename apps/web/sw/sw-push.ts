@@ -1,5 +1,6 @@
 // Push and notification-click listeners, bundled to sw-push.js (modules/sw-push.ts) and imported by the generated
 // worker through workbox.importScripts. Logic lives in app/utils/push/swHandlers.ts; this file is wiring only.
+import { handleSubscriptionChange } from "../app/utils/push/autoSyncDevice";
 import { loadAutoSyncKey } from "../app/utils/push/autoSyncKeyStore";
 import { closeTaggedNotifications } from "../app/utils/push/autoSyncNotices";
 import { handleNotificationClick, handlePush } from "../app/utils/push/swHandlers";
@@ -29,6 +30,17 @@ self.addEventListener("notificationclick", (event) => {
         ),
     );
 });
+
+self.addEventListener("pushsubscriptionchange", (event) =>
+    keepAlive(
+        event,
+        handleSubscriptionChange(event, {
+            pushManager: self.registration.pushManager,
+            loadAutoSyncKey,
+            fetch: self.fetch.bind(self),
+        }).catch(() => undefined),
+    ),
+);
 
 function keepAlive(event: ExtendableEvent, work: Promise<void>): void {
     try {

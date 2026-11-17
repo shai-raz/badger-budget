@@ -247,7 +247,9 @@ describe("AutoSyncSchedulerService", () => {
 
             expect(mockAutoSync.issueRunToken).not.toHaveBeenCalled();
             expect(mockPush.send).not.toHaveBeenCalled();
-            expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({ where: { id: "grant-1" } });
+            expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({
+                where: { id: "grant-1", pushSubscriptionId: "sub-1" },
+            });
             expect(advanceCalls()).toHaveLength(0);
         });
 
@@ -262,7 +264,9 @@ describe("AutoSyncSchedulerService", () => {
                 select: { id: true },
             });
             expect(mockPush.send).not.toHaveBeenCalled();
-            expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({ where: { id: "grant-1" } });
+            expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({
+                where: { id: "grant-1", pushSubscriptionId: "sub-1" },
+            });
         });
     });
 
@@ -273,8 +277,12 @@ describe("AutoSyncSchedulerService", () => {
 
             await service.tick(NOW);
 
-            expect(mockPrisma.autoSyncCredential.deleteMany).toHaveBeenCalledWith({ where: { grantId: "grant-1" } });
-            expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({ where: { id: "grant-1" } });
+            expect(mockPrisma.autoSyncCredential.deleteMany).toHaveBeenCalledWith({
+                where: { grantId: "grant-1", grant: { id: "grant-1", pushSubscriptionId: "sub-1" } },
+            });
+            expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({
+                where: { id: "grant-1", pushSubscriptionId: "sub-1" },
+            });
             expect(advanceCalls()).toHaveLength(0);
         });
 

@@ -1,10 +1,11 @@
 import { randomUUID } from "crypto";
 import { GUARDS_METADATA } from "@nestjs/common/constants";
 import { ThrottlerGuard } from "@nestjs/throttler";
+import { plainToInstance } from "class-transformer";
 import { validate } from "class-validator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { AutoSyncRunController } from "./auto-sync-run.controller";
-import { RunAutoSyncDto } from "./dto";
+import { MoveAutoSyncDeviceDto, RunAutoSyncDto } from "./dto";
 
 const SECRET_43 = "a".repeat(43);
 
@@ -18,10 +19,12 @@ describe("AutoSyncRunController (AC7)", () => {
         expect(methodGuards).not.toContain(JwtAuthGuard);
     });
 
-    it("throttles the run handler to 10 requests a minute", () => {
+    it.each(["run", "moveDevice"] as const)("throttles %s to 10 requests a minute", (handler) => {
         // Keys written by @nestjs/throttler's Throttle decorator, one per named throttler.
-        expect(Reflect.getMetadata("THROTTLER:LIMITdefault", AutoSyncRunController.prototype.run)).toBe(10);
-        expect(Reflect.getMetadata("THROTTLER:TTLdefault", AutoSyncRunController.prototype.run)).toBe(60_000);
+        const method = AutoSyncRunController.prototype[handler];
+        expect(Reflect.getMetadata(GUARDS_METADATA, method) ?? []).not.toContain(JwtAuthGuard);
+        expect(Reflect.getMetadata("THROTTLER:LIMITdefault", method)).toBe(10);
+        expect(Reflect.getMetadata("THROTTLER:TTLdefault", method)).toBe(60_000);
     });
 });
 
@@ -40,5 +43,30 @@ describe("RunAutoSyncDto validation", () => {
         ["a run token of the wrong length", { runToken: "a".repeat(44) }],
     ])("rejects %s", async (_label, overrides) => {
         expect(await validate(dto(overrides))).not.toHaveLength(0);
+    });
+});
+
+describe("MoveAutoSyncDeviceDto validation", () => {
+    // The global ValidationPipe runs with whitelist and forbidNonWhitelisted, so the spec does too.
+    const strict = { whitelist: true, forbidNonWhitelisted: true };
+    const dto = (overrides: Record<string, unknown> = {}) =>
+        plainToInstance(MoveAutoSyncDeviceDto, {
+            grantId: randomUUID(),
+            key: SECRET_43,
+            endpoint: "https://fcm.googleapis.com/fcm/send/abc",
+            keys: { p256dh: "p", auth: "a" },
+            ...overrides,
+        });
+
+    it("accepts a grant, a device key and a push service endpoint", async () => {
+        expect(await validate(dto(), strict)).toHaveLength(0);
+    });
+
+    it.each([
+        ["a key of the wrong length", { key: "a".repeat(42) }],
+        ["an endpoint off the known push services", { endpoint: "https://internal.example/hook" }],
+        ["missing subscription keys", { keys: { p256dh: "", auth: "a" } }],
+    ])("rejects %s", async (_label, overrides) => {
+        expect(await validate(dto(overrides), strict)).not.toHaveLength(0);
     });
 });

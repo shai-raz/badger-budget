@@ -34,6 +34,7 @@ import type {
     IAutoSyncState,
     IAutoSyncStatus,
     IEnableAutoSync,
+    IMoveAutoSyncDevice,
     IUpdateAutoSyncSchedule,
     SpendingReport,
     MonthlySpending,
@@ -138,12 +139,14 @@ export class ApiClient {
                 // endpoints (a 401 from these can't be recovered by refreshing, and
                 // refreshing /auth/refresh itself would loop). Everything else —
                 // including /auth/me — is eligible for the 401 -> refresh -> retry flow.
+                // The auto-sync device route is proven by a device key, so its 401 is never the session's.
                 const refreshExcludedSuffixes = [
                     "/auth/login",
                     "/auth/register",
                     "/auth/refresh",
                     "/auth/logout",
                     "/auth/google",
+                    "/bank-sync/auto-sync/device",
                 ];
                 const url = originalRequest.url ?? "";
                 const isRefreshExcluded = refreshExcludedSuffixes.some((suffix) => url.includes(suffix));
@@ -973,6 +976,11 @@ export class ApiClient {
     async updateAutoSyncSchedule(body: IUpdateAutoSyncSchedule): Promise<IAutoSyncStatus> {
         const response = await this.client.patch<IAutoSyncStatus>("/bank-sync/auto-sync", body);
         return response.data;
+    }
+
+    /** Proven by the device-held key, not the session. */
+    async moveAutoSyncDevice(body: IMoveAutoSyncDevice): Promise<void> {
+        await this.client.post("/bank-sync/auto-sync/device", body);
     }
 
     async disableAutoSync(): Promise<void> {

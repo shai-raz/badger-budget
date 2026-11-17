@@ -170,7 +170,7 @@ export class AutoSyncSchedulerService {
 
                 // The device's subscription was removed, or now belongs to another user: this grant must not run.
                 if (!(await isGrantSubscriptionOwned(this.prisma, grant))) {
-                    await deleteAutoSyncGrant(this.prisma, grant.id);
+                    await deleteAutoSyncGrant(this.prisma, grant);
                     continue;
                 }
 
@@ -203,7 +203,7 @@ export class AutoSyncSchedulerService {
 
                 // The device subscription is gone for good, so the grant can never run again: delete it.
                 if (results.some((result) => result.outcome === "gone")) {
-                    await deleteAutoSyncGrant(this.prisma, grant.id);
+                    await deleteAutoSyncGrant(this.prisma, grant);
                     continue;
                 }
 
