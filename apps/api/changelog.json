@@ -1,6 +1,19 @@
 {
     "releases": [
         {
+            "version": "0.18.1",
+            "date": "2026-11-17",
+            "items": [
+                {
+                    "type": "fix",
+                    "scope": "deploy",
+                    "breaking": false,
+                    "subject": "pass bank sync concurrency to app containers",
+                    "pr": 146
+                }
+            ]
+        },
+        {
             "version": "0.18.0",
             "date": "2026-11-17",
             "items": [
