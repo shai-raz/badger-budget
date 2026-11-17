@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { IAccountResponse } from "@badger/types";
-import { isLedgerAccountType } from "@badger/shared-data";
 import { sortAccountsForDisplay } from "~/utils/accountBalance";
+import { buildAccountMenuItems } from "~/utils/accountMenu";
+import { useToast } from "primevue/usetoast";
 
 // fullBleed: below md the band runs edge to edge, as on Overview (see layouts/app.vue).
 definePageMeta({
@@ -47,44 +48,36 @@ const handleFormClose = () => {
     editingAccount.value = null;
 };
 
+const toast = useToast();
+const updateAccount = useUpdateAccount();
+const handleToggleOverview = (account: IAccountResponse) =>
+    updateAccount.mutate(
+        { id: account.id, data: { hiddenOnOverview: !account.hiddenOnOverview } },
+        {
+            onError: (error) =>
+                toast.add({
+                    severity: "error",
+                    summary: "Error",
+                    detail: getApiErrorMessage(error, "Couldn't update the account."),
+                    life: 5000,
+                }),
+        },
+    );
+
 // The ⋮ menu is shared by every row and tile: it is pointed at one account when opened.
 const menu = ref();
 const selectedAccount = ref<IAccountResponse | null>(null);
 
-const menuItems = computed(() => {
-    const account = selectedAccount.value;
-    if (!account) return [];
-    // An account with linked transfers can't be deleted until those transfers are reverted or re-pointed.
-    const deleteBlocked = isLedgerAccountType(account.type) && account.hasLinkedTransfers;
-    return [
-        {
-            label: "Edit",
-            icon: "pi pi-pencil",
-            command: () => handleEditAccount(account),
-        },
-        ...(isLedgerAccountType(account.type)
-            ? [
-                  {
-                      label: "Update balance",
-                      icon: "pi pi-wallet",
-                      command: () => openUpdateBalance(account),
-                  },
-              ]
-            : []),
-        {
-            label: "Delete",
-            icon: "pi pi-trash",
-            class: "text-rose-500",
-            command: () => handleDeleteAccount(account),
-            disabled: deleteBlocked,
-            ...(deleteBlocked
-                ? {
-                      tooltip: "This account has linked transfers. Revert or re-point them before deleting it.",
-                  }
-                : {}),
-        },
-    ];
-});
+const menuItems = computed(() =>
+    selectedAccount.value
+        ? buildAccountMenuItems(selectedAccount.value, {
+              edit: handleEditAccount,
+              updateBalance: openUpdateBalance,
+              toggleOverview: handleToggleOverview,
+              remove: handleDeleteAccount,
+          })
+        : [],
+);
 
 const openMenu = ({ account, event }: { account: IAccountResponse; event: Event }) => {
     selectedAccount.value = account;
