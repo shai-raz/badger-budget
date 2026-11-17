@@ -50,19 +50,23 @@ const handleFormClose = () => {
 
 const toast = useToast();
 const updateAccount = useUpdateAccount();
-const handleToggleOverview = (account: IAccountResponse) =>
-    updateAccount.mutate(
-        { id: account.id, data: { hiddenOnOverview: !account.hiddenOnOverview } },
-        {
-            onError: (error) =>
-                toast.add({
-                    severity: "error",
-                    summary: "Error",
-                    detail: getApiErrorMessage(error, "Couldn't update the account."),
-                    life: 5000,
-                }),
-        },
-    );
+// mutateAsync, not mutate's per-call onError: a shared mutation observer drops the callbacks of
+// a call once a later toggle starts, so a failure could otherwise go unreported.
+const handleToggleOverview = async (account: IAccountResponse) => {
+    try {
+        await updateAccount.mutateAsync({
+            id: account.id,
+            data: { hiddenOnOverview: !account.hiddenOnOverview },
+        });
+    } catch (error) {
+        toast.add({
+            severity: "error",
+            summary: "Error",
+            detail: getApiErrorMessage(error, "Couldn't update the account."),
+            life: 5000,
+        });
+    }
+};
 
 // The ⋮ menu is shared by every row and tile: it is pointed at one account when opened.
 const menu = ref();
