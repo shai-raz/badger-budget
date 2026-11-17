@@ -1,7 +1,9 @@
-import { IsString, IsNotEmpty, IsOptional, IsIn, IsUUID } from "class-validator";
+import { IsString, IsNotEmpty, IsOptional, IsIn, IsUUID, IsBoolean, ValidateIf } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Transform } from "class-transformer";
 import { ACCOUNT_TYPES, AVATAR_ICON_NAMES } from "@badger/shared-data";
 import type { AccountType, AvatarIconName } from "@badger/shared-data";
+import type { IUpdateAccount } from "@badger/types";
 
 export class CreateAccountDto {
     @ApiProperty({ example: "My Visa Card" })
@@ -49,7 +51,7 @@ export class CreateAccountDto {
     currencyId?: string;
 }
 
-export class UpdateAccountDto {
+export class UpdateAccountDto implements IUpdateAccount {
     @ApiPropertyOptional({ example: "Updated Account Name" })
     @IsString()
     @IsOptional()
@@ -81,4 +83,12 @@ export class UpdateAccountDto {
     @IsUUID()
     @IsOptional()
     currencyId?: string;
+
+    @ApiPropertyOptional({ description: "Hide the account's card from Overview's Accounts section. Display only." })
+    // The global pipe uses implicit conversion, which would turn any string into `true`; validate the raw value.
+    @Transform(({ obj, key }) => obj[key])
+    // ValidateIf rather than IsOptional: IsOptional would let an explicit null through to a non-nullable column.
+    @ValidateIf((_, value) => value !== undefined)
+    @IsBoolean()
+    hiddenOnOverview?: boolean;
 }

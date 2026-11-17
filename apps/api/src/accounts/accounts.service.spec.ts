@@ -642,6 +642,57 @@ describe("AccountsService", () => {
             expect(result.cardFrame).toBe(10000);
             expect(typeof result.cardFrame).toBe("number");
         });
+
+        describe("hiddenOnOverview", () => {
+            it("persists the flag on an owned account and returns it", async () => {
+                mockPrismaService.account.findFirst.mockResolvedValue({ type: "bank", currencyId: null });
+                mockPrismaService.account.update.mockResolvedValue({
+                    id: "a1",
+                    name: "Checking",
+                    type: "bank",
+                    userId: "user-123",
+                    balance: null,
+                    cardFrame: null,
+                    currency: null,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    deletedAt: null,
+                    hiddenOnOverview: true,
+                });
+
+                const result = await service.update("a1", "user-123", { hiddenOnOverview: true });
+
+                expect(mockPrismaService.account.update).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        where: { id: "a1" },
+                        data: { hiddenOnOverview: true },
+                    }),
+                );
+                expect(result.hiddenOnOverview).toBe(true);
+            });
+
+            it("accepts a flag-only update of a cash account with a currency", async () => {
+                mockPrismaService.account.findFirst.mockResolvedValue({ type: "cash", currencyId: "cur-1" });
+                mockPrismaService.account.update.mockResolvedValue(cashRow({ id: "a1", hiddenOnOverview: true }));
+                mockCashRows([]);
+
+                const result = await service.update("a1", "user-123", { hiddenOnOverview: true });
+
+                expect(mockPrismaService.account.update).toHaveBeenCalledWith(
+                    expect.objectContaining({ data: { hiddenOnOverview: true } }),
+                );
+                expect(result.hiddenOnOverview).toBe(true);
+            });
+
+            it("404s for an account the user does not own without updating it", async () => {
+                mockPrismaService.account.findFirst.mockResolvedValue(null);
+
+                await expect(service.update("a1", "other-user", { hiddenOnOverview: true })).rejects.toThrow(
+                    NotFoundException,
+                );
+                expect(mockPrismaService.account.update).not.toHaveBeenCalled();
+            });
+        });
     });
 
     describe("updateLedgerBalance", () => {
