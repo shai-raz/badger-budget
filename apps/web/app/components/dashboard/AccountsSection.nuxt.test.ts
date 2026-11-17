@@ -124,6 +124,16 @@ describe("AccountsSection hidden accounts", () => {
         expect(manage).toBeDefined();
     });
 
+    it("mobile: shows the all-hidden empty state with the icon and the header total, which still includes hidden bank balances", async () => {
+        layout.desktop = false;
+        const wrapper = await mountSection([savings, visa, noBalance]);
+
+        expect(wrapper.text()).toContain(`${formatCurrency(2500)} total`);
+        expect(wrapper.text()).toContain("All accounts are hidden from Overview");
+        expect(wrapper.text()).not.toContain("No account balances yet");
+        expect(wrapper.find("i.pi-eye-slash").exists()).toBe(true);
+    });
+
     it("shows the no-balances empty state when there are no accounts", async () => {
         const wrapper = await mountSection([]);
 
