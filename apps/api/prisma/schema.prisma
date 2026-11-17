@@ -113,6 +113,8 @@ model Account {
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
   deletedAt     DateTime? @map("deleted_at") @db.Timestamp(6)
+  // Shown or hidden in the Overview Accounts section only. Display-only: never affects totals or other lists.
+  hiddenOnOverview Boolean @default(false) @map("hidden_on_overview")
 
   user             User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   currency         Currency?                @relation("account_currency", fields: [currencyId], references: [id])

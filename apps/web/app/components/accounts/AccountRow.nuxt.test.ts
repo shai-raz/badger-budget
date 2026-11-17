@@ -9,6 +9,7 @@ const base: IAccountResponse = {
     id: "acc-1",
     name: "Checking",
     accountNumber: null,
+    hiddenOnOverview: false,
     type: "bank",
     icon: null,
     color: null,
