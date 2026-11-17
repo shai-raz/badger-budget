@@ -36,6 +36,8 @@ const stale = computed(() =>
     props.account.balanceUpdatedAt ? isStale(props.account.balanceUpdatedAt, now.value) : false,
 );
 
+const showHiddenTag = computed(() => props.manageable && props.account.hiddenOnOverview);
+
 const handleMenu = (event: Event) => emit("menuToggle", { account: props.account, event });
 </script>
 
@@ -59,6 +61,15 @@ const handleMenu = (event: Event) => emit("menuToggle", { account: props.account
                     >
                 </p>
                 <p class="truncate text-xs text-muted-color">{{ subtitle }}</p>
+                <div
+                    v-if="showHiddenTag"
+                    class="mt-1"
+                >
+                    <SharedStatusTag
+                        value="Hidden on Overview"
+                        icon="pi pi-eye-slash"
+                    />
+                </div>
             </div>
             <div
                 v-if="display"

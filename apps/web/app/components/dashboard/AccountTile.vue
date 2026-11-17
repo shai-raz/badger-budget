@@ -33,6 +33,8 @@ const handleMenu = (event: Event) => emit("menuToggle", { account: props.account
 const stale = computed(() =>
     props.account.balanceUpdatedAt ? isStale(props.account.balanceUpdatedAt, now.value) : false,
 );
+
+const showHiddenTag = computed(() => props.manageable && props.account.hiddenOnOverview);
 </script>
 
 <template>
@@ -117,17 +119,27 @@ const stale = computed(() =>
                 />
             </template>
 
-            <p
-                v-if="account.balanceUpdatedAt"
-                class="mt-auto flex items-center gap-1 pt-3 text-xs"
-                :class="stale ? 'text-amber-600' : 'text-muted-color'"
+            <div
+                v-if="showHiddenTag || account.balanceUpdatedAt"
+                class="mt-auto flex flex-col items-start gap-2 pt-3"
             >
-                <i
-                    v-if="stale"
-                    class="pi pi-exclamation-circle"
-                ></i>
-                Synced {{ formatTimeAgo(account.balanceUpdatedAt, now) }}
-            </p>
+                <SharedStatusTag
+                    v-if="showHiddenTag"
+                    value="Hidden on Overview"
+                    icon="pi pi-eye-slash"
+                />
+                <p
+                    v-if="account.balanceUpdatedAt"
+                    class="flex items-center gap-1 text-xs"
+                    :class="stale ? 'text-amber-600' : 'text-muted-color'"
+                >
+                    <i
+                        v-if="stale"
+                        class="pi pi-exclamation-circle"
+                    ></i>
+                    Synced {{ formatTimeAgo(account.balanceUpdatedAt, now) }}
+                </p>
+            </div>
         </template>
     </Card>
 </template>
