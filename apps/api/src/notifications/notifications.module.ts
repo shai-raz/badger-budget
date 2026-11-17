@@ -7,6 +7,7 @@ import { NotificationPreferencesService } from "./notification-preferences.servi
 import { PushController } from "./push.controller";
 import { PushService } from "./push.service";
 import { PushSubscriptionsService } from "./push-subscriptions.service";
+import { PushSubscriptionCleanupService } from "./push-subscription-cleanup.service";
 import { createWebPushSender } from "./push-sender";
 import { NOTIFICATION_MANDATORY_RULES, NOTIFICATION_REGISTRY, PUSH_SENDER, VAPID_CONFIG } from "./notifications.tokens";
 import { resolveVapidConfig } from "./vapid";
@@ -24,6 +25,7 @@ import { resolveVapidConfig } from "./vapid";
         NotificationPreferencesService,
         PushService,
         PushSubscriptionsService,
+        PushSubscriptionCleanupService,
     ],
     exports: [PushService, NotificationPreferencesService],
 })

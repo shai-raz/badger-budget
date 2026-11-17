@@ -486,6 +486,8 @@ model PushSubscription {
   lastSeenAt     DateTime  @default(now()) @map("last_seen_at") @db.Timestamp(6)
   lastAcceptedAt DateTime? @map("last_accepted_at") @db.Timestamp(6)
   removedAt      DateTime? @map("removed_at") @db.Timestamp(6)
+  // The push service answered 404/410: kept, not deleted, so the device can bring it back with a new endpoint.
+  goneAt         DateTime? @map("gone_at") @db.Timestamp(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

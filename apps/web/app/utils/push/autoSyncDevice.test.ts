@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { IMoveAutoSyncDevice } from "@badger/types";
-import {
-    handleSubscriptionChange,
-    syncAutoSyncDevice,
-    type DeviceSubscriptionLike,
-    type SubscriptionChangeDeps,
-} from "./autoSyncDevice";
+import { handleSubscriptionChange, type DeviceSubscriptionLike, type SubscriptionChangeDeps } from "./autoSyncDevice";
 import type { AutoSyncKeyRecord } from "./autoSyncKeyStore";
 
 const RECORD: AutoSyncKeyRecord = { grantId: "grant-1", key: "k".repeat(43), apiBaseUrl: "https://app.test/api/v1" };
@@ -24,34 +19,6 @@ const moveBody = (endpoint: string): IMoveAutoSyncDevice => ({
     key: RECORD.key,
     endpoint,
     keys: { p256dh: "p", auth: "a" },
-});
-
-describe("syncAutoSyncDevice", () => {
-    const deps = (record: AutoSyncKeyRecord | null, subscription: DeviceSubscriptionLike | null) => ({
-        getSubscription: vi.fn(() => Promise.resolve(subscription)),
-        loadAutoSyncKey: vi.fn(() => Promise.resolve(record)),
-        move: vi.fn((_body: IMoveAutoSyncDevice) => Promise.resolve()),
-    });
-
-    it("moves the grant to this browser's current subscription", async () => {
-        const d = deps(RECORD, fakeSubscription("https://push.example/new"));
-
-        await syncAutoSyncDevice(d);
-
-        expect(d.move).toHaveBeenCalledWith(moveBody("https://push.example/new"));
-    });
-
-    it.each([
-        ["holds no auto-sync key", null, fakeSubscription("https://push.example/new")],
-        ["has no subscription", RECORD, null],
-        ["has a subscription without keys", RECORD, fakeSubscription("https://push.example/new", {})],
-    ])("does nothing when this browser %s", async (_label, record, subscription) => {
-        const d = deps(record, subscription);
-
-        await syncAutoSyncDevice(d);
-
-        expect(d.move).not.toHaveBeenCalled();
-    });
 });
 
 describe("handleSubscriptionChange", () => {

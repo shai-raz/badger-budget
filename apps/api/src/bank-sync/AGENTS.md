@@ -6,7 +6,7 @@ Scrapes Israeli banks with `israeli-bank-scrapers` (IBS) + `puppeteer-extra` (st
 - An `AutoSyncCredential` row must be deleted wherever a connection's credentials change or it is deleted (soft delete: the cascade won't fire). A PIN change deletes the auto-sync grant with the passkeys.
 - `SyncPasskey` rows hold only a browser-wrapped PIN; there is no server-side WebAuthn. Registration needs `verifyPin` and is capped at `MAX_PASSKEYS`.
 - `POST bank-sync/auto-sync/run` and `/device` are public (device key) and throttled, one uniform 401. Run checks the key before consuming the token. K, PIN and token never reach logs or errors.
-- `/device` repoints a grant's push subscription: a dead-device delete must match `{ id, pushSubscriptionId }`.
+- A 404/410 marks the subscription `goneAt`: its grant pauses, never deleted, until `replacePushSubscription`.
 - Scraped rows go through `transactions/transaction-import.service.ts`, never straight to `Transaction`.
 - Without `BROWSERLESS_URL`, `scrapeConnection` launches Chromium itself through `puppeteer-extra` and hands it to IBS (IBS alone would launch plain puppeteer, without stealth). `BANK_SYNC_CONCURRENCY` caps sessions.
 - `CAL_PROXY_URL` runs `visaCal` in its own proxied browser context (Cal blocks datacenter IPs), with one direct retry unless the error is a credential error (never retried, to avoid lockouts).

@@ -69,7 +69,7 @@ export class PushService {
     private async resolveSubscriptions(target: PushTarget, type: string): Promise<DeliverySubscription[]> {
         if ("subscriptionId" in target) {
             const sub = await this.prisma.pushSubscription.findFirst({
-                where: { id: target.subscriptionId, removedAt: null },
+                where: { id: target.subscriptionId, removedAt: null, goneAt: null },
                 select: SUBSCRIPTION_SELECT,
             });
             return sub ? [sub] : [];
@@ -82,7 +82,7 @@ export class PushService {
         if (!user || !(await this.preferences.shouldSend(user, type))) return [];
 
         return this.prisma.pushSubscription.findMany({
-            where: { userId: user.id, removedAt: null },
+            where: { userId: user.id, removedAt: null, goneAt: null },
             select: SUBSCRIPTION_SELECT,
         });
     }
@@ -102,11 +102,18 @@ export class PushService {
         return { subscriptionId: sub.id, outcome: "accepted" };
     }
 
-    /** Only 404/410 mean the subscription is dead. Other statuses (or no status) keep the row so a later send can retry. */
+    /**
+     * Only 404/410 mean the endpoint is dead. The row is marked gone, not deleted, so its device (and an auto-sync grant
+     * on it) comes back when the browser registers a new endpoint in its place. Other statuses (or no status) keep the
+     * row so a later send can retry.
+     */
     private async handleRejection(subscriptionId: string, statusCode: number | undefined): Promise<PushResult> {
         if (statusCode === 404 || statusCode === 410) {
-            await this.prisma.pushSubscription.deleteMany({ where: { id: subscriptionId } });
-            this.logger.warn(`Push subscription ${subscriptionId} is gone (status ${statusCode}); removed`);
+            await this.prisma.pushSubscription.updateMany({
+                where: { id: subscriptionId, goneAt: null },
+                data: { goneAt: new Date() },
+            });
+            this.logger.warn(`Push subscription ${subscriptionId} is gone (status ${statusCode}); marked gone`);
             return { subscriptionId, outcome: "gone", statusCode };
         }
 

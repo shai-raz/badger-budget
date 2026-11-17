@@ -1,5 +1,6 @@
 import { ApiClient } from "@badger/api-client";
 import { sanitizeRedirectPath } from "~/utils/safeRedirect";
+import { pushIdStore } from "~/utils/push/pushSubscriptionIdStore";
 import { clearAutoSyncKey } from "~/utils/push/autoSyncKeyStore";
 
 let apiClientInstance: ApiClient | null = null;
@@ -43,8 +44,9 @@ export const useApiClient = () => {
                     localStorage.removeItem("refresh_token");
                 }
                 // Refresh was rejected, so the JWT is gone and the grant cannot be turned off from here. The key still
-                // must not outlive the session.
+                // must not outlive the session, nor this browser's claim on the session user's push device.
                 await clearAutoSyncKey().catch(() => undefined);
+                pushIdStore().clear();
             },
 
             onAuthRequired: () => {

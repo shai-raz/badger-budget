@@ -10,6 +10,7 @@ import {
     type PushSubscriptionLike,
     type PushSyncDeps,
 } from "./pushSync";
+import type { PushIdStore } from "./pushSubscriptionIdStore";
 
 const ENDPOINT = "https://push.example/abc";
 const registered = (id: string): IPushSubscription => ({
@@ -43,17 +44,33 @@ function fakeRegistration(existing: PushSubscriptionLike | null) {
     return { registration, created };
 }
 
+/** An in-memory id store, starting with `initial`. */
+function fakeIdStore(initial: string | null = null) {
+    let value = initial;
+    return {
+        load: vi.fn(() => value),
+        save: vi.fn((id: string) => {
+            value = id;
+        }),
+        clear: vi.fn(() => {
+            value = null;
+        }),
+    } satisfies PushIdStore;
+}
+
 function syncDeps(overrides: Partial<PushSyncDeps> & { registration?: PushRegistrationLike } = {}) {
-    const register = vi.fn<PushSyncDeps["register"]>(() => Promise.resolve({}));
+    const register = vi.fn<PushSyncDeps["register"]>(() => Promise.resolve(registered("sub-1")));
+    const idStore = fakeIdStore();
     const deps: PushSyncDeps = {
         permission: "granted",
         getRegistration: vi.fn(() => Promise.resolve(overrides.registration)),
         fetchVapidKey: vi.fn(() => Promise.resolve(NEW_KEY)),
         register,
         device: DEVICE,
+        idStore,
         ...overrides,
     };
-    return { deps, register };
+    return { deps, register, idStore: deps.idStore as ReturnType<typeof fakeIdStore> };
 }
 
 describe("syncPushSubscription", () => {
@@ -72,7 +89,7 @@ describe("syncPushSubscription", () => {
         expect(register).not.toHaveBeenCalled();
     });
 
-    it("does nothing without a subscription", async () => {
+    it("does nothing without a subscription or an earlier registration", async () => {
         const { registration } = fakeRegistration(null);
         const { deps, register } = syncDeps({ registration });
         await syncPushSubscription(deps);
@@ -110,6 +127,46 @@ describe("syncPushSubscription", () => {
         expect(registration.pushManager.subscribe).not.toHaveBeenCalled();
         expect(register).toHaveBeenCalledWith(expect.objectContaining({ endpoint: ENDPOINT }));
     });
+
+    it("registers in place of the earlier row and keeps the id the server returns", async () => {
+        const { registration } = fakeRegistration(fakeSubscription(new Uint8Array([4, 9, 9, 9])));
+        const { deps, register, idStore } = syncDeps({ registration, idStore: fakeIdStore("sub-old") });
+        register.mockResolvedValueOnce(registered("sub-old"));
+
+        await syncPushSubscription(deps);
+
+        expect(register).toHaveBeenCalledWith(expect.objectContaining({ endpoint: ENDPOINT, replacesId: "sub-old" }));
+        expect(idStore.save).toHaveBeenCalledWith("sub-old");
+    });
+
+    it("subscribes again when the browser dropped its subscription but registered one before", async () => {
+        const { registration, created } = fakeRegistration(null);
+        const { deps, register } = syncDeps({ registration, idStore: fakeIdStore("sub-old") });
+
+        await syncPushSubscription(deps);
+
+        expect(registration.pushManager.subscribe).toHaveBeenCalledWith(
+            expect.objectContaining({ userVisibleOnly: true }),
+        );
+        expect(register).toHaveBeenCalledWith(
+            expect.objectContaining({ endpoint: created.endpoint, replacesId: "sub-old" }),
+        );
+    });
+
+    it("swaps a dead endpoint (409) for a new one, still in place of the earlier row", async () => {
+        const existing = fakeSubscription(new Uint8Array([4, 9, 9, 9]));
+        const { registration, created } = fakeRegistration(existing);
+        const { deps, register, idStore } = syncDeps({ registration, idStore: fakeIdStore("sub-old") });
+        register.mockRejectedValueOnce(apiError(409)).mockResolvedValueOnce(registered("sub-old"));
+
+        await syncPushSubscription(deps);
+
+        expect(existing.unsubscribe).toHaveBeenCalledTimes(1);
+        expect(register).toHaveBeenLastCalledWith(
+            expect.objectContaining({ endpoint: created.endpoint, replacesId: "sub-old" }),
+        );
+        expect(idStore.save).toHaveBeenCalledWith("sub-old");
+    });
 });
 
 describe("unregisterThisBrowser", () => {
@@ -126,7 +183,11 @@ describe("unregisterThisBrowser", () => {
             return Promise.resolve(true);
         });
 
-        await unregisterThisBrowser({ getRegistration: () => Promise.resolve(registration), unregister });
+        await unregisterThisBrowser({
+            getRegistration: () => Promise.resolve(registration),
+            unregister,
+            idStore: fakeIdStore(),
+        });
 
         expect(unregister).toHaveBeenCalledWith(ENDPOINT);
         expect(order).toEqual(["api", "unsubscribe"]);
@@ -138,16 +199,37 @@ describe("unregisterThisBrowser", () => {
         const unregister = vi.fn(() => Promise.reject(new Error("offline")));
 
         await expect(
-            unregisterThisBrowser({ getRegistration: () => Promise.resolve(registration), unregister }),
+            unregisterThisBrowser({
+                getRegistration: () => Promise.resolve(registration),
+                unregister,
+                idStore: fakeIdStore(),
+            }),
         ).resolves.toBeUndefined();
         expect(subscription.unsubscribe).toHaveBeenCalledTimes(1);
     });
 
+    it("forgets the earlier registration, so app start does not bring the device back", async () => {
+        const idStore = fakeIdStore("sub-1");
+        const unregister = vi.fn(() => Promise.resolve());
+
+        await unregisterThisBrowser({ getRegistration: () => Promise.resolve(undefined), unregister, idStore });
+
+        expect(idStore.clear).toHaveBeenCalled();
+    });
+
     it("does nothing without a registration or subscription", async () => {
         const unregister = vi.fn(() => Promise.resolve());
-        await unregisterThisBrowser({ getRegistration: () => Promise.resolve(undefined), unregister });
+        await unregisterThisBrowser({
+            getRegistration: () => Promise.resolve(undefined),
+            unregister,
+            idStore: fakeIdStore(),
+        });
         const { registration } = fakeRegistration(null);
-        await unregisterThisBrowser({ getRegistration: () => Promise.resolve(registration), unregister });
+        await unregisterThisBrowser({
+            getRegistration: () => Promise.resolve(registration),
+            unregister,
+            idStore: fakeIdStore(),
+        });
         expect(unregister).not.toHaveBeenCalled();
     });
 
@@ -157,7 +239,10 @@ describe("unregisterThisBrowser", () => {
         const unregister = vi.fn(() => new Promise<void>(() => undefined));
 
         const started = Date.now();
-        await unregisterThisBrowser({ getRegistration: () => Promise.resolve(registration), unregister }, 20);
+        await unregisterThisBrowser(
+            { getRegistration: () => Promise.resolve(registration), unregister, idStore: fakeIdStore() },
+            20,
+        );
 
         expect(Date.now() - started).toBeLessThan(1000);
     });
@@ -169,16 +254,17 @@ function apiError(status: number): Error {
 }
 
 describe("syncPushSubscription with a removed endpoint", () => {
-    it("unsubscribes this browser instead of re-adding the endpoint", async () => {
+    it("unsubscribes this browser and forgets the earlier row instead of re-adding the endpoint", async () => {
         const existing = fakeSubscription(new Uint8Array([4, 9, 9, 9]));
         const { registration } = fakeRegistration(existing);
-        const { deps, register } = syncDeps({ registration });
+        const { deps, register, idStore } = syncDeps({ registration, idStore: fakeIdStore("sub-old") });
         register.mockRejectedValueOnce(apiError(410));
 
         await expect(syncPushSubscription(deps)).resolves.toBeUndefined();
 
         expect(existing.unsubscribe).toHaveBeenCalledTimes(1);
         expect(registration.pushManager.subscribe).not.toHaveBeenCalled();
+        expect(idStore.clear).toHaveBeenCalled();
     });
 
     it("rethrows other register failures and keeps the subscription", async () => {
@@ -193,8 +279,12 @@ describe("syncPushSubscription with a removed endpoint", () => {
 });
 
 describe("enablePushSubscription", () => {
-    function enableDeps(registration: PushRegistrationLike, register: EnablePushDeps["register"]) {
-        return { registration, publicKey: NEW_KEY, register, device: DEVICE };
+    function enableDeps(
+        registration: PushRegistrationLike,
+        register: EnablePushDeps["register"],
+        idStore = fakeIdStore(),
+    ) {
+        return { registration, publicKey: NEW_KEY, register, device: DEVICE, idStore };
     }
 
     it("registers the current subscription and resolves with the id the server assigned", async () => {
@@ -226,6 +316,21 @@ describe("enablePushSubscription", () => {
         );
         expect(register).toHaveBeenCalledTimes(2);
         expect(register).toHaveBeenLastCalledWith(expect.objectContaining({ endpoint: created.endpoint }));
+    });
+
+    it("registers in place of the earlier row, then starts over plainly when that row was removed", async () => {
+        const existing = fakeSubscription(new Uint8Array([4, 9, 9, 9]));
+        const { registration, created } = fakeRegistration(existing);
+        const idStore = fakeIdStore("sub-old");
+        const register = vi.fn<EnablePushDeps["register"]>();
+        register.mockRejectedValueOnce(apiError(410)).mockResolvedValueOnce(registered("sub-2"));
+
+        await enablePushSubscription(enableDeps(registration, register, idStore));
+
+        expect(register).toHaveBeenNthCalledWith(1, expect.objectContaining({ replacesId: "sub-old" }));
+        expect(register.mock.calls[1]![0]).toEqual(expect.not.objectContaining({ replacesId: expect.anything() }));
+        expect(register).toHaveBeenLastCalledWith(expect.objectContaining({ endpoint: created.endpoint }));
+        expect(idStore.load()).toBe("sub-2");
     });
 
     it("rethrows other register failures without re-subscribing", async () => {

@@ -48,7 +48,7 @@ describe("AutoSyncService", () => {
             deleteMany: jest.fn(),
         },
         autoSyncCredential: { findMany: jest.fn(), createMany: jest.fn(), deleteMany: jest.fn() },
-        pushSubscription: { findFirst: jest.fn(), findUnique: jest.fn(), upsert: jest.fn(), deleteMany: jest.fn() },
+        pushSubscription: { findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn(), deleteMany: jest.fn() },
         user: { findFirst: jest.fn() },
         $transaction: jest.fn(),
     };
@@ -202,14 +202,14 @@ describe("AutoSyncService", () => {
             expectNoWrites();
         });
 
-        it("rejects a push subscription that is missing, removed or not the user's, before any other work", async () => {
+        it("rejects a push subscription that is missing, removed, gone or not the user's, before any other work", async () => {
             mockPrisma.pushSubscription.findFirst.mockResolvedValueOnce(null);
 
             await expect(service.enable(USER_ID, enableDto(), NOW)).rejects.toThrow(
                 new BadRequestException("Unknown push subscription"),
             );
             expect(mockPrisma.pushSubscription.findFirst).toHaveBeenCalledWith({
-                where: { id: PUSH_ID, userId: USER_ID, removedAt: null },
+                where: { id: PUSH_ID, userId: USER_ID, removedAt: null, goneAt: null },
                 select: { id: true },
             });
             expect(mockBankSync.verifyUserPin).not.toHaveBeenCalled();
@@ -950,17 +950,13 @@ describe("AutoSyncService", () => {
                 );
             });
 
-            it("deletes the grant when its device subscription is gone", async () => {
+            it("keeps the grant when its device subscription is gone, for the device to bring back", async () => {
                 mockPush.send.mockResolvedValueOnce([{ subscriptionId: PUSH_ID, outcome: "gone", statusCode: 410 }]);
 
                 await finishRun(summaryOf({ newTransactions: 1 }));
 
-                expect(mockPrisma.autoSyncCredential.deleteMany).toHaveBeenCalledWith({
-                    where: { grantId: GRANT_ID, grant: { id: GRANT_ID, pushSubscriptionId: PUSH_ID } },
-                });
-                expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({
-                    where: { id: GRANT_ID, pushSubscriptionId: PUSH_ID },
-                });
+                expect(mockPrisma.autoSyncGrant.deleteMany).not.toHaveBeenCalled();
+                expect(mockPrisma.autoSyncCredential.deleteMany).not.toHaveBeenCalled();
             });
 
             it("deletes the grant without a push when its device subscription was removed", async () => {
@@ -1065,7 +1061,6 @@ describe("AutoSyncService", () => {
     });
 
     describe("moveDevice", () => {
-        const NEW_PUSH_ID = "00000000-0000-4000-8000-0000000000a2";
         const ENDPOINT = "https://fcm.googleapis.com/fcm/send/new";
         const KEYS = { p256dh: "p256dh-new", auth: "auth-new" };
         const move = (key = KEY) => service.moveDevice({ grantId: GRANT_ID, key, endpoint: ENDPOINT, keys: KEYS }, NOW);
@@ -1082,47 +1077,18 @@ describe("AutoSyncService", () => {
                 keyCheckIv: check.iv,
                 keyCheckAuthTag: check.authTag,
                 pushSubscriptionId: PUSH_ID,
-                deviceLabel: "Pixel",
             };
             mockPrisma.autoSyncGrant.findUnique.mockResolvedValue(movedGrant);
             mockPrisma.pushSubscription.findUnique.mockResolvedValue(null);
-            mockPrisma.pushSubscription.upsert.mockResolvedValue({ id: NEW_PUSH_ID });
-            mockPrisma.autoSyncGrant.updateMany.mockResolvedValue({ count: 1 });
         });
 
-        it("registers the new endpoint for the grant's user, moves the grant and drops the old subscription", async () => {
+        it("gives the grant's subscription the new endpoint, bringing it back if gone", async () => {
             await move();
 
-            expect(mockPrisma.pushSubscription.upsert).toHaveBeenCalledWith({
-                where: { endpoint: ENDPOINT },
-                create: {
-                    userId: USER_ID,
-                    endpoint: ENDPOINT,
-                    p256dh: KEYS.p256dh,
-                    auth: KEYS.auth,
-                    deviceLabel: "Pixel",
-                    lastSeenAt: NOW,
-                },
-                update: { p256dh: KEYS.p256dh, auth: KEYS.auth, lastSeenAt: NOW },
-                select: { id: true },
+            expect(mockPrisma.pushSubscription.update).toHaveBeenCalledWith({
+                where: { id: PUSH_ID },
+                data: { endpoint: ENDPOINT, p256dh: KEYS.p256dh, auth: KEYS.auth, lastSeenAt: NOW, goneAt: null },
             });
-            expect(mockPrisma.autoSyncGrant.updateMany).toHaveBeenCalledWith({
-                where: { id: GRANT_ID, pushSubscriptionId: PUSH_ID },
-                data: { pushSubscriptionId: NEW_PUSH_ID },
-            });
-            expect(mockPrisma.pushSubscription.deleteMany).toHaveBeenCalledWith({
-                where: { id: PUSH_ID, userId: USER_ID },
-            });
-        });
-
-        it("only refreshes the subscription when the grant already points at it", async () => {
-            mockPrisma.pushSubscription.findUnique.mockResolvedValue({ userId: USER_ID, removedAt: null });
-            mockPrisma.pushSubscription.upsert.mockResolvedValue({ id: PUSH_ID });
-
-            await move();
-
-            expect(mockPrisma.autoSyncGrant.updateMany).not.toHaveBeenCalled();
-            expect(mockPrisma.pushSubscription.deleteMany).not.toHaveBeenCalled();
         });
 
         it.each([
@@ -1134,34 +1100,28 @@ describe("AutoSyncService", () => {
                     return move();
                 },
             ],
+            [
+                "an expired grant",
+                () => {
+                    mockPrisma.autoSyncGrant.findUnique.mockResolvedValue({ ...movedGrant, expiresAt: NOW });
+                    return move();
+                },
+            ],
         ])("rejects %s before touching subscriptions", async (_label, act) => {
             await expect(act()).rejects.toThrow("Auto-sync device rejected");
             expect(mockPrisma.$transaction).not.toHaveBeenCalled();
         });
 
-        it("rejects an expired grant", async () => {
-            mockPrisma.autoSyncGrant.findUnique.mockResolvedValue({ ...movedGrant, expiresAt: NOW });
-
-            await expect(move()).rejects.toThrow("Auto-sync device rejected");
-            expect(mockPrisma.$transaction).not.toHaveBeenCalled();
-        });
-
         it.each([
-            ["removed by the user", { userId: USER_ID, removedAt: NOW }],
-            ["held by another user", { userId: "user-2", removedAt: null }],
+            ["removed by the user", { userId: USER_ID, removedAt: NOW, goneAt: null }],
+            ["reported dead", { userId: USER_ID, removedAt: null, goneAt: NOW }],
+            ["held by another user", { userId: "user-2", removedAt: null, goneAt: null }],
         ])("never takes an endpoint %s", async (_label, existing) => {
             mockPrisma.pushSubscription.findUnique.mockResolvedValue(existing);
 
             await expect(move()).rejects.toThrow("Auto-sync device rejected");
-            expect(mockPrisma.pushSubscription.upsert).not.toHaveBeenCalled();
+            expect(mockPrisma.pushSubscription.update).not.toHaveBeenCalled();
             expect(mockPrisma.autoSyncGrant.updateMany).not.toHaveBeenCalled();
-        });
-
-        it("rejects, keeping the old subscription, when the grant was deleted or moved meanwhile", async () => {
-            mockPrisma.autoSyncGrant.updateMany.mockResolvedValue({ count: 0 });
-
-            await expect(move()).rejects.toThrow("Auto-sync device rejected");
-            expect(mockPrisma.pushSubscription.deleteMany).not.toHaveBeenCalled();
         });
     });
 });

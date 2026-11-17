@@ -1,9 +1,9 @@
 import type { IMoveAutoSyncDevice } from "@badger/types";
 import type { AutoSyncKeyRecord } from "./autoSyncKeyStore";
 
-// Keeps the auto-sync grant pointed at this browser's current push subscription. When the browser replaces its
-// subscription, the server's next push to the old endpoint gets 410 and the grant is deleted with it, so the grant is
-// moved as soon as this device sees the new one. Reached from the service worker too: no Vue, no api-client.
+// The service worker's half of keeping a device when the browser replaces its push subscription: the worker has no
+// session, so it proves itself with the auto-sync device key. App start covers the rest (syncPushSubscription).
+// Reached from the service worker: no Vue, no api-client.
 
 /** Structural stand-in for PushSubscription, so this runs under node tests and in the worker. */
 export interface DeviceSubscriptionLike {
@@ -32,22 +32,6 @@ export function buildMoveAutoSyncDevice(
     };
 }
 
-export interface SyncAutoSyncDeviceDeps {
-    getSubscription(): Promise<DeviceSubscriptionLike | null>;
-    loadAutoSyncKey(): Promise<AutoSyncKeyRecord | null>;
-    move(body: IMoveAutoSyncDevice): Promise<void>;
-}
-
-/** On app start, after the push re-register: a no-op on the server when the grant already points here. */
-export async function syncAutoSyncDevice(deps: SyncAutoSyncDeviceDeps): Promise<void> {
-    const record = await deps.loadAutoSyncKey();
-    if (!record) return;
-    const subscription = await deps.getSubscription();
-    if (!subscription) return;
-    const body = buildMoveAutoSyncDevice(record, subscription);
-    if (body) await deps.move(body);
-}
-
 export interface SubscriptionChangeLike {
     oldSubscription: DeviceSubscriptionLike | null;
     newSubscription: DeviceSubscriptionLike | null;
@@ -61,7 +45,8 @@ export interface SubscriptionChangeDeps {
 
 /**
  * The worker's `pushsubscriptionchange`: takes the new subscription (subscribing again with the old one's key when
- * the browser gave none) and moves the grant to it. Not every browser fires the event; app start covers the rest.
+ * the browser gave none) and gives it to the grant's device. Not every browser fires the event; app start covers the
+ * rest.
  */
 export async function handleSubscriptionChange(
     event: SubscriptionChangeLike,
