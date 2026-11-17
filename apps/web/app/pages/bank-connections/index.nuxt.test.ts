@@ -1,10 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { useNuxtApp } from "#app";
 import type { VueWrapper } from "@vue/test-utils";
+import type { DefaultOptions } from "@tanstack/vue-query";
 import { ref } from "vue";
 import type { IScraperConnectionResponse } from "@badger/types";
 import { useAutoSync } from "../../composables/bankSync/useAutoSync";
+import { bankSyncKeys } from "../../composables/bankSync/useBankSync";
 import BankConnections from "./index.vue";
 
 const api = vi.hoisted(() => ({
@@ -208,5 +210,66 @@ describe("bank connections page auto-sync", () => {
         await vi.waitFor(() => expect(wrapper.text()).toContain("Not in auto-sync"));
         expect(wrapper.text()).toContain("Joins on your next unlock");
         expect(wrapper.text().split("Not in auto-sync").length - 1).toBe(1);
+    });
+});
+
+describe("bank connections page auto-sync card", () => {
+    const offCopy = "Sync on a schedule, even when Badger is closed.";
+    // A failing query would retry with backoff, past the waits below. The shared client's defaults are restored after.
+    let savedDefaults: DefaultOptions;
+    beforeEach(() => {
+        const client = useNuxtApp().$queryClient;
+        savedDefaults = client.getDefaultOptions();
+        client.setDefaultOptions({ ...savedDefaults, queries: { ...savedDefaults.queries, retry: false } });
+    });
+    afterEach(() => {
+        useNuxtApp().$queryClient.setDefaultOptions(savedDefaults);
+    });
+
+    it("renders the card above Connections once there is a connection", async () => {
+        api.getScraperConnections.mockResolvedValue([connection(true)]);
+        const wrapper = await mountSuspended(BankConnections);
+        await vi.waitFor(() => expect(wrapper.text()).toContain(offCopy));
+
+        const headings = wrapper.findAll("h2").map((heading) => heading.text());
+        expect(headings.findIndex((t) => t.includes("Auto-sync"))).toBeLessThan(
+            headings.findIndex((t) => t.includes("Connections")),
+        );
+        wrapper.unmount();
+    });
+
+    it("hides the card while the connections are loading", async () => {
+        api.getScraperConnections.mockReturnValue(new Promise(() => {}));
+        const wrapper = await mountSuspended(BankConnections);
+        expect(wrapper.text()).not.toContain(offCopy);
+        wrapper.unmount();
+    });
+
+    it("hides the card when there are no connections", async () => {
+        api.getScraperConnections.mockResolvedValue([]);
+        const wrapper = await mountSuspended(BankConnections);
+        await vi.waitFor(() => expect(wrapper.text()).toContain("Connect a bank to sync transactions automatically"));
+        expect(wrapper.text()).not.toContain(offCopy);
+        wrapper.unmount();
+    });
+
+    it("hides the card when the connections query fails", async () => {
+        api.getScraperConnections.mockRejectedValue(new Error("Network down"));
+        const wrapper = await mountSuspended(BankConnections);
+        await vi.waitFor(() => expect(wrapper.text()).toContain("Couldn't load connections."));
+        expect(wrapper.text()).not.toContain(offCopy);
+        wrapper.unmount();
+    });
+
+    it("hides the card when a refetch fails after the connections loaded", async () => {
+        api.getScraperConnections
+            .mockResolvedValueOnce([connection(true)])
+            .mockRejectedValue(new Error("Network down"));
+        const wrapper = await mountSuspended(BankConnections);
+        await vi.waitFor(() => expect(wrapper.text()).toContain(offCopy));
+        await useNuxtApp().$queryClient.refetchQueries({ queryKey: bankSyncKeys.connections() });
+        await vi.waitFor(() => expect(wrapper.text()).toContain("Couldn't load connections."));
+        expect(wrapper.text()).not.toContain(offCopy);
+        wrapper.unmount();
     });
 });

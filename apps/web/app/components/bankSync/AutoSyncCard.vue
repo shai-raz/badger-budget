@@ -38,8 +38,7 @@ const pushDevice = usePushDevice();
 const needsHomeScreen = computed(() => pushDevice.state.value === "ios-install");
 onMounted(() => void pushDevice.refresh());
 
-const UNTIL_TOOLTIP =
-    "Each unlock on this device restarts the countdown. A connection added later joins on the next unlock.";
+const UNTIL_TOOLTIP = "Each unlock on this device restarts the countdown.";
 const untilFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 
 const status = computed(() => props.autoSync.status.value);
@@ -51,15 +50,13 @@ const intervalText = computed(() =>
     schedule.value ? formatAutoSyncInterval(schedule.value.intervalUnit, schedule.value.intervalCount) : "",
 );
 const windowText = computed(() => (schedule.value ? scheduleWindowLabel(schedule.value) : ""));
-const scheduleText = computed(() => `${intervalText.value} / ${windowText.value}`);
+const scheduleText = computed(() => `${intervalText.value}, ${windowText.value}`);
 
 const nextRun = computed(() => (status.value ? new Date(status.value.nextRunAt) : null));
 const nextTime = computed(() => (nextRun.value ? formatMinuteOfDay(dateToMinute(nextRun.value)) : ""));
-const nextSyncText = computed(() => {
-    if (!nextRun.value) return "";
-    const day = syncDayLabel(nextRun.value);
-    return `${day.charAt(0).toUpperCase()}${day.slice(1)} ${nextTime.value}`;
-});
+const nextSyncText = computed(() =>
+    nextRun.value ? `Next sync ${syncDayLabel(nextRun.value)} at ${nextTime.value}` : "",
+);
 const untilText = computed(() => (status.value ? untilFormat.format(new Date(status.value.expiresAt)) : ""));
 
 // Only the other device's card reports this: the server marks the device holding the grant as unreachable.
@@ -217,6 +214,17 @@ async function submitKeepPin() {
                 :disabled="needsHomeScreen"
                 @click="openEnable"
             />
+            <p
+                v-else-if="status && holdsGrant && daysLeft === null && !loading && !error"
+                class="flex items-center gap-1 text-xs text-muted-color"
+            >
+                On until {{ untilText }}
+                <SharedHintButton
+                    icon="pi-info-circle"
+                    :tooltip="UNTIL_TOOLTIP"
+                    aria-label="About keeping auto-sync on"
+                />
+            </p>
         </template>
 
         <div
@@ -224,115 +232,98 @@ async function submitKeepPin() {
             class="px-4 pb-4 md:px-0 md:pb-0"
         >
             <p class="text-sm text-muted-color">Sync on a schedule, even when Badger is closed.</p>
-            <p
+            <Message
                 v-if="needsHomeScreen"
-                class="mt-2 text-sm"
+                severity="secondary"
+                class="mt-3"
             >
-                First add Badger to your Home Screen: Share › Add to Home Screen.
-            </p>
+                <div class="flex items-start gap-3">
+                    <i
+                        class="pi pi-mobile mt-0.5 text-lg text-muted-color"
+                        aria-hidden="true"
+                    ></i>
+                    <div class="flex min-w-0 flex-col gap-1">
+                        <p class="font-semibold">Add Badger to your Home Screen first</p>
+                        <p class="text-muted-color">
+                            On iPhone and iPad, auto-sync only runs from the Home Screen app.
+                        </p>
+                        <p>
+                            Tap
+                            <i
+                                class="pi pi-upload"
+                                aria-hidden="true"
+                            ></i>
+                            <strong>Share</strong>, then <strong>Add to Home Screen</strong>.
+                        </p>
+                    </div>
+                </div>
+            </Message>
         </div>
 
         <div
             v-else-if="holdsGrant"
-            class="flex flex-col gap-3 px-4 pb-4 md:px-0 md:pb-0"
+            class="flex flex-col"
         >
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex min-w-0 flex-col">
-                    <span class="font-semibold">Sync automatically</span>
-                    <span class="text-xs text-muted-color">From this device</span>
-                </div>
-                <ToggleSwitch
-                    :model-value="true"
-                    aria-label="Sync automatically"
-                    class="shrink-0"
-                    @update:model-value="onToggle"
-                />
-            </div>
-
-            <div
-                v-if="daysLeft !== null"
-                class="flex flex-wrap items-center justify-between gap-3"
-            >
-                <div class="flex flex-wrap items-center gap-2 text-sm">
-                    <span>Stops on {{ untilText }}</span>
-                    <SharedStatusTag
-                        :value="daysLeftText"
-                        tone="warn"
+            <div class="flex flex-col gap-3 px-4 pb-4 md:px-0 md:pb-4">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="flex min-w-0 flex-col">
+                        <span class="font-semibold">Sync automatically</span>
+                        <span class="text-xs text-muted-color">From this device</span>
+                    </div>
+                    <ToggleSwitch
+                        :model-value="true"
+                        aria-label="Sync automatically"
+                        class="shrink-0"
+                        @update:model-value="onToggle"
                     />
                 </div>
-                <Button
-                    label="Keep on"
-                    severity="secondary"
-                    outlined
-                    size="small"
-                    :loading="keepingOn"
-                    :disabled="keepingOn"
-                    @click="keepOn"
-                />
-            </div>
 
-            <div class="flex items-center justify-between gap-3 md:hidden">
-                <span class="min-w-0 text-sm">{{ scheduleText }} · next at {{ nextTime }}</span>
-                <Button
-                    label="Change"
-                    severity="secondary"
-                    outlined
-                    size="small"
-                    @click="openSchedule"
-                />
-            </div>
-            <p
-                v-if="daysLeft === null"
-                class="flex items-center gap-1 text-xs text-muted-color md:hidden"
-            >
-                On until {{ untilText }}
-                <SharedHintButton
-                    icon="pi-info-circle"
-                    :tooltip="UNTIL_TOOLTIP"
-                    aria-label="About keeping auto-sync on"
-                    class="h-11 w-11 justify-center"
-                />
-            </p>
-
-            <p class="hidden text-xs text-muted-color md:block">Runs from {{ status.deviceLabel }}</p>
-            <div class="hidden grid-cols-3 gap-4 md:grid">
-                <div class="flex flex-col">
-                    <span class="text-xs text-muted-color">How often</span>
-                    <span class="font-semibold">{{ intervalText }}</span>
-                    <span class="text-xs text-muted-color">{{ windowText }}</span>
-                </div>
-                <div class="flex flex-col">
-                    <span class="text-xs text-muted-color">Next sync</span>
-                    <span class="font-semibold tabular-nums">{{ nextSyncText }}</span>
-                </div>
-                <div class="flex flex-col">
-                    <span class="text-xs text-muted-color">On until</span>
-                    <span class="flex items-center gap-1 font-semibold">
-                        {{ untilText }}
-                        <SharedHintButton
-                            icon="pi-info-circle"
-                            :tooltip="UNTIL_TOOLTIP"
-                            aria-label="About keeping auto-sync on"
+                <div
+                    v-if="daysLeft !== null"
+                    class="flex flex-wrap items-center justify-between gap-3"
+                >
+                    <div class="flex flex-wrap items-center gap-2 text-sm">
+                        <span>Stops on {{ untilText }}</span>
+                        <SharedStatusTag
+                            :value="daysLeftText"
+                            tone="warn"
                         />
-                    </span>
+                    </div>
+                    <Button
+                        label="Keep on"
+                        severity="secondary"
+                        outlined
+                        size="small"
+                        :loading="keepingOn"
+                        :disabled="keepingOn"
+                        @click="keepOn"
+                    />
                 </div>
             </div>
-            <div class="hidden justify-between gap-2 md:flex">
-                <Button
-                    label="Turn off auto-sync"
-                    text
-                    severity="danger"
-                    size="small"
-                    @click="confirmTurnOff"
-                />
-                <Button
-                    label="Change schedule"
-                    severity="secondary"
-                    outlined
-                    size="small"
-                    @click="openSchedule"
-                />
-            </div>
+
+            <button
+                type="button"
+                aria-label="Change schedule"
+                class="flex items-center gap-3 border-t border-surface-200 px-4 py-3 text-left outline-none hover:bg-surface-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary dark:border-surface-700 dark:hover:bg-surface-800 md:-mx-5 md:-mb-5 md:rounded-b-xl md:px-5"
+                @click="openSchedule"
+            >
+                <span
+                    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-100 dark:bg-surface-800"
+                >
+                    <i
+                        class="pi pi-clock text-surface-600 dark:text-surface-300"
+                        aria-hidden="true"
+                    ></i>
+                </span>
+                <span class="flex min-w-0 flex-1 flex-col">
+                    <span class="truncate text-sm font-semibold">{{ scheduleText }}</span>
+                    <span class="truncate text-xs text-muted-color">{{ nextSyncText }}</span>
+                </span>
+                <i
+                    class="pi pi-chevron-right shrink-0 text-muted-color"
+                    aria-hidden="true"
+                ></i>
+            </button>
         </div>
 
         <div

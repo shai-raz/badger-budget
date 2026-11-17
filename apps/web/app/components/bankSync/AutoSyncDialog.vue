@@ -292,7 +292,6 @@ const saveLabel = computed(() => (isEnable.value ? "Unlock and turn on" : "Save"
                 icon="pi-info-circle"
                 tooltip="Syncs on a schedule, even when Badger is closed. Your bank logins are locked with a key kept on this device."
                 aria-label="About auto-sync"
-                class="h-11 w-11 justify-center md:h-auto md:w-auto"
             />
         </template>
 
@@ -435,7 +434,6 @@ const saveLabel = computed(() => (isEnable.value ? "Unlock and turn on" : "Save"
                         icon="pi-info-circle"
                         tooltip="Each unlock on this device restarts the countdown. A connection added later joins on the next unlock."
                         aria-label="About keeping auto-sync on"
-                        class="h-11 w-11 justify-center md:h-auto md:w-auto"
                     />
                 </div>
                 <SelectButton
