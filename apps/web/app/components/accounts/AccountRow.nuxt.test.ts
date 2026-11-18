@@ -100,4 +100,26 @@ describe("AccountRow", () => {
         const withUpdate = await mountRow({ account: cash });
         expect(findButton(withUpdate, "Update")?.classes()).toContain("z-10");
     });
+
+    it("shows the hidden tag on a manageable hidden account", async () => {
+        const wrapper = await mountRow({ account: { ...base, hiddenOnOverview: true }, manageable: true });
+        expect(wrapper.text()).toContain("Hidden on Overview");
+    });
+
+    it("omits the hidden tag when the account is shown or the row is not manageable", async () => {
+        const shown = await mountRow({ account: base, manageable: true });
+        expect(shown.text()).not.toContain("Hidden on Overview");
+
+        const overview = await mountRow({ account: { ...base, hiddenOnOverview: true } });
+        expect(overview.text()).not.toContain("Hidden on Overview");
+    });
+
+    it("places the hidden tag under the subtitle in the name column", async () => {
+        const wrapper = await mountRow({ account: { ...base, hiddenOnOverview: true }, manageable: true });
+        const column = wrapper.find(".min-w-0.flex-1");
+        const html = column.html();
+        const subtitle = column.find("p.text-muted-color").text();
+        expect(column.text()).toContain("Hidden on Overview");
+        expect(html.indexOf("Hidden on Overview")).toBeGreaterThan(html.indexOf(subtitle));
+    });
 });

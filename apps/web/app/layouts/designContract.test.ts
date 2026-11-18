@@ -167,7 +167,7 @@ describe("design contract: amount colours come from theme tokens", () => {
     const RAW_AMOUNT_COLOUR = /text-teal-\d|text-rose-500/;
     const ALLOW_LIST = [
         // The Delete menu item: a destructive status colour, not an amount.
-        "pages/accounts/index.vue",
+        "utils/accountMenu.ts",
         // File-type icons: teal for images, rose for PDFs. A file kind, not an amount.
         "utils/attachments.ts",
     ];
@@ -702,7 +702,7 @@ describe("savings accounts: counterpart picker and balance dialog", () => {
 describe("savings accounts: web wiring", () => {
     // Savings is a ledger type like cash: form, menu and row/tile Update all key off isLedgerAccountType.
     const formModal = readFileSync(`${appDir}/components/accounts/AccountsFormModal.vue`, "utf8");
-    const accountsPage = readFileSync(`${appDir}/pages/accounts/index.vue`, "utf8");
+    const accountMenu = readFileSync(`${appDir}/utils/accountMenu.ts`, "utf8");
     const tile = readFileSync(`${appDir}/components/dashboard/AccountTile.vue`, "utf8");
     const row = readFileSync(`${appDir}/components/accounts/AccountRow.vue`, "utf8");
 
@@ -713,8 +713,8 @@ describe("savings accounts: web wiring", () => {
     });
 
     it("blocks deleting a ledger account with linked transfers and offers Update balance for it", () => {
-        expect(accountsPage).toContain("isLedgerAccountType(account.type) && account.hasLinkedTransfers");
-        expect(accountsPage).toContain("...(isLedgerAccountType(account.type)");
+        expect(accountMenu).toContain("isLedgerAccountType(account.type) && account.hasLinkedTransfers");
+        expect(accountMenu).toContain("...(isLedgerAccountType(account.type)");
     });
 
     it("shows the Update action on the tile and row for ledger accounts", () => {
