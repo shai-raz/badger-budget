@@ -69,13 +69,17 @@ const cardPayoffSummary = computed(() =>
                     size="large"
                 />
                 <div class="flex min-w-0 flex-col">
-                    <span class="text-base font-semibold">{{ fullName }}</span>
+                    <span
+                        v-if="fullName"
+                        class="text-base font-semibold"
+                        >{{ fullName }}</span
+                    >
                     <span class="truncate text-sm text-muted-color">{{ user?.email }}</span>
                 </div>
             </div>
         </SharedSectionBand>
 
-        <SharedSectionBand aria-label="Preferences">
+        <SharedSectionBand title="Preferences">
             <div class="flex flex-col divide-y divide-surface-200 dark:divide-surface-700">
                 <SettingsRow
                     to="/settings/appearance"
@@ -92,7 +96,7 @@ const cardPayoffSummary = computed(() =>
             </div>
         </SharedSectionBand>
 
-        <SharedSectionBand aria-label="Transactions">
+        <SharedSectionBand title="Transactions">
             <div class="flex flex-col divide-y divide-surface-200 dark:divide-surface-700">
                 <SettingsRow
                     to="/categories"

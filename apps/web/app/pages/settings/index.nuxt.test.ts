@@ -129,6 +129,23 @@ describe("settings index profile and footer", () => {
         expect(profile.text()).toContain("a@example.com");
     });
 
+    it("omits the name line when the user has no first or last name", async () => {
+        useAuthStore().user = {
+            id: "u1",
+            email: "a@example.com",
+            firstName: "",
+            lastName: "",
+            role: "ADMIN",
+            colorTheme: "noir",
+            isDemo: false,
+        };
+        const wrapper = await mountPage();
+        const profile = wrapper.get('section[aria-label="Profile"]');
+
+        expect(profile.find("span.font-semibold").exists()).toBe(false);
+        expect(profile.text()).toContain("a@example.com");
+    });
+
     it("shows the app version in the footer", async () => {
         m.systemInfo.value = {
             version: "0.19.1",
@@ -154,5 +171,17 @@ describe("settings index log out", () => {
         await wrapper.get('section[aria-label="Log out"] button').trigger("click");
 
         expect(m.logout).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("settings index section headings", () => {
+    it("labels the Preferences and Transactions groups and leaves Profile and Log out headingless", async () => {
+        const wrapper = await mountPage();
+        // Each heading renders a mobile and a desktop span with the same text.
+        const headings = wrapper.findAll("h2").map((heading) => heading.find("span").text());
+
+        expect(headings).toEqual(["Preferences", "Transactions"]);
+        expect(wrapper.get('section[aria-label="Profile"]').find("h2").exists()).toBe(false);
+        expect(wrapper.get('section[aria-label="Log out"]').find("h2").exists()).toBe(false);
     });
 });
