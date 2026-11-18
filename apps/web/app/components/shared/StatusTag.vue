@@ -5,10 +5,11 @@
  * Values are sentence case and supplied by the caller.
  */
 import type { TagProps } from "primevue/tag";
+import type { StatusTagTone } from "~/utils/statusTag";
 
 interface Props {
     value: string;
-    tone?: "neutral" | "success" | "warn" | "danger" | "info";
+    tone?: StatusTagTone;
 }
 
 const props = withDefaults(defineProps<Props>(), { tone: "neutral" });
