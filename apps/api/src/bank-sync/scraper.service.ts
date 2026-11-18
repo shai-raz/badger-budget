@@ -75,8 +75,9 @@ export class ScraperService {
                 } catch (e) {
                     const errorType = (e as { errorType?: string } | null)?.errorType;
                     if (isCredentialErrorCode(errorType)) throw e;
-                    const reason = errorType ?? (e instanceof Error ? e.message : String(e));
-                    this.logger.warn(`visaCal via CAL_PROXY_URL failed (${reason}), retrying directly`);
+                    const message = e instanceof Error ? e.message : String(e);
+                    const reason = errorType ?? message;
+                    this.logger.warn(`visaCal via CAL_PROXY_URL failed (${reason}): ${message}, retrying directly`);
                 } finally {
                     // After debug capture (done inside runAttempt), so the failure screenshot is taken first.
                     await context?.close().catch(() => undefined);
