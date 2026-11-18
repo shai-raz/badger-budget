@@ -67,6 +67,7 @@ const makeAccount = (id: string, name: string): IAccountResponse => ({
     id,
     name,
     accountNumber: null,
+    hiddenOnOverview: false,
     type: "bank",
     icon: null,
     color: null,
