@@ -53,6 +53,7 @@ import type {
     ICardPayoffLinkPreview,
     ISystemInfo,
     ISystemUpgradeResponse,
+    ISettingsSummary,
     IChangelogResponse,
     IChangelogSeenResponse,
     IAuthResponse,
@@ -216,6 +217,11 @@ export class ApiClient {
     // Running version and latest-release info (authenticated)
     async getSystemInfo(): Promise<ISystemInfo> {
         const response = await this.client.get<ISystemInfo>("/system/info");
+        return response.data;
+    }
+
+    async getSettingsSummary(): Promise<ISettingsSummary> {
+        const response = await this.client.get<ISettingsSummary>("/settings/summary");
         return response.data;
     }
 
