@@ -12,6 +12,7 @@ import { DebugArtifactService } from "./debug-artifact.service";
 import { toSourceCalendarDate, legacyStoredDate } from "./scraped-date.util";
 import { extractAccountBalances, ScrapedAccountBalance } from "./scraped-balance.util";
 import { withSyncErrorCode } from "./sync-error-code.util";
+import { ScrapeRequestTrace } from "./scrape-request-trace";
 
 export interface ScrapeConnectionResult {
     candidates: ImportCandidate[];
@@ -185,6 +186,7 @@ export class ScraperService {
         logSuffix: string,
     ): Promise<any> {
         let debugPage: any = null;
+        const trace = new ScrapeRequestTrace();
 
         const scraperOptions: any = {
             companyId: companyId as any,
@@ -193,6 +195,7 @@ export class ScraperService {
             showBrowser: false,
             preparePage: async (page: any) => {
                 debugPage = page;
+                trace.attach(page);
                 // Capture what the page looks like 5s in, while the selector wait is still running.
                 // IBS closes the page on error so we can't screenshot after scrape() rejects.
                 setTimeout(() => {
@@ -210,17 +213,25 @@ export class ScraperService {
         try {
             result = await scraper.scrape(credentials as any);
         } catch (e) {
+            this.logRequestTrace(trace, debugPage, companyId, logSuffix);
             await this.captureDebugArtifacts(debugPage, companyId);
             throw e;
         }
 
         if (!result.success) {
+            this.logRequestTrace(trace, debugPage, companyId, logSuffix);
             await this.captureDebugArtifacts(debugPage, companyId);
             throw Object.assign(new Error(`Scraper failed: ${result.errorType} — ${result.errorMessage}`), {
                 errorType: result.errorType as string,
             });
         }
         return result;
+    }
+
+    /** Logs a failed attempt's network timeline, so a timeout shows which request it was waiting on. */
+    private logRequestTrace(trace: ScrapeRequestTrace, page: unknown, companyId: string, logSuffix: string): void {
+        if (!page) return;
+        for (const line of trace.report()) this.logger.warn(`[TRACE] ${companyId}${logSuffix} ${line}`);
     }
 
     private async captureDebugArtifacts(page: any, companyId: string, label = "failure"): Promise<void> {
