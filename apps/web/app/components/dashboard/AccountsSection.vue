@@ -10,8 +10,12 @@ const { data, isLoading, error } = useGetAccounts();
 
 const accounts = computed(() => balanceAccounts(data.value ?? []));
 // Bank total: mobile-only header meta (desktop shows nothing here — each
-// balance-bearing tile already carries its own amount).
+// balance-bearing tile already carries its own amount). Includes hidden accounts.
 const bankTotal = computed(() => sumBankBalances(accounts.value));
+
+const shownAccounts = computed(() => accounts.value.filter((account) => !account.hiddenOnOverview));
+// Every balance-bearing account is hidden: the section would otherwise read as having no balances.
+const allHidden = computed(() => accounts.value.length > 0 && shownAccounts.value.length === 0);
 
 const balanceAccount = ref<IAccountResponse | null>(null);
 const showUpdateBalance = ref(false);
@@ -36,7 +40,7 @@ const openUpdateBalance = (account: IAccountResponse) => {
         "
         :loading="isLoading"
         :error="error"
-        :empty="!accounts.length"
+        :empty="!shownAccounts.length"
     >
         <template #skeleton>
             <div class="grid grid-cols-2 gap-3 px-4 pb-3 md:gap-4 md:px-0 md:pb-0 xl:grid-cols-4">
@@ -50,6 +54,14 @@ const openUpdateBalance = (account: IAccountResponse) => {
 
         <template #empty>
             <SharedEmptyState
+                v-if="allHidden"
+                icon="pi-eye-slash"
+                text="All accounts are hidden from Overview"
+                action-label="Manage accounts"
+                action-to="/accounts"
+            />
+            <SharedEmptyState
+                v-else
                 text="No account balances yet"
                 action-label="Connect a bank"
                 action-to="/bank-connections"
@@ -61,7 +73,7 @@ const openUpdateBalance = (account: IAccountResponse) => {
             class="grid grid-cols-2 gap-4 xl:grid-cols-4"
         >
             <DashboardAccountTile
-                v-for="account in accounts"
+                v-for="account in shownAccounts"
                 :key="account.id"
                 :account="account"
                 @update-cash="openUpdateBalance(account)"
@@ -72,7 +84,7 @@ const openUpdateBalance = (account: IAccountResponse) => {
             class="divide-y divide-surface-200 dark:divide-surface-700"
         >
             <AccountsAccountRow
-                v-for="account in accounts"
+                v-for="account in shownAccounts"
                 :key="account.id"
                 :account="account"
                 @update-cash="openUpdateBalance(account)"

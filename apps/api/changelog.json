@@ -1,6 +1,59 @@
 {
     "releases": [
         {
+            "version": "0.19.1",
+            "date": "2026-11-18",
+            "items": [
+                {
+                    "type": "fix",
+                    "scope": "bank-sync",
+                    "breaking": false,
+                    "subject": "include the scraper error in the CAL_PROXY_URL failure log",
+                    "pr": 154
+                }
+            ]
+        },
+        {
+            "version": "0.19.0",
+            "date": "2026-11-18",
+            "items": [
+                {
+                    "type": "feat",
+                    "scope": "api",
+                    "breaking": false,
+                    "subject": "store whether an account is hidden on Overview",
+                    "pr": 149
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "hide or show an account on Overview from the Accounts page",
+                    "pr": 150
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "leave hidden accounts off the Overview page",
+                    "pr": 151
+                }
+            ]
+        },
+        {
+            "version": "0.18.1",
+            "date": "2026-11-17",
+            "items": [
+                {
+                    "type": "fix",
+                    "scope": "deploy",
+                    "breaking": false,
+                    "subject": "pass bank sync concurrency to app containers",
+                    "pr": 146
+                }
+            ]
+        },
+        {
             "version": "0.18.0",
             "date": "2026-11-17",
             "items": [

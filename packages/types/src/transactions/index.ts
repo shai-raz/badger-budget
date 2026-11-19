@@ -22,5 +22,6 @@ export type { ITransactionAttachmentResponse } from "./ITransactionAttachmentRes
 export type { IAttachmentUrlResponse } from "./IAttachmentUrlResponse";
 export type { IRenameTransactionAttachment } from "./IRenameTransactionAttachment";
 export type { ICreateTransaction } from "./ICreateTransaction";
+export type { IUpdateAccount } from "./IUpdateAccount";
 export type { IUpdateTransaction } from "./IUpdateTransaction";
 export type { IUpdateLedgerBalance, ILedgerBalanceUpdateResponse } from "./ILedgerBalanceUpdate";

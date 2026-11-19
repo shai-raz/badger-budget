@@ -6,6 +6,7 @@ Accounts that transactions and budgets attach to. CRUD, soft-deleted, scoped by 
 - **Balances** (`balance`, `balanceKind`, `balanceDate`, `cardFrame`, `cardIssuer`) are the latest observation, written unconditionally by `AccountBalanceService` during bank sync; `account_balance_snapshots` keeps the history. Never sum balances without checking `balanceKind` (see `bank-sync/AGENTS.md`), and never sum `cardFrame`.
 - `upgradeUnknownAccountTypes` keeps `type: "unknown"` in its `where`: that makes the sweep atomic and idempotent. Don't lift it out.
 - `default-account-currency.ts` is shared with the importer; don't duplicate it.
+- `hiddenOnOverview` is display-only (Overview's Accounts section); never filter queries, totals, reports or sync by it.
 
 ## Ledger accounts (cash, savings)
 
