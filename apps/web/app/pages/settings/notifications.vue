@@ -15,7 +15,7 @@ import {
 } from "../../composables/notifications/useNotificationQueries";
 import { usePushDevice } from "../../composables/notifications/usePushDevice";
 import { useAuthStore } from "~/stores/auth";
-import { describeDevice } from "~/utils/deviceLabel";
+import { describeDevice, isPhoneLabel } from "~/utils/deviceLabel";
 import { getApiErrorMessage } from "~/utils/apiError";
 import { formatTimeAgo } from "~/utils/relativeTime";
 import type { PushDeviceState } from "~/utils/push/pushState";
@@ -81,9 +81,6 @@ const lastNotificationLabel = (subscription: IPushSubscription) =>
     subscription.lastAcceptedAt
         ? `Last notification ${formatTimeAgo(subscription.lastAcceptedAt)}`
         : "No notifications yet";
-
-// Phone and tablet names come from the registered device label, which describeDevice builds.
-const isPhoneLabel = (label: string) => /iPhone|iPad|Android/.test(label);
 
 // A 429 from the test endpoint is the throttle, which needs its own message.
 const isTooManyRequests = (error: unknown) =>
