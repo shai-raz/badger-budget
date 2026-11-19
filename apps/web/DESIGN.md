@@ -76,5 +76,5 @@ Reuse these before drawing your own (`components/shared/` unless noted): `Sectio
 - Colours come from PrimeVue theme tokens and Tailwind semantic classes, with `dark:` variants, not hardcoded colours in components. Named exceptions are the constants above.
 - Muted text is `text-muted-color` (PrimeVue semantic: surface-500 light, surface-400 dark). Never a bare `text-surface-500` or `text-surface-600` text colour without a `dark:` partner (contract test).
 - Use an existing building block before making a new one. Keep one component per concept and vary it with props.
-- Row actions are an always-visible ⋮ menu, never hover-only actions.
+- Row actions are an always-visible ⋮ menu, never hover-only actions. A destructive item takes `class: "menu-item-danger"`; `text-red-500` on a MenuItem never reaches its label.
 - Tables are for md and up only. Below md, the same data is a divided row list, with no sideways scroll.
