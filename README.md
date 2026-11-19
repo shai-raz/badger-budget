@@ -70,6 +70,10 @@ pnpm dev                                          # web on :3001, API on :3000
 
 [AGENTS.md](AGENTS.md) has the commands and conventions.
 
+## Thanks
+
+Bank sync stands on the shoulders of [israeli-bank-scrapers](https://github.com/eshaham/israeli-bank-scrapers). Badger wouldn't be possible without it, so a big thank you to everyone who builds and maintains it.
+
 ## License
 
-Badger Budget is free and open source under the [AGPL-3.0](LICENSE).
+Badger is free and open source under the [AGPL-3.0](LICENSE).
