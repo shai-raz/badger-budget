@@ -16,7 +16,7 @@ export interface SystemInfoOptions {
     refetchInterval?: MaybeRefOrGetter<number | false>;
 }
 
-// Running version and latest-release info. Errors stay silent: the About page falls back to "Unknown".
+// Running version and latest-release info. No retries: a failed fetch leaves `error` set, and cached `data` stays.
 export function useSystemInfo(enabled: MaybeRefOrGetter<boolean> = true, options: SystemInfoOptions = {}) {
     const apiClient = useApiClient();
     const authStore = useAuthStore();

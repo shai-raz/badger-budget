@@ -37,7 +37,11 @@ const status = computed(() =>
     info.value ? aboutStatus(info.value, phase.value, pending.value?.targetVersion ?? null) : null,
 );
 const commit = computed(() => shortCommit(info.value?.commit ?? null));
-const showActions = computed(() => status.value?.kind === "update-upgradeable" || status.value?.kind === "update");
+// The row needs something to show: Upgrade now (when enabled here) or the release notes link.
+const showActions = computed(() => {
+    if (status.value?.kind === "update-upgradeable") return actionState.value !== "hidden" || !!info.value?.releaseUrl;
+    return status.value?.kind === "update" && !!info.value?.releaseUrl;
+});
 const whatsNewSubtitle = computed(() => (info.value?.version ? `What changed in ${info.value.version}` : null));
 
 const handleCheck = async () => {
@@ -76,7 +80,7 @@ const handleCheck = async () => {
             title="Version"
             heading-id="version-heading"
             :loading="isLoading"
-            :error="error"
+            :error="info ? undefined : error"
         >
             <div
                 v-if="status"
