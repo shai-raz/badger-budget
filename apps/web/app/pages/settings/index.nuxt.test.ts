@@ -70,7 +70,7 @@ beforeEach(() => {
     };
 });
 
-const stubs = { SettingsMcpConnectionsCard: true, SettingsAboutCard: true };
+const stubs = { SettingsAboutCard: true };
 
 async function mountPage() {
     return mountSuspended(Settings, { global: { stubs } });
@@ -115,6 +115,23 @@ function passkey(id: string, credentialId: string): ISyncPasskey {
         createdAt: "2026-01-01T00:00:00.000Z",
     };
 }
+
+// The AI assistants row's summary line, under its title.
+async function aiAssistantsSummary(): Promise<string> {
+    const wrapper = await mountPage();
+    const row = wrapper.get('a[href="/settings/ai-assistants"]');
+    return row.findAll("span.text-xs").map((span) => span.text())[0] ?? "";
+}
+
+describe("settings index AI assistants row", () => {
+    it("summarises the connected apps, or that none are connected", async () => {
+        m.summaryData.value = { ...counts, connectedApps: [] };
+        expect(await aiAssistantsSummary()).toBe("No apps connected");
+
+        m.summaryData.value = { ...counts, connectedApps: ["Claude", "ChatGPT"] };
+        expect(await aiAssistantsSummary()).toBe("2 apps connected · Claude, ChatGPT");
+    });
+});
 
 describe("settings index sync passkeys row", () => {
     it("shows the passkey count with singular and plural labels", async () => {
@@ -240,12 +257,12 @@ describe("settings index log out", () => {
 });
 
 describe("settings index section headings", () => {
-    it("labels the Preferences, Transactions and Bank sync groups and leaves Profile and Log out headingless", async () => {
+    it("labels the Preferences, Transactions, Bank sync and AI groups and leaves Profile and Log out headingless", async () => {
         const wrapper = await mountPage();
         // Each heading renders a mobile and a desktop span with the same text.
         const headings = wrapper.findAll("h2").map((heading) => heading.find("span").text());
 
-        expect(headings).toEqual(["Preferences", "Transactions", "Bank sync"]);
+        expect(headings).toEqual(["Preferences", "Transactions", "Bank sync", "AI"]);
         expect(wrapper.get('section[aria-label="Profile"]').find("h2").exists()).toBe(false);
         expect(wrapper.get('section[aria-label="Log out"]').find("h2").exists()).toBe(false);
     });
