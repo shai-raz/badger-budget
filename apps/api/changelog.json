@@ -1,6 +1,19 @@
 {
     "releases": [
         {
+            "version": "0.20.1",
+            "date": "2026-11-19",
+            "items": [
+                {
+                    "type": "fix",
+                    "scope": "bank-sync",
+                    "breaking": false,
+                    "subject": "log which requests were stuck when a scrape attempt fails",
+                    "pr": 160
+                }
+            ]
+        },
+        {
             "version": "0.20.0",
             "date": "2026-11-19",
             "items": [
