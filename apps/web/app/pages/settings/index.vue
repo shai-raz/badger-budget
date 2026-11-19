@@ -154,7 +154,7 @@ const passkeysSubtitle = computed(() => {
         <SharedSectionBand title="AI">
             <SettingsRow
                 to="/settings/ai-assistants"
-                icon="pi pi-microchip-ai"
+                icon="pi pi-sparkles"
                 title="AI assistants"
                 :subtitle="aiAssistantsSubtitle"
                 :loading="summaryLoading"
