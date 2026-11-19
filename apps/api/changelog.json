@@ -1,6 +1,40 @@
 {
     "releases": [
         {
+            "version": "0.20.0",
+            "date": "2026-11-19",
+            "items": [
+                {
+                    "type": "feat",
+                    "scope": "settings",
+                    "breaking": false,
+                    "subject": "regroup Settings into chevron rows with live counts",
+                    "pr": 155
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "move sync passkeys to their own Settings page",
+                    "pr": 156
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "move AI assistants to their own Settings page",
+                    "pr": 157
+                },
+                {
+                    "type": "feat",
+                    "scope": "web",
+                    "breaking": false,
+                    "subject": "move About to its own Settings page with update status",
+                    "pr": 158
+                }
+            ]
+        },
+        {
             "version": "0.19.1",
             "date": "2026-11-18",
             "items": [
