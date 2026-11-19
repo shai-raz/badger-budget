@@ -59,9 +59,10 @@ const cardPayoffSummary = computed(() =>
 );
 
 // The Sync passkeys row: the count from the summary, plus whether this browser's passkey is among them.
-const passkeys = useSyncPasskeysQuery();
+// The list is only fetched when this browser has a stored passkey to look for.
 const userId = authStore.user?.id;
 const deviceCredentialId = userId ? getDeviceCredentialId(userId) : null;
+const passkeys = useSyncPasskeysQuery(deviceCredentialId !== null);
 const onThisDevice = computed(
     () => deviceCredentialId !== null && (passkeys.data.value ?? []).some((p) => p.credentialId === deviceCredentialId),
 );

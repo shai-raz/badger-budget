@@ -15,6 +15,7 @@ const m = await vi.hoisted(async () => {
         summaryError: ref(false),
         systemInfo: ref<ISystemInfo | undefined>(undefined),
         passkeys: ref<ISyncPasskey[] | undefined>(undefined),
+        passkeysQuery: vi.fn(),
         logout: vi.fn(),
     };
 });
@@ -32,7 +33,10 @@ vi.mock("../../composables/settings/useSettingsSummary", () => ({
 }));
 
 vi.mock("../../composables/bankSync/useBankSync", () => ({
-    useSyncPasskeysQuery: () => ({ data: m.passkeys }),
+    useSyncPasskeysQuery: (enabled?: boolean) => {
+        m.passkeysQuery(enabled);
+        return { data: m.passkeys };
+    },
 }));
 
 mockNuxtImport("useSystemInfo", () => () => ({ data: m.systemInfo }));
@@ -119,6 +123,15 @@ describe("settings index sync passkeys row", () => {
 
         m.summaryData.value = { ...counts, passkeys: 1 };
         expect(await passkeysSummary()).toBe("1 passkey");
+    });
+
+    it("fetches the passkey list only when this browser has a stored passkey", async () => {
+        await mountPage();
+        expect(m.passkeysQuery).toHaveBeenLastCalledWith(false);
+
+        localStorage.setItem("badger:syncPasskey:credential:u1", "cred-b");
+        await mountPage();
+        expect(m.passkeysQuery).toHaveBeenLastCalledWith(true);
     });
 
     it("adds 'on for this device' when the stored device credential is one of the passkeys", async () => {
