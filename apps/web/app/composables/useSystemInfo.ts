@@ -16,7 +16,7 @@ export interface SystemInfoOptions {
     refetchInterval?: MaybeRefOrGetter<number | false>;
 }
 
-// Running version and latest-release info. Errors stay silent: the About card falls back to "Unknown".
+// Running version and latest-release info. Errors stay silent: the About page falls back to "Unknown".
 export function useSystemInfo(enabled: MaybeRefOrGetter<boolean> = true, options: SystemInfoOptions = {}) {
     const apiClient = useApiClient();
     const authStore = useAuthStore();

@@ -5,6 +5,7 @@ import { useSettingsSummaryQuery } from "../../composables/settings/useSettingsS
 import { getDeviceCredentialId } from "../../utils/syncPasskeyDeviceFlags";
 import { initialsOf } from "../../utils/profile";
 import { connectedAppsLabel, countLabel } from "../../utils/settingsSummary";
+import { aboutRowSubtitle } from "../../utils/about";
 import { THEMES } from "../../theme/themes";
 import { COLOR_MODE_OPTIONS } from "../../utils/theme";
 
@@ -16,7 +17,8 @@ definePageMeta({
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
 const logout = useLogout();
-const { data: systemInfo } = useSystemInfo();
+const { data: systemInfo, isLoading: systemInfoLoading } = useSystemInfo();
+const aboutRow = computed(() => (systemInfo.value ? aboutRowSubtitle(systemInfo.value) : null));
 
 const user = computed(() => authStore.user);
 const fullName = computed(() => `${user.value?.firstName ?? ""} ${user.value?.lastName ?? ""}`.trim());
@@ -161,7 +163,17 @@ const passkeysSubtitle = computed(() => {
             />
         </SharedSectionBand>
 
-        <SettingsAboutCard />
+        <SharedSectionBand title="About">
+            <SettingsRow
+                to="/settings/about"
+                icon="pi pi-info-circle"
+                title="About Badger"
+                :loading="systemInfoLoading"
+                :subtitle="aboutRow?.subtitle ?? null"
+                :dot="aboutRow?.update"
+                :tag="aboutRow?.update ? { value: 'Update', tone: 'info' } : undefined"
+            />
+        </SharedSectionBand>
 
         <SharedSectionBand aria-label="Log out">
             <SettingsRow
