@@ -153,7 +153,7 @@ const passkeyMenuItems = computed<MenuItem[]>(() => [
     {
         label: "Remove passkey",
         icon: "pi pi-trash",
-        class: "text-red-500",
+        class: "menu-item-danger",
         command: () => {
             if (selectedPasskey.value) handleRemove(selectedPasskey.value);
         },
@@ -202,17 +202,21 @@ const addedLabel = (createdAt: string) =>
                     severity="info"
                     class="mx-4 mb-4 md:mx-0 md:mb-0"
                 >
-                    <strong>Set a sync PIN first.</strong> Passkeys unlock the PIN you choose when you add a bank
-                    connection.
+                    <div class="flex flex-col items-start gap-2.5">
+                        <span>
+                            <strong>Set a sync PIN first.</strong> Passkeys unlock the PIN you choose when you add a
+                            bank connection.
+                        </span>
+                        <Button
+                            as="router-link"
+                            to="/bank-connections"
+                            label="Go to bank connections"
+                            severity="info"
+                            outlined
+                            size="small"
+                        />
+                    </div>
                 </Message>
-                <div class="px-4 pb-4 md:px-0 md:pb-0">
-                    <NuxtLink
-                        to="/bank-connections"
-                        class="text-sm font-semibold text-primary hover:underline"
-                    >
-                        Go to bank connections
-                    </NuxtLink>
-                </div>
             </template>
 
             <template v-else>
