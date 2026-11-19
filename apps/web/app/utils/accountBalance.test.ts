@@ -17,6 +17,7 @@ const NOW = new Date("2026-06-15T12:00:00");
 function account(overrides: Partial<IAccountResponse> & { id: string; name: string }): IAccountResponse {
     return {
         accountNumber: null,
+        hiddenOnOverview: false,
         type: "bank",
         icon: null,
         color: null,

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/vue-query";
 import type { MaybeRefOrGetter } from "vue";
 import { useApiClient } from "../useApiClient";
-import type { IAccountResponse, IUpdateLedgerBalance } from "@badger/types";
+import type { IAccountResponse, IUpdateAccount, IUpdateLedgerBalance } from "@badger/types";
 import type { AccountType, AvatarIconName } from "@badger/shared-data";
 import { transactionKeys } from "../transactions/useTransactions";
 import { ruleKeys } from "../rules/ruleKeys";
@@ -55,19 +55,7 @@ export function useUpdateAccount() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({
-            id,
-            data,
-        }: {
-            id: string;
-            data: Partial<{
-                name: string;
-                type: AccountType;
-                icon: AvatarIconName | null;
-                color: string;
-                currencyId: string;
-            }>;
-        }) => apiClient.updateAccount(id, data),
+        mutationFn: ({ id, data }: { id: string; data: IUpdateAccount }) => apiClient.updateAccount(id, data),
         onSuccess: (_, { id }) => {
             queryClient.invalidateQueries({ queryKey: accountKeys.lists() });
             queryClient.invalidateQueries({ queryKey: accountKeys.detail(id) });

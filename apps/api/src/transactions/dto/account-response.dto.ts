@@ -50,6 +50,9 @@ export class AccountResponseDto implements IAccountResponse {
     @ApiPropertyOptional({ type: String, nullable: true })
     cardIssuer: string | null;
 
+    @ApiProperty({ description: "Hidden from Overview's Accounts section (display only)" })
+    hiddenOnOverview: boolean;
+
     @ApiProperty()
     hasLinkedTransfers: boolean;
 

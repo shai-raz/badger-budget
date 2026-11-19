@@ -1,6 +1,7 @@
 import axios, { type AxiosInstance, AxiosError, type InternalAxiosRequestConfig } from "axios";
 import type {
     ITransactionResponse,
+    IUpdateAccount,
     IUpdateTransaction,
     ICreateTransaction,
     ITransactionListParams,
@@ -362,16 +363,7 @@ export class ApiClient {
         return response.data;
     }
 
-    async updateAccount(
-        id: string,
-        data: Partial<{
-            name: string;
-            type: AccountType;
-            icon: AvatarIconName | null;
-            color: string;
-            currencyId: string;
-        }>,
-    ) {
+    async updateAccount(id: string, data: IUpdateAccount) {
         const response = await this.client.patch(`/accounts/${id}`, data);
         return response.data;
     }

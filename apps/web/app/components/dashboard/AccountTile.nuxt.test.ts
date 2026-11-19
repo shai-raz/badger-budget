@@ -9,6 +9,7 @@ const base: IAccountResponse = {
     id: "acc-1",
     name: "Checking",
     accountNumber: null,
+    hiddenOnOverview: false,
     type: "bank",
     icon: null,
     color: null,
@@ -88,5 +89,37 @@ describe("AccountTile", () => {
 
         const withUpdate = await mountTile({ account: cash });
         expect(findButton(withUpdate, "Update")?.classes()).toContain("z-10");
+    });
+
+    it("shows the hidden tag on a manageable hidden account", async () => {
+        const wrapper = await mountTile({ account: { ...base, hiddenOnOverview: true }, manageable: true });
+        expect(wrapper.text()).toContain("Hidden on Overview");
+    });
+
+    it("omits the hidden tag when the account is shown or the tile is not manageable", async () => {
+        const shown = await mountTile({ account: base, manageable: true });
+        expect(shown.text()).not.toContain("Hidden on Overview");
+
+        const overview = await mountTile({ account: { ...base, hiddenOnOverview: true } });
+        expect(overview.text()).not.toContain("Hidden on Overview");
+    });
+
+    it("places the hidden tag above the Synced line", async () => {
+        const wrapper = await mountTile({
+            account: { ...base, hiddenOnOverview: true, balanceUpdatedAt: new Date("2026-01-02T00:00:00.000Z") },
+            manageable: true,
+        });
+        const html = wrapper.html();
+        expect(html.indexOf("Hidden on Overview")).toBeGreaterThan(-1);
+        expect(html.indexOf("Hidden on Overview")).toBeLessThan(html.indexOf("Synced"));
+    });
+
+    it("keeps the hidden tag when the account has no Synced line", async () => {
+        const wrapper = await mountTile({
+            account: { ...base, hiddenOnOverview: true, balanceUpdatedAt: null },
+            manageable: true,
+        });
+        expect(wrapper.text()).toContain("Hidden on Overview");
+        expect(wrapper.text()).not.toContain("Synced");
     });
 });
