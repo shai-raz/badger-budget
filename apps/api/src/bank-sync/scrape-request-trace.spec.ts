@@ -70,6 +70,15 @@ describe("ScrapeRequestTrace", () => {
         expect(report.filter((line) => line.includes("FAILED"))).toHaveLength(60);
         expect(report).toContain("… 10 more event(s) not kept");
     });
+
+    it("labels a failure with empty error text as unknown", () => {
+        const { page, trace } = setup();
+        const req = fakeRequest("https://www.cal-online.co.il/app.js", { error: "" });
+        page.emit("request", req);
+        page.emit("requestfailed", req);
+
+        expect(trace.report()[0]).toContain("(script, unknown error, 0.0s)");
+    });
 });
 
 describe("redactUrl", () => {

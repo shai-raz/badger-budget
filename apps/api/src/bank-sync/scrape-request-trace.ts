@@ -1,5 +1,6 @@
 /** The slice of a Puppeteer page this trace listens to. */
 export interface TraceablePage {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- each Puppeteer event has its own payload type
     on(event: string, handler: (arg: any) => void): unknown;
     mainFrame(): unknown;
 }
@@ -66,7 +67,8 @@ export class ScrapeRequestTrace {
                 type: req.resourceType(),
                 startedAt: this.now(),
             };
-            const reason: string = req.failure()?.errorText ?? "unknown error";
+            // `||`, not `??`: some blocked requests fail with an empty error text.
+            const reason: string = req.failure()?.errorText || "unknown error";
             this.record(`FAILED ${entry.method} ${entry.url} (${entry.type}, ${reason}, ${this.since(entry)})`);
         });
 
