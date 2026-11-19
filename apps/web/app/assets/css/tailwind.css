@@ -23,4 +23,21 @@
 @layer tailwind-utilities {
     @tailwind components;
     @tailwind utilities;
+
+    /* A destructive Menu item: `class: "menu-item-danger"` on its MenuItem.
+     * Menu colours the item's label and icon from its own variables, so a
+     * text colour on the item (`text-red-500`) never reaches them. */
+    .menu-item-danger {
+        --p-menu-item-color: var(--p-red-600);
+        --p-menu-item-focus-color: var(--p-red-700);
+        --p-menu-item-icon-color: var(--p-red-600);
+        --p-menu-item-icon-focus-color: var(--p-red-700);
+    }
+
+    .dark .menu-item-danger {
+        --p-menu-item-color: var(--p-red-400);
+        --p-menu-item-focus-color: var(--p-red-300);
+        --p-menu-item-icon-color: var(--p-red-400);
+        --p-menu-item-icon-focus-color: var(--p-red-300);
+    }
 }
