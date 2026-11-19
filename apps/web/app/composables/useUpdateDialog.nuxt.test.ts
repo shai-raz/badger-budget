@@ -17,10 +17,18 @@ describe("useUpdateDialog", () => {
     });
 
     it("openDialog opens the dialog and clears the confirm step", () => {
-        const { open, confirming, openConfirm, openDialog } = useUpdateDialog();
+        const { open, confirming, confirmOnly, openConfirm, openDialog } = useUpdateDialog();
         openConfirm();
         openDialog();
         expect(open.value).toBe(true);
         expect(confirming.value).toBe(false);
+        expect(confirmOnly.value).toBe(false);
+    });
+
+    it("openConfirm marks the confirm step as the only view", () => {
+        const { confirmOnly, openConfirm, closeDialog } = useUpdateDialog();
+        openConfirm();
+        expect(confirmOnly.value).toBe(true);
+        closeDialog();
     });
 });

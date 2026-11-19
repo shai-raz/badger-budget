@@ -171,6 +171,26 @@ describe("settings about page", () => {
             expect(buttonWithText(wrapper, "Upgrade now")).toBeUndefined();
         });
 
+        it("keeps the upgrade status while the server restarts and the version poll fails", async () => {
+            setInfo({ latest: "0.20.0", updateAvailable: true, upgradeAvailable: true });
+            m.phase.value = "upgrading";
+            m.pending.value = { targetVersion: "0.20.0" };
+            m.actionState.value = "disabled";
+            m.error.value = new Error("Network Error");
+            const wrapper = await mountPage();
+
+            expect(statusOf(wrapper).text()).toContain("Upgrading to 0.20.0");
+            expect(bandText(wrapper, "version-heading")).not.toContain("Couldn't load version.");
+        });
+
+        it("shows the load error when there is no version info", async () => {
+            m.info.value = undefined;
+            m.error.value = new Error("Network Error");
+            const wrapper = await mountPage();
+
+            expect(bandText(wrapper, "version-heading")).toContain("Couldn't load version.");
+        });
+
         it("says update checks are off and disables the header check", async () => {
             setInfo({ updateCheckEnabled: false, checkedAt: null });
             const wrapper = await mountPage();
@@ -238,6 +258,13 @@ describe("settings about page", () => {
             expect(band).toContain("Version");
             expect(band).not.toContain("Commit");
             expect(band).not.toContain("Latest release");
+        });
+
+        it("omits the actions row when an update has no release notes link", async () => {
+            setInfo({ latest: "0.20.0", updateAvailable: true, upgradeAvailable: false, releaseUrl: null });
+            const wrapper = await mountPage();
+
+            expect(statusOf(wrapper).element.nextElementSibling?.classList).toContain("border-t");
         });
 
         it("shows the short commit and latest release when they are known", async () => {
