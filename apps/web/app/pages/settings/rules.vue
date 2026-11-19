@@ -71,7 +71,7 @@ const menuItems = computed<MenuItem[]>(() => {
         {
             label: "Delete",
             icon: "pi pi-trash",
-            class: "text-red-500",
+            class: "menu-item-danger",
             command: () => confirmDelete(rule),
         },
     ];

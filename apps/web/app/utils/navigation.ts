@@ -26,7 +26,7 @@ export interface NavAction {
 /** Rendered after the route items, above the bottom divider. */
 export const NAV_ACTIONS = {
     update: { id: "update", label: "Update available", icon: "pi pi-arrow-circle-up" },
-    whatsNew: { id: "whats-new", label: "What's new", icon: "pi pi-sparkles" },
+    whatsNew: { id: "whats-new", label: "What's new", icon: "pi pi-megaphone" },
 } as const satisfies Record<string, NavAction>;
 
 export const SIDEBAR_ITEMS: readonly NavItem[] = [

@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mountSuspended } from "@nuxt/test-utils/runtime";
 import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import type { IOAuthConnection } from "@badger/types";
-import { MCP_DATA_SHARING_NOTICE } from "~/utils/mcpCopy";
 import AiAssistants from "./ai-assistants.vue";
 
 // Shared, resettable fakes for the OAuth composables the page reads and writes.
@@ -97,7 +96,7 @@ describe("settings AI assistants page", () => {
         it("shows the empty state when no app is connected", async () => {
             const wrapper = await mountPage();
 
-            expect(pageText(wrapper)).toContain("No apps connected yet. Pick one under Connect an app to get started.");
+            expect(pageText(wrapper)).toContain("No apps connected yet.");
         });
 
         it("shows the band error when connected apps cannot be loaded", async () => {
@@ -220,7 +219,7 @@ describe("settings AI assistants page", () => {
         it("keeps the data-sharing notice below the bands", async () => {
             const wrapper = await mountPage();
 
-            expect(pageText(wrapper)).toContain(MCP_DATA_SHARING_NOTICE);
+            expect(pageText(wrapper)).toContain("Your data is shared with that app's AI provider.");
         });
     });
 });

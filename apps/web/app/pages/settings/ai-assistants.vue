@@ -8,7 +8,7 @@ import {
     useOAuthConnectionsQuery,
     useRevokeOAuthConnection,
 } from "../../composables/useOAuthConnections";
-import { MCP_DATA_SHARING_NOTICE, MCP_SETUP_GUIDES } from "../../utils/mcpCopy";
+import { MCP_SETUP_GUIDES } from "../../utils/mcpCopy";
 import { getApiErrorMessage } from "~/utils/apiError";
 import { formatTimeAgo } from "../../utils/relativeTime";
 
@@ -76,7 +76,7 @@ const menuItems = computed<MenuItem[]>(() => [
     {
         label: "Revoke access",
         icon: "pi pi-ban",
-        class: "text-red-500",
+        class: "menu-item-danger",
         command: () => {
             const conn = selected.value;
             if (conn) handleRevoke(conn.id, conn.clientName);
@@ -103,8 +103,8 @@ function openMenu(event: Event, conn: IOAuthConnection) {
             :loading="isLoading"
             :error="error"
             :empty="!isLoading && !list.length"
-            empty-icon="pi-microchip-ai"
-            empty-text="No apps connected yet. Pick one under Connect an app to get started."
+            empty-icon="pi-sparkles"
+            empty-text="No apps connected yet."
         >
             <div class="flex flex-col divide-y divide-surface-200 dark:divide-surface-700">
                 <div
@@ -113,7 +113,7 @@ function openMenu(event: Event, conn: IOAuthConnection) {
                     class="flex items-center gap-3 px-4 py-3 md:px-0"
                 >
                     <i
-                        class="pi pi-microchip-ai text-muted-color"
+                        class="pi pi-objects-column text-muted-color"
                         aria-hidden="true"
                     />
                     <div class="flex min-w-0 flex-1 flex-col gap-1">
@@ -144,10 +144,6 @@ function openMenu(event: Event, conn: IOAuthConnection) {
             title="Connect an app"
             heading-id="connect-app-heading"
         >
-            <p class="px-4 pb-2 text-sm text-muted-color md:px-0">
-                Ask Claude or another AI app about your spending. It can read your data but can't change anything.
-            </p>
-
             <div class="flex items-center gap-3 border-t border-surface-200 px-4 py-3 md:px-0 dark:border-surface-700">
                 <i
                     class="pi pi-link text-muted-color"
@@ -182,10 +178,12 @@ function openMenu(event: Event, conn: IOAuthConnection) {
                 class="flex flex-col gap-2.5 border-t border-surface-200 px-4 pt-3 pb-4 md:px-0 md:pb-0 dark:border-surface-700"
             >
                 <p class="text-sm">
-                    Add it as a custom connector (MCP server) in your app, then approve access when Badger asks.
+                    Add this URL as a custom connector in Claude, ChatGPT or another AI app. It can only read your data.
                 </p>
-                <span class="text-xs font-semibold text-muted-color">Setup guides</span>
-                <ul class="flex flex-wrap gap-2">
+                <ul
+                    class="flex flex-wrap gap-2"
+                    aria-label="Setup guides"
+                >
                     <li
                         v-for="guide in MCP_SETUP_GUIDES"
                         :key="guide.name"
@@ -206,6 +204,6 @@ function openMenu(event: Event, conn: IOAuthConnection) {
             </div>
         </SharedSectionBand>
 
-        <p class="mx-4 text-xs text-muted-color md:mx-0">{{ MCP_DATA_SHARING_NOTICE }}</p>
+        <p class="mx-4 text-xs text-muted-color md:mx-0">Your data is shared with that app's AI provider.</p>
     </div>
 </template>
