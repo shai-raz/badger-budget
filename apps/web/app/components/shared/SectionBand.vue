@@ -2,11 +2,13 @@
 /**
  * The section used by every app page: a full-width band with a label row on
  * mobile, and a card on desktop (`card`). Handles the header, loading, error
- * and empty states, so a page section only supplies its content.
+ * and empty states, so a page section only supplies its content. `title` is
+ * optional: a band with no heading (e.g. a settings group) omits it, and the
+ * header row then shows only what is set (meta, link, header-extra slot).
  */
 interface Props {
-    /** Section heading, e.g. "Accounts". */
-    title: string;
+    /** Section heading, e.g. "Accounts". Omit for a band with no heading. */
+    title?: string;
     /** Heading shown below md instead of `title`, when mobile needs a shorter
      * label (e.g. "Recent" for "Recent transactions"). Defaults to `title`. */
     mobileTitle?: string;
@@ -33,6 +35,7 @@ interface Props {
 }
 
 withDefaults(defineProps<Props>(), {
+    title: undefined,
     mobileTitle: undefined,
     meta: undefined,
     linkTo: undefined,
@@ -57,8 +60,12 @@ withDefaults(defineProps<Props>(), {
                 : 'md:border-0 md:bg-transparent dark:md:bg-transparent'
         "
     >
-        <div class="flex items-center justify-between gap-2 px-4 pt-3 pb-2 md:px-0 md:pt-0 md:pb-3">
+        <div
+            v-if="title || $slots.label || meta || linkTo || $slots['header-extra']"
+            class="flex items-center justify-between gap-2 px-4 pt-3 pb-2 md:px-0 md:pt-0 md:pb-3"
+        >
             <h2
+                v-if="title || $slots.label"
                 :id="headingId"
                 class="text-xs font-semibold uppercase tracking-wide text-muted-color md:text-base md:font-semibold md:normal-case md:tracking-normal md:text-surface-900 dark:md:text-surface-0"
             >
@@ -91,7 +98,7 @@ withDefaults(defineProps<Props>(), {
             severity="error"
             :closable="false"
         >
-            Couldn't load {{ title.toLowerCase() }}.
+            {{ title ? `Couldn't load ${title.toLowerCase()}.` : "Couldn't load this section." }}
         </Message>
 
         <template v-else-if="loading">

@@ -6,10 +6,11 @@
  * PrimeIcons class (e.g. `pi pi-eye-slash`) rendered before the value.
  */
 import type { TagProps } from "primevue/tag";
+import type { StatusTagTone } from "~/utils/statusTag";
 
 interface Props {
     value: string;
-    tone?: "neutral" | "success" | "warn" | "danger" | "info";
+    tone?: StatusTagTone;
     icon?: string;
 }
 

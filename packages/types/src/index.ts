@@ -394,5 +394,6 @@ export * from "./reports";
 export * from "./oauth";
 export * from "./reimbursements";
 export * from "./system";
+export * from "./settings";
 export * from "./auth";
 export * from "./notifications";

@@ -204,7 +204,7 @@ const deviceMenuItems = computed<MenuItem[]>(() => [
     {
         label: "Remove device",
         icon: "pi pi-trash",
-        class: "text-red-500",
+        class: "menu-item-danger",
         command: () => {
             const subscription = selectedDevice.value;
             if (!subscription) return;

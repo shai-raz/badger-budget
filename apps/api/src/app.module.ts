@@ -23,6 +23,7 @@ import { HealthModule } from "./health/health.module";
 import { AppConfigModule } from "./app-config/app-config.module";
 import { SystemModule } from "./system/system.module";
 import { NotificationsModule } from "./notifications/notifications.module";
+import { SettingsModule } from "./settings/settings.module";
 
 @Module({
     imports: [
@@ -77,6 +78,9 @@ import { NotificationsModule } from "./notifications/notifications.module";
 
         // Web Push subscriptions and the test send
         NotificationsModule,
+
+        // Counts shown on the Settings page (authenticated)
+        SettingsModule,
     ],
     controllers: [],
     providers: [],
