@@ -40,6 +40,11 @@ const hasPinSet = computed(() => pinStatus.value?.hasPinSet === true);
 const webAuthnAvailable = computed(() => isWebAuthnAvailable());
 const list = computed(() => passkeys.value ?? []);
 const canAdd = computed(() => list.value.length < MAX_PASSKEYS);
+const emptyText = computed(() =>
+    webAuthnAvailable.value
+        ? "No passkeys yet. Add one to unlock bank sync with your fingerprint, face or screen lock."
+        : "No passkeys yet. This browser can't create passkeys, so add one from a browser that supports them.",
+);
 
 const dialogVisible = ref(false);
 const pin = ref("");
@@ -190,7 +195,7 @@ const addedLabel = (createdAt: string) =>
             :error="pinStatusError ?? passkeysError"
             :empty="hasPinSet && !passkeysLoading && !list.length"
             empty-icon="pi-key"
-            empty-text="No passkeys yet. Add one to unlock bank sync with your fingerprint, face or screen lock."
+            :empty-text="emptyText"
         >
             <template v-if="!hasPinSet">
                 <Message

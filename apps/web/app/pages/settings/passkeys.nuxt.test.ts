@@ -147,6 +147,14 @@ describe("settings passkeys page", () => {
         expect(headerButton()?.disabled).toBe(false);
     });
 
+    it("explains why adding is disabled when there are no passkeys and this browser can't create them", async () => {
+        m.webAuthn.value = false;
+        const wrapper = await mountPage();
+
+        expect(pageText(wrapper)).toContain("This browser can't create passkeys, so add one");
+        expect(headerButton()?.disabled).toBe(true);
+    });
+
     it("disables adding and explains the limit at 10 passkeys", async () => {
         m.passkeys.data.value = Array.from({ length: 10 }, (_, index) =>
             passkey({ id: `pk-${index}`, credentialId: `cred-${index}`, label: `Chrome on Windows ${index}` }),
