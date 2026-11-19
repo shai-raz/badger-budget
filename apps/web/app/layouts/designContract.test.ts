@@ -371,6 +371,7 @@ describe("design contract: settings and transaction detail bands", () => {
         "pages/transactions/[id].vue",
         "pages/settings/passkeys.vue",
         "pages/settings/ai-assistants.vue",
+        "pages/settings/about.vue",
         "components/transactions/AttachmentsCard.vue",
     ];
 

@@ -34,6 +34,7 @@ describe("page header contract", () => {
         ["settings/appearance.vue", 'title="Appearance"', 'back-to="/settings"'],
         ["settings/passkeys.vue", 'title="Sync passkeys"', 'back-to="/settings"'],
         ["settings/ai-assistants.vue", 'title="AI assistants"', 'back-to="/settings"'],
+        ["settings/about.vue", 'title="About"', 'back-to="/settings"'],
         ["bank-connections/history.vue", 'title="Sync history"', 'back-to="/bank-connections"'],
     ])("%s keeps its title and back target", (rel, title, backTo) => {
         const tag = headerTag(rel);
