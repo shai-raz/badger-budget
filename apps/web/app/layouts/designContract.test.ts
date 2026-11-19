@@ -370,7 +370,7 @@ describe("design contract: settings and transaction detail bands", () => {
         "pages/settings/index.vue",
         "pages/transactions/[id].vue",
         "pages/settings/passkeys.vue",
-        "components/settings/McpConnectionsCard.vue",
+        "pages/settings/ai-assistants.vue",
         "components/transactions/AttachmentsCard.vue",
     ];
 

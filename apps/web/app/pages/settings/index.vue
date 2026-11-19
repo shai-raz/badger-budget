@@ -4,7 +4,7 @@ import { usePushDevice } from "../../composables/notifications/usePushDevice";
 import { useSettingsSummaryQuery } from "../../composables/settings/useSettingsSummary";
 import { getDeviceCredentialId } from "../../utils/syncPasskeyDeviceFlags";
 import { initialsOf } from "../../utils/profile";
-import { countLabel } from "../../utils/settingsSummary";
+import { connectedAppsLabel, countLabel } from "../../utils/settingsSummary";
 import { THEMES } from "../../theme/themes";
 import { COLOR_MODE_OPTIONS } from "../../utils/theme";
 
@@ -65,6 +65,9 @@ const deviceCredentialId = userId ? getDeviceCredentialId(userId) : null;
 const passkeys = useSyncPasskeysQuery(deviceCredentialId !== null);
 const onThisDevice = computed(
     () => deviceCredentialId !== null && (passkeys.data.value ?? []).some((p) => p.credentialId === deviceCredentialId),
+);
+const aiAssistantsSubtitle = computed(() =>
+    summaryData.value ? connectedAppsLabel(summaryData.value.connectedApps) : null,
 );
 const passkeysSubtitle = computed(() => {
     if (!summaryData.value) return null;
@@ -148,7 +151,15 @@ const passkeysSubtitle = computed(() => {
             />
         </SharedSectionBand>
 
-        <SettingsMcpConnectionsCard />
+        <SharedSectionBand title="AI">
+            <SettingsRow
+                to="/settings/ai-assistants"
+                icon="pi pi-sparkles"
+                title="AI assistants"
+                :subtitle="aiAssistantsSubtitle"
+                :loading="summaryLoading"
+            />
+        </SharedSectionBand>
 
         <SettingsAboutCard />
 
