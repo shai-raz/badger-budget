@@ -14,11 +14,11 @@ To use your own domain, set it on the `app` service. To update, redeploy.
 
 - **Domain and proxy.** `SERVICE_URL_APP` is the generated domain. Coolify's proxy routes it to the app on port 8080 and terminates TLS.
 - **Database credentials.** `SERVICE_USER_POSTGRES` and `SERVICE_PASSWORD_POSTGRES` are generated and shared by `app`, `db` and `backup`.
-- **App secrets.** `JWT_SECRET`, `JWT_REFRESH_SECRET` and `CREDENTIAL_ENCRYPTION_PEPPER` are generated on first boot into `/data/secrets` in the `app_data` volume. See [Backups and restore](../../README.md#backups-and-restore).
+- **App secrets.** `JWT_SECRET`, `JWT_REFRESH_SECRET` and `CREDENTIAL_ENCRYPTION_PEPPER` are generated on first boot into `/data/secrets` in the `app_data` volume. See [Backups and restore](../../docs/self-hosting.md#backups-and-restore).
 
 ## You set
 
-- **Optional features**, on the Environment Variables tab. See [Optional features](../../README.md#optional-features).
+- **Optional features**, on the Environment Variables tab. See [Optional features](../../docs/self-hosting.md#optional-features).
 - **In-app upgrade**, described below.
 
 ## Backups
@@ -30,9 +30,9 @@ docker run --rm -v <project>_backups:/backups -v "$PWD":/out busybox \
   cp /backups/last/badger-latest.sql.gz /out/
 ```
 
-Restore the database from that file with the steps in [Restore the database](../../README.md#restore-the-database), using the copied file in place of `backups/last/*-latest.sql.gz`. Those steps use `docker compose`, so on Coolify run them against the service's containers.
+Restore the database from that file with the steps in [Restore the database](../../docs/self-hosting.md#restore-the-database), using the copied file in place of `backups/last/*-latest.sql.gz`. Those steps use `docker compose`, so on Coolify run them against the service's containers.
 
-Also back up the `app_data` volume (`/data`), which holds the generated secrets. Coolify prefixes the volume name with the project, so use `<project>_app_data` here, not the name in the root README's [Back up `/data`](../../README.md#back-up-data) command:
+Also back up the `app_data` volume (`/data`), which holds the generated secrets. Coolify prefixes the volume name with the project, so use `<project>_app_data` here, not the name in the self-hosting guide's [Back up `/data`](../../docs/self-hosting.md#back-up-data) command:
 
 ```bash
 docker run --rm -v <project>_app_data:/data -v "$PWD":/backup busybox \
@@ -41,7 +41,7 @@ docker run --rm -v <project>_app_data:/data -v "$PWD":/backup busybox \
 
 ## In-app upgrade
 
-Lets the admin upgrade from the update dialog. The general behaviour is in [Upgrade from the app](../../README.md#upgrade-from-the-app). For Coolify, set these on the Environment Variables tab:
+Lets the admin upgrade from the update dialog. The general behaviour is in [Upgrade from the app](../../docs/self-hosting.md#upgrade-from-the-app). For Coolify, set these on the Environment Variables tab:
 
 - `DEPLOY_WEBHOOK_URL`: copy the **Deploy Webhook URL** from Coolify's **Configuration → Webhooks** page. It looks like `https://<coolify>/api/v1/deploy?uuid=<uuid>&force=false`.
 - `DEPLOY_WEBHOOK_TOKEN`: an API token from **Keys & Tokens → API Tokens** with the deploy permission.
