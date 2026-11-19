@@ -369,7 +369,7 @@ describe("design contract: settings and transaction detail bands", () => {
     const BAND_PAGES = [
         "pages/settings/index.vue",
         "pages/transactions/[id].vue",
-        "components/bankSync/PasskeysCard.vue",
+        "pages/settings/passkeys.vue",
         "components/settings/McpConnectionsCard.vue",
         "components/transactions/AttachmentsCard.vue",
     ];

@@ -24,6 +24,11 @@ function deviceOf(ua: string, maxTouchPoints: number): string | null {
     return null;
 }
 
+// Phone and tablet names come from the registered device label, which describeDevice builds.
+export function isPhoneLabel(label: string): boolean {
+    return /iPhone|iPad|Android/.test(label);
+}
+
 export function describeDevice(userAgent: string, maxTouchPoints = 0): string {
     const browser = browserOf(userAgent);
     const device = deviceOf(userAgent, maxTouchPoints);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeDevice } from "./deviceLabel";
+import { describeDevice, isPhoneLabel } from "./deviceLabel";
 
 const SAFARI_IPHONE =
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
@@ -53,5 +53,17 @@ describe("describeDevice", () => {
         const label = describeDevice(`${"x".repeat(500)} iPhone Chrome/124.0.0.0 Safari/537.36`);
         expect(label.length).toBeLessThanOrEqual(100);
         expect(label).toBe("Chrome on iPhone");
+    });
+});
+
+describe("isPhoneLabel", () => {
+    it.each([
+        ["Safari on iPhone", true],
+        ["Chrome on iPad", true],
+        ["Chrome on Android", true],
+        ["Chrome on Windows", false],
+        ["Safari on Mac", false],
+    ])("%s -> %s", (label, expected) => {
+        expect(isPhoneLabel(label)).toBe(expected);
     });
 });

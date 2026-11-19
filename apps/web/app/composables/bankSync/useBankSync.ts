@@ -8,7 +8,7 @@ import type {
     ICreateScraperConnection,
     IUpdateScraperConnection,
 } from "@badger/types";
-import type { Ref } from "vue";
+import type { MaybeRefOrGetter, Ref } from "vue";
 
 // Query keys
 export const bankSyncKeys = {
@@ -75,14 +75,14 @@ export function useSyncPinStatusQuery() {
     });
 }
 
-export function useSyncPasskeysQuery() {
+export function useSyncPasskeysQuery(enabled: MaybeRefOrGetter<boolean> = true) {
     const apiClient = useApiClient();
     const pinStatus = useSyncPinStatusQuery();
 
     return useQuery({
         queryKey: bankSyncKeys.passkeys(),
         queryFn: (): Promise<ISyncPasskey[]> => apiClient.getSyncPasskeys(),
-        enabled: computed(() => pinStatus.data.value?.hasPinSet === true),
+        enabled: computed(() => pinStatus.data.value?.hasPinSet === true && toValue(enabled)),
     });
 }
 

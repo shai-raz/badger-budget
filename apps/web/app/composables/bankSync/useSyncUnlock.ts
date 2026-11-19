@@ -6,7 +6,7 @@ import { bankSyncKeys } from "./useBankSync";
 import { fromBase64Url, toBase64Url } from "../../utils/base64url";
 import { unwrapPin, wrapPin } from "../../utils/syncPasskeyCrypto";
 import { describeDevice } from "../../utils/deviceLabel";
-import { markRegisteredOnDevice } from "../../utils/syncPasskeyDeviceFlags";
+import { markRegisteredOnDevice, setDeviceCredentialId } from "../../utils/syncPasskeyDeviceFlags";
 import {
     SyncUnlockError,
     UNSUPPORTED_MESSAGE,
@@ -85,6 +85,7 @@ export function useSyncUnlock() {
                 throw err;
             }
             markRegisteredOnDevice(user.id);
+            setDeviceCredentialId(user.id, created.credentialId);
             await queryClient.invalidateQueries({ queryKey: bankSyncKeys.passkeys() });
             return row;
         } catch (err) {
@@ -107,11 +108,15 @@ export function useSyncUnlock() {
             prfOutput = result.prfOutput;
             const row = passkeys.find((p) => p.credentialId === result.credentialId);
             if (!row) throw new SyncUnlockError("failed");
+            let pin: string;
             try {
-                return await unwrapPin(row, prfOutput, fromBase64Url(row.prfSalt), row.credentialId);
+                pin = await unwrapPin(row, prfOutput, fromBase64Url(row.prfSalt), row.credentialId);
             } catch (err) {
                 throw new SyncUnlockError("failed", undefined, { cause: err });
             }
+            const userId = authStore.user?.id;
+            if (userId) setDeviceCredentialId(userId, row.credentialId);
+            return pin;
         } catch (err) {
             throw toSyncUnlockError(err);
         } finally {
