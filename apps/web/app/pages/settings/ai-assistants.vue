@@ -9,16 +9,13 @@ import {
     useRevokeOAuthConnection,
 } from "../../composables/useOAuthConnections";
 import { MCP_DATA_SHARING_NOTICE, MCP_SETUP_GUIDES } from "../../utils/mcpCopy";
+import { getApiErrorMessage } from "~/utils/apiError";
 import { formatTimeAgo } from "../../utils/relativeTime";
 
 definePageMeta({
     layout: "app",
     fullBleed: true,
 });
-
-interface HttpError {
-    response?: { data?: { message?: string } };
-}
 
 const toast = useToast();
 const confirm = useConfirm();
@@ -31,7 +28,11 @@ const list = computed(() => connections.value ?? []);
 
 const connectionMeta = (conn: IOAuthConnection) => {
     const used = conn.lastUsedAt ? `Last used ${formatTimeAgo(conn.lastUsedAt)}` : "Never used";
-    const date = new Date(conn.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const date = new Date(conn.createdAt).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+    });
     return `${used} · connected ${date}`;
 };
 
@@ -60,7 +61,7 @@ const handleRevoke = (id: string, clientName: string) => {
                 toast.add({
                     severity: "error",
                     summary: "Error",
-                    detail: (err as HttpError).response?.data?.message || "Failed to revoke access",
+                    detail: getApiErrorMessage(err, "Failed to revoke access"),
                     life: 5000,
                 });
             }

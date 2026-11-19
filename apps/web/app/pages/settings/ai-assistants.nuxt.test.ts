@@ -41,7 +41,8 @@ const connection = (overrides: Partial<IOAuthConnection>): IOAuthConnection => (
     ...overrides,
 });
 
-const connectedOn = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+const connectedOn = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -123,6 +124,38 @@ describe("settings AI assistants page", () => {
             const options = confirmRequire.mock.calls[0]?.[0] as { accept: () => Promise<void> };
             await options.accept();
             expect(m.revoke.mutateAsync).toHaveBeenCalledWith("conn-1");
+            expect(m.toastAdd).toHaveBeenCalledWith(
+                expect.objectContaining({ severity: "success", detail: "Claude Desktop revoked" }),
+            );
+        });
+
+        it("shows the server message when revoking fails", async () => {
+            m.connections.data.value = [connection({ id: "conn-1", clientName: "Claude Desktop" })];
+            m.revoke.mutateAsync.mockRejectedValueOnce({ response: { data: { message: "Nope" } } });
+            const wrapper = await mountPage();
+
+            await openRevokeItem(wrapper, "Claude Desktop").then((item) => item?.click());
+            await flushPromises();
+            const options = confirmRequire.mock.calls[0]?.[0] as { accept: () => Promise<void> };
+            await options.accept();
+
+            expect(m.toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: "error", detail: "Nope" }));
+            expect(m.toastAdd).not.toHaveBeenCalledWith(expect.objectContaining({ severity: "success" }));
+        });
+
+        it("falls back to a generic message when revoking fails without one", async () => {
+            m.connections.data.value = [connection({ id: "conn-1", clientName: "Claude Desktop" })];
+            m.revoke.mutateAsync.mockRejectedValueOnce(new Error("network down"));
+            const wrapper = await mountPage();
+
+            await openRevokeItem(wrapper, "Claude Desktop").then((item) => item?.click());
+            await flushPromises();
+            const options = confirmRequire.mock.calls[0]?.[0] as { accept: () => Promise<void> };
+            await options.accept();
+
+            expect(m.toastAdd).toHaveBeenCalledWith(
+                expect.objectContaining({ severity: "error", detail: "Failed to revoke access" }),
+            );
         });
     });
 
@@ -136,6 +169,19 @@ describe("settings AI assistants page", () => {
 
             expect(navigator.clipboard.writeText).toHaveBeenCalledWith(SERVER_URL);
             expect(m.toastAdd).toHaveBeenCalledWith(expect.objectContaining({ summary: "Copied" }));
+        });
+
+        it("shows an error toast when the clipboard write fails", async () => {
+            navigator.clipboard.writeText = vi.fn(() => Promise.reject(new Error("denied")));
+            const wrapper = await mountPage();
+
+            await wrapper.get('button[aria-label="Copy server URL"]').trigger("click");
+            await flushPromises();
+
+            expect(m.toastAdd).toHaveBeenCalledWith(
+                expect.objectContaining({ severity: "error", detail: "Could not copy to clipboard" }),
+            );
+            expect(m.toastAdd).not.toHaveBeenCalledWith(expect.objectContaining({ summary: "Copied" }));
         });
 
         it("links to the five setup guides in a new tab", async () => {
