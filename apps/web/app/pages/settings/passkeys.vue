@@ -214,6 +214,7 @@ const addedLabel = (createdAt: string) =>
                             severity="info"
                             outlined
                             size="small"
+                            class="border-current text-current"
                         />
                     </div>
                 </Message>
