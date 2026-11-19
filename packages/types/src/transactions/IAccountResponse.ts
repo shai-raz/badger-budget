@@ -22,6 +22,8 @@ export interface IAccountResponse {
     cardFrame: number | null;
     /** IBS `cardType` — bankIssued | companyIssued. Cal-only. */
     cardIssuer: string | null;
+    /** Hidden from Overview's Accounts section only; never affects totals or other lists. */
+    hiddenOnOverview: boolean;
     /** Cash and savings (ledger accounts) only: true when any non-deleted row on the account is a transfer mirror or has a counterpart. */
     hasLinkedTransfers: boolean;
     /** Cash and savings (ledger accounts) only: true when the account has any non-deleted transaction (pins its currency). */
