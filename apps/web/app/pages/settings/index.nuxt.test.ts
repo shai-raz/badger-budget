@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockNuxtImport, mountSuspended } from "@nuxt/test-utils/runtime";
-import type { ISettingsSummary, ISystemInfo } from "@badger/types";
+import type { ISettingsSummary, ISyncPasskey, ISystemInfo } from "@badger/types";
 import type { PushDeviceState } from "~/utils/push/pushState";
 import { useAuthStore } from "~/stores/auth";
 import Settings from "./index.vue";
@@ -14,6 +14,7 @@ const m = await vi.hoisted(async () => {
         summaryLoading: ref(false),
         summaryError: ref(false),
         systemInfo: ref<ISystemInfo | undefined>(undefined),
+        passkeys: ref<ISyncPasskey[] | undefined>(undefined),
         logout: vi.fn(),
     };
 });
@@ -28,6 +29,10 @@ vi.mock("../../composables/settings/useSettingsSummary", () => ({
         isLoading: m.summaryLoading,
         isError: m.summaryError,
     }),
+}));
+
+vi.mock("../../composables/bankSync/useBankSync", () => ({
+    useSyncPasskeysQuery: () => ({ data: m.passkeys }),
 }));
 
 mockNuxtImport("useSystemInfo", () => () => ({ data: m.systemInfo }));
@@ -48,6 +53,8 @@ beforeEach(() => {
     m.summaryLoading.value = false;
     m.summaryError.value = false;
     m.systemInfo.value = undefined;
+    m.passkeys.value = undefined;
+    localStorage.removeItem("badger:syncPasskey:credential:u1");
     useAuthStore().user = {
         id: "u1",
         email: "a@example.com",
@@ -59,7 +66,7 @@ beforeEach(() => {
     };
 });
 
-const stubs = { BankSyncPasskeysCard: true, SettingsMcpConnectionsCard: true, SettingsAboutCard: true };
+const stubs = { SettingsMcpConnectionsCard: true, SettingsAboutCard: true };
 
 async function mountPage() {
     return mountSuspended(Settings, { global: { stubs } });
@@ -83,6 +90,51 @@ describe("settings index notifications row", () => {
         m.state.value = state;
 
         expect(await notificationsSummary()).toBe(summary);
+    });
+});
+
+// The Sync passkeys row's summary line, under its title.
+async function passkeysSummary(): Promise<string> {
+    const wrapper = await mountPage();
+    const row = wrapper.get('a[href="/settings/passkeys"]');
+    return row.findAll("span.text-xs").map((span) => span.text())[0] ?? "";
+}
+
+function passkey(id: string, credentialId: string): ISyncPasskey {
+    return {
+        id,
+        credentialId,
+        prfSalt: "",
+        wrappedPinCt: "",
+        wrappedPinIv: "",
+        label: "Phone",
+        createdAt: "2026-01-01T00:00:00.000Z",
+    };
+}
+
+describe("settings index sync passkeys row", () => {
+    it("shows the passkey count with singular and plural labels", async () => {
+        m.summaryData.value = { ...counts, passkeys: 2 };
+        expect(await passkeysSummary()).toBe("2 passkeys");
+
+        m.summaryData.value = { ...counts, passkeys: 1 };
+        expect(await passkeysSummary()).toBe("1 passkey");
+    });
+
+    it("adds 'on for this device' when the stored device credential is one of the passkeys", async () => {
+        m.summaryData.value = { ...counts, passkeys: 2 };
+        m.passkeys.value = [passkey("a", "cred-a"), passkey("b", "cred-b")];
+        localStorage.setItem("badger:syncPasskey:credential:u1", "cred-b");
+
+        expect(await passkeysSummary()).toBe("2 passkeys · on for this device");
+    });
+
+    it("omits the device tag when the stored credential is not in the list", async () => {
+        m.summaryData.value = { ...counts, passkeys: 2 };
+        m.passkeys.value = [passkey("a", "cred-a"), passkey("b", "cred-b")];
+        localStorage.setItem("badger:syncPasskey:credential:u1", "cred-gone");
+
+        expect(await passkeysSummary()).toBe("2 passkeys");
     });
 });
 
@@ -175,12 +227,12 @@ describe("settings index log out", () => {
 });
 
 describe("settings index section headings", () => {
-    it("labels the Preferences and Transactions groups and leaves Profile and Log out headingless", async () => {
+    it("labels the Preferences, Transactions and Bank sync groups and leaves Profile and Log out headingless", async () => {
         const wrapper = await mountPage();
         // Each heading renders a mobile and a desktop span with the same text.
         const headings = wrapper.findAll("h2").map((heading) => heading.find("span").text());
 
-        expect(headings).toEqual(["Preferences", "Transactions"]);
+        expect(headings).toEqual(["Preferences", "Transactions", "Bank sync"]);
         expect(wrapper.get('section[aria-label="Profile"]').find("h2").exists()).toBe(false);
         expect(wrapper.get('section[aria-label="Log out"]').find("h2").exists()).toBe(false);
     });

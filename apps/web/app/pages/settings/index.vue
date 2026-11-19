@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { useSyncPasskeysQuery } from "../../composables/bankSync/useBankSync";
 import { usePushDevice } from "../../composables/notifications/usePushDevice";
 import { useSettingsSummaryQuery } from "../../composables/settings/useSettingsSummary";
+import { getDeviceCredentialId } from "../../utils/syncPasskeyDeviceFlags";
 import { initialsOf } from "../../utils/profile";
 import { countLabel } from "../../utils/settingsSummary";
 import { THEMES } from "../../theme/themes";
@@ -55,6 +57,19 @@ const rulesSummary = computed(() => (summaryData.value ? countLabel(summaryData.
 const cardPayoffSummary = computed(() =>
     summaryData.value ? countLabel(summaryData.value.cardPayoffPatterns, "pattern") : null,
 );
+
+// The Sync passkeys row: the count from the summary, plus whether this browser's passkey is among them.
+const passkeys = useSyncPasskeysQuery();
+const userId = authStore.user?.id;
+const deviceCredentialId = userId ? getDeviceCredentialId(userId) : null;
+const onThisDevice = computed(
+    () => deviceCredentialId !== null && (passkeys.data.value ?? []).some((p) => p.credentialId === deviceCredentialId),
+);
+const passkeysSubtitle = computed(() => {
+    if (!summaryData.value) return null;
+    const count = countLabel(summaryData.value.passkeys, "passkey");
+    return onThisDevice.value ? `${count} · on for this device` : count;
+});
 </script>
 
 <template>
@@ -122,7 +137,15 @@ const cardPayoffSummary = computed(() =>
             </div>
         </SharedSectionBand>
 
-        <BankSyncPasskeysCard />
+        <SharedSectionBand title="Bank sync">
+            <SettingsRow
+                to="/settings/passkeys"
+                icon="pi pi-key"
+                title="Sync passkeys"
+                :subtitle="passkeysSubtitle"
+                :loading="summaryLoading"
+            />
+        </SharedSectionBand>
 
         <SettingsMcpConnectionsCard />
 
