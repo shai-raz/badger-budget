@@ -11,13 +11,13 @@ interface HttpError {
 // Mounted once in layouts/app.vue. Opened from the nav's "Update available" item, which is shown only while
 // useUpdateNotice reports a release this browser has not dismissed.
 const toast = useToast();
-const { open, closeDialog } = useUpdateDialog();
+const { open, closeDialog, confirming } = useUpdateDialog();
 const { info, dismiss } = useUpdateNotice();
 const checkMutation = useCheckForUpdates();
 const { pending, phase, actionState, startUpgrade, triggerPending } = useUpgrade();
 
-// Set by "Upgrade now"; the confirm step replaces the body until the user confirms or cancels.
-const confirming = ref(false);
+// Set by "Upgrade now" (shared through useUpdateDialog); the confirm step replaces the body until the user
+// confirms or cancels.
 watch(open, (isOpen) => {
     if (!isOpen) confirming.value = false;
 });

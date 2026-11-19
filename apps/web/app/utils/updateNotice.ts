@@ -22,4 +22,5 @@ export function hamburgerLabel(visible: boolean, phase: UpgradePhase | null = nu
 
 /** Upgrade instructions linked from the update dialog. */
 export const UPGRADE_GUIDE_URL = "https://github.com/shai-raz/badger-budget/blob/main/README.md#upgrading";
+export const RELEASES_URL = "https://github.com/shai-raz/badger-budget/releases";
 export const RESTORE_GUIDE_URL = "https://github.com/shai-raz/badger-budget/blob/main/README.md#restore-the-database";
