@@ -6,6 +6,7 @@ import { useCheckForUpdates, useSystemInfo } from "../../composables/useSystemIn
 import { useUpgrade } from "../../composables/useUpgrade";
 import { useUpdateDialog } from "../../composables/useUpdateDialog";
 import { useWhatsNewDialog } from "../../composables/useWhatsNewDialog";
+import { NAV_ACTIONS } from "../../utils/navigation";
 
 interface HttpError {
     response?: { data?: { message?: string } };
@@ -153,8 +154,8 @@ const handleCheck = async () => {
         >
             <div class="flex flex-col divide-y divide-surface-200 dark:divide-surface-700">
                 <SettingsRow
-                    icon="pi pi-sparkles"
-                    title="What's new"
+                    :icon="NAV_ACTIONS.whatsNew.icon"
+                    :title="NAV_ACTIONS.whatsNew.label"
                     :subtitle="whatsNewSubtitle"
                     @click="openRecent()"
                 />
