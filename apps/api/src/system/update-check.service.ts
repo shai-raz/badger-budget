@@ -42,7 +42,7 @@ export class UpdateCheckService implements OnApplicationBootstrap {
 
     constructor(private readonly config: ConfigService) {}
 
-    /** Warms the cache in the background so the first About card does not wait on GitHub. */
+    /** Warms the cache in the background so the first About page load does not wait on GitHub. */
     onApplicationBootstrap(): void {
         if (this.isEnabled()) void this.getLatest();
     }

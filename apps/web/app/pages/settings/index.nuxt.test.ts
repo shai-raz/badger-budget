@@ -14,6 +14,7 @@ const m = await vi.hoisted(async () => {
         summaryLoading: ref(false),
         summaryError: ref(false),
         systemInfo: ref<ISystemInfo | undefined>(undefined),
+        systemInfoLoading: ref(false),
         passkeys: ref<ISyncPasskey[] | undefined>(undefined),
         passkeysQuery: vi.fn(),
         logout: vi.fn(),
@@ -39,7 +40,7 @@ vi.mock("../../composables/bankSync/useBankSync", () => ({
     },
 }));
 
-mockNuxtImport("useSystemInfo", () => () => ({ data: m.systemInfo }));
+mockNuxtImport("useSystemInfo", () => () => ({ data: m.systemInfo, isLoading: m.systemInfoLoading }));
 mockNuxtImport("useLogout", () => () => m.logout);
 
 const counts: ISettingsSummary = {
@@ -57,6 +58,7 @@ beforeEach(() => {
     m.summaryLoading.value = false;
     m.summaryError.value = false;
     m.systemInfo.value = undefined;
+    m.systemInfoLoading.value = false;
     m.passkeys.value = undefined;
     localStorage.removeItem("badger:syncPasskey:credential:u1");
     useAuthStore().user = {
@@ -70,10 +72,8 @@ beforeEach(() => {
     };
 });
 
-const stubs = { SettingsAboutCard: true };
-
 async function mountPage() {
-    return mountSuspended(Settings, { global: { stubs } });
+    return mountSuspended(Settings);
 }
 
 // The Notifications row's summary line, under its title.
@@ -201,6 +201,67 @@ describe("settings index transactions rows", () => {
     });
 });
 
+const aboutInfo: ISystemInfo = {
+    version: "0.19.1",
+    commit: null,
+    latest: "0.19.1",
+    updateAvailable: false,
+    updateComparable: true,
+    checkedAt: "2026-11-19T10:00:00.000Z",
+    updateCheckEnabled: true,
+    upgradeAvailable: false,
+    releaseUrl: null,
+};
+
+// The About row, linked to the About page. Its subtitle is the first text-xs span under the title.
+async function aboutRow() {
+    const wrapper = await mountPage();
+    return wrapper.get('a[href="/settings/about"]');
+}
+
+describe("settings index about row", () => {
+    it("shows the version and up to date with no tag or dot when nothing is pending", async () => {
+        m.systemInfo.value = aboutInfo;
+        const row = await aboutRow();
+
+        expect(row.findAll("span.text-xs")[0]?.text()).toBe("Version 0.19.1 · Up to date");
+        expect(row.find(".p-tag").exists()).toBe(false);
+        expect(row.find("span.rounded-full.bg-primary").exists()).toBe(false);
+    });
+
+    it("names the available version with an Update tag and dot", async () => {
+        m.systemInfo.value = { ...aboutInfo, latest: "0.20.0", updateAvailable: true };
+        const row = await aboutRow();
+
+        expect(row.findAll("span.text-xs")[0]?.text()).toBe("Version 0.20.0 is available · you have 0.19.1");
+        expect(row.get(".p-tag").text()).toBe("Update");
+        expect(row.find("span.rounded-full.bg-primary").exists()).toBe(true);
+    });
+
+    it("shows just the version when update checks are off", async () => {
+        m.systemInfo.value = { ...aboutInfo, updateCheckEnabled: false, checkedAt: null };
+        const row = await aboutRow();
+
+        expect(row.findAll("span.text-xs")[0]?.text()).toBe("Version 0.19.1");
+        expect(row.find(".p-tag").exists()).toBe(false);
+        expect(row.find("span.rounded-full.bg-primary").exists()).toBe(false);
+    });
+
+    it("shows a Skeleton and no subtitle while the system info loads", async () => {
+        m.systemInfoLoading.value = true;
+        const row = await aboutRow();
+
+        expect(row.find(".p-skeleton").exists()).toBe(true);
+        expect(row.find("span.text-xs").exists()).toBe(false);
+    });
+
+    it("has no Bank connections row", async () => {
+        const wrapper = await mountPage();
+
+        expect(wrapper.find('a[href="/bank-connections"]').exists()).toBe(false);
+    });
+});
+
 describe("settings index profile and footer", () => {
     it("shows the initials, name and email", async () => {
         const wrapper = await mountPage();
@@ -257,12 +318,12 @@ describe("settings index log out", () => {
 });
 
 describe("settings index section headings", () => {
-    it("labels the Preferences, Transactions, Bank sync and AI groups and leaves Profile and Log out headingless", async () => {
+    it("labels the Preferences, Transactions, Bank sync, AI and About groups and leaves Profile and Log out headingless", async () => {
         const wrapper = await mountPage();
         // Each heading renders a mobile and a desktop span with the same text.
         const headings = wrapper.findAll("h2").map((heading) => heading.find("span").text());
 
-        expect(headings).toEqual(["Preferences", "Transactions", "Bank sync", "AI"]);
+        expect(headings).toEqual(["Preferences", "Transactions", "Bank sync", "AI", "About"]);
         expect(wrapper.get('section[aria-label="Profile"]').find("h2").exists()).toBe(false);
         expect(wrapper.get('section[aria-label="Log out"]').find("h2").exists()).toBe(false);
     });
