@@ -1,4 +1,4 @@
-import { ForbiddenException, GoneException, NotFoundException } from "@nestjs/common";
+import { ConflictException, ForbiddenException, GoneException, NotFoundException } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
 import type { AuthUser } from "../auth/auth-user";
 import { PrismaService } from "../prisma/prisma.service";
@@ -31,12 +31,14 @@ describe("PushSubscriptionsService", () => {
     let prisma: {
         pushSubscription: {
             upsert: jest.Mock;
+            update: jest.Mock;
             findUnique: jest.Mock;
+            findUniqueOrThrow: jest.Mock;
             findMany: jest.Mock;
             updateMany: jest.Mock;
             deleteMany: jest.Mock;
         };
-        autoSyncGrant: { deleteMany: jest.Mock };
+        autoSyncGrant: { deleteMany: jest.Mock; updateMany: jest.Mock };
         autoSyncCredential: { deleteMany: jest.Mock };
         $transaction: jest.Mock;
     };
@@ -53,11 +55,23 @@ describe("PushSubscriptionsService", () => {
                     lastSeenAt: SEEN,
                     lastAcceptedAt: null,
                 }),
+                update: jest.fn().mockResolvedValue({}),
+                findUniqueOrThrow: jest.fn().mockResolvedValue({
+                    id: "sub-old",
+                    endpoint: DTO.endpoint,
+                    deviceLabel: DTO.deviceLabel,
+                    createdAt: CREATED,
+                    lastSeenAt: SEEN,
+                    lastAcceptedAt: null,
+                }),
                 findMany: jest.fn().mockResolvedValue([]),
                 updateMany: jest.fn().mockResolvedValue({ count: 1 }),
                 deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
             },
-            autoSyncGrant: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
+            autoSyncGrant: {
+                deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+                updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+            },
             autoSyncCredential: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
             $transaction: jest.fn(async (fn: (tx: unknown) => unknown) => fn(prisma)),
         };
@@ -140,6 +154,79 @@ describe("PushSubscriptionsService", () => {
             await expect(service.register(DEMO, DTO)).rejects.toBeInstanceOf(ForbiddenException);
             expect(prisma.pushSubscription.upsert).not.toHaveBeenCalled();
         });
+        it("answers 409 for an endpoint the push service reported dead, so the browser subscribes again", async () => {
+            prisma.pushSubscription.findUnique.mockResolvedValue({
+                id: "sub-1",
+                userId: USER.id,
+                removedAt: null,
+                goneAt: new Date(),
+            });
+
+            await expect(service.register(USER, DTO)).rejects.toBeInstanceOf(ConflictException);
+            expect(prisma.$transaction).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("register replacing an earlier subscription", () => {
+        /** `byEndpoint` answers the endpoint lookup; `byId` answers the replacesId lookup. */
+        const given = (byEndpoint: object | null, byId: object | null) =>
+            prisma.pushSubscription.findUnique.mockImplementation(async ({ where }: { where: object }) =>
+                "endpoint" in where ? byEndpoint : byId,
+            );
+        const replacing = { ...DTO, replacesId: "sub-old" };
+
+        it("gives the earlier row the new endpoint, bringing back a gone one, and returns that row", async () => {
+            given(null, { id: "sub-old", userId: USER.id, removedAt: null });
+
+            const result = await service.register(USER, replacing);
+
+            expect(prisma.pushSubscription.update).toHaveBeenCalledWith({
+                where: { id: "sub-old" },
+                data: expect.objectContaining({ endpoint: DTO.endpoint, goneAt: null, deviceLabel: DTO.deviceLabel }),
+            });
+            expect(prisma.pushSubscription.upsert).not.toHaveBeenCalled();
+            expect(result.id).toBe("sub-old");
+        });
+
+        it("moves the earlier row's grant onto an endpoint the caller already registered", async () => {
+            given(
+                { id: "sub-new", userId: USER.id, removedAt: null, goneAt: null },
+                {
+                    id: "sub-old",
+                    userId: USER.id,
+                    removedAt: null,
+                },
+            );
+
+            await service.register(USER, replacing);
+
+            expect(prisma.autoSyncGrant.updateMany).toHaveBeenCalledWith({
+                where: { pushSubscriptionId: "sub-old" },
+                data: { pushSubscriptionId: "sub-new" },
+            });
+            expect(prisma.pushSubscription.deleteMany).toHaveBeenCalledWith({
+                where: { id: "sub-old", userId: USER.id },
+            });
+        });
+
+        it("answers 410 when the earlier row was removed from the user's devices", async () => {
+            given(null, { id: "sub-old", userId: USER.id, removedAt: new Date() });
+
+            await expect(service.register(USER, replacing)).rejects.toBeInstanceOf(GoneException);
+            expect(prisma.$transaction).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            ["belongs to another user", { id: "sub-old", userId: "user-2", removedAt: null }],
+            ["no longer exists", null],
+        ])("registers plainly when the earlier row %s", async (_label, previous) => {
+            given(null, previous);
+
+            await service.register(USER, replacing);
+
+            expect(prisma.pushSubscription.upsert).toHaveBeenCalled();
+            expect(prisma.pushSubscription.update).not.toHaveBeenCalled();
+        });
     });
 
     describe("list", () => {
@@ -158,7 +245,10 @@ describe("PushSubscriptionsService", () => {
             const result = await service.list(USER.id);
 
             expect(prisma.pushSubscription.findMany).toHaveBeenCalledWith(
-                expect.objectContaining({ where: { userId: USER.id, removedAt: null }, orderBy: { createdAt: "asc" } }),
+                expect.objectContaining({
+                    where: { userId: USER.id, removedAt: null, goneAt: null },
+                    orderBy: { createdAt: "asc" },
+                }),
             );
             expect(result).toEqual([
                 {
@@ -231,7 +321,7 @@ describe("PushSubscriptionsService", () => {
             await service.list(USER.id);
 
             expect(prisma.pushSubscription.findMany).toHaveBeenCalledWith(
-                expect.objectContaining({ where: { userId: USER.id, removedAt: null } }),
+                expect.objectContaining({ where: { userId: USER.id, removedAt: null, goneAt: null } }),
             );
         });
     });

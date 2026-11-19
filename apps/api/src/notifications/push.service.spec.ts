@@ -191,7 +191,7 @@ describe("PushService", () => {
             const results = await service.send({ subscriptionId: "sub-1" }, contentOf("fixture.muted"));
 
             expect(prisma.pushSubscription.findFirst).toHaveBeenCalledWith(
-                expect.objectContaining({ where: { id: "sub-1", removedAt: null } }),
+                expect.objectContaining({ where: { id: "sub-1", removedAt: null, goneAt: null } }),
             );
             expect(prisma.user.findFirst).not.toHaveBeenCalled();
             expect(sender).toHaveBeenCalledTimes(1);
@@ -218,7 +218,7 @@ describe("PushService", () => {
             await service.send({ userId: USER.id }, contentOf("fixture.normal"));
 
             expect(prisma.pushSubscription.findMany).toHaveBeenCalledWith(
-                expect.objectContaining({ where: { userId: USER.id, removedAt: null } }),
+                expect.objectContaining({ where: { userId: USER.id, removedAt: null, goneAt: null } }),
             );
         });
     });
@@ -246,14 +246,17 @@ describe("PushService", () => {
             expect(warn).not.toHaveBeenCalled();
         });
 
-        it.each([404, 410])("removes the subscription on %i", async (statusCode) => {
+        it.each([404, 410])("marks the subscription gone, keeping the row, on %i", async (statusCode) => {
             sender.mockRejectedValue(new WebPushError("gone", statusCode, {}, "", "https://push.example.test/sub-1"));
 
             const results = await service.send({ userId: USER.id }, contentOf("fixture.normal"));
 
             expect(results).toEqual([{ subscriptionId: "sub-1", outcome: "gone", statusCode }]);
-            expect(prisma.pushSubscription.deleteMany).toHaveBeenCalledWith({ where: { id: "sub-1" } });
-            expect(prisma.pushSubscription.updateMany).not.toHaveBeenCalled();
+            expect(prisma.pushSubscription.updateMany).toHaveBeenCalledTimes(1);
+            const update = prisma.pushSubscription.updateMany.mock.calls[0][0];
+            expect(update.where).toEqual({ id: "sub-1", goneAt: null });
+            expect(update.data.goneAt).toBeInstanceOf(Date);
+            expect(prisma.pushSubscription.deleteMany).not.toHaveBeenCalled();
         });
 
         it.each([403, 413, 429, 500, 503])("keeps the subscription and reports failed on %i", async (statusCode) => {

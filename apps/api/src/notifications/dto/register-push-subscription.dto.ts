@@ -1,6 +1,15 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsNotEmpty, IsString, MaxLength, ValidateBy, ValidateNested, ValidationOptions } from "class-validator";
+import {
+    IsNotEmpty,
+    IsOptional,
+    IsString,
+    IsUUID,
+    MaxLength,
+    ValidateBy,
+    ValidateNested,
+    ValidationOptions,
+} from "class-validator";
 
 /** Hosts of the browser push services. The API POSTs to the endpoint, so anything else would let a user reach internal hosts. */
 const PUSH_SERVICE_HOSTS = [
@@ -66,4 +75,9 @@ export class RegisterPushSubscriptionDto {
     @IsNotEmpty()
     @MaxLength(100)
     deviceLabel: string;
+
+    @ApiPropertyOptional({ description: "The subscription this browser registered before, which this one replaces" })
+    @IsOptional()
+    @IsUUID()
+    replacesId?: string;
 }

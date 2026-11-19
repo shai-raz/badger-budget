@@ -213,7 +213,7 @@ describe("AutoSyncSchedulerService", () => {
 
             expect(mockPrisma.autoSyncGrant.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    where: { dueAt: { lte: NOW }, expiresAt: { gt: NOW } },
+                    where: { dueAt: { lte: NOW }, expiresAt: { gt: NOW }, pushSubscription: { goneAt: null } },
                     orderBy: { dueAt: "asc" },
                 }),
             );
@@ -247,7 +247,9 @@ describe("AutoSyncSchedulerService", () => {
 
             expect(mockAutoSync.issueRunToken).not.toHaveBeenCalled();
             expect(mockPush.send).not.toHaveBeenCalled();
-            expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({ where: { id: "grant-1" } });
+            expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({
+                where: { id: "grant-1", pushSubscriptionId: "sub-1" },
+            });
             expect(advanceCalls()).toHaveLength(0);
         });
 
@@ -262,19 +264,21 @@ describe("AutoSyncSchedulerService", () => {
                 select: { id: true },
             });
             expect(mockPush.send).not.toHaveBeenCalled();
-            expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({ where: { id: "grant-1" } });
+            expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({
+                where: { id: "grant-1", pushSubscriptionId: "sub-1" },
+            });
         });
     });
 
     describe("gone devices (AC13)", () => {
-        it("deletes the grant and its credentials when its device subscription is gone", async () => {
+        it("keeps the grant, still due, when its device subscription is gone", async () => {
             givenGrants([dailyGrant()]);
             mockPush.send.mockResolvedValue([{ subscriptionId: "sub-1", outcome: "gone", statusCode: 410 }]);
 
             await service.tick(NOW);
 
-            expect(mockPrisma.autoSyncCredential.deleteMany).toHaveBeenCalledWith({ where: { grantId: "grant-1" } });
-            expect(mockPrisma.autoSyncGrant.deleteMany).toHaveBeenCalledWith({ where: { id: "grant-1" } });
+            expect(mockPrisma.autoSyncGrant.deleteMany).not.toHaveBeenCalled();
+            expect(mockPrisma.autoSyncCredential.deleteMany).not.toHaveBeenCalled();
             expect(advanceCalls()).toHaveLength(0);
         });
 

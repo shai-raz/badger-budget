@@ -8,3 +8,4 @@ export { AutoSyncScheduleDto } from "./auto-sync-schedule.dto";
 export { EnableAutoSyncDto } from "./enable-auto-sync.dto";
 export { UpdateAutoSyncScheduleDto } from "./update-auto-sync-schedule.dto";
 export { RunAutoSyncDto } from "./run-auto-sync.dto";
+export { MoveAutoSyncDeviceDto } from "./move-auto-sync-device.dto";

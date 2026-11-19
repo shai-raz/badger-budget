@@ -146,7 +146,8 @@ export class AutoSyncSchedulerService {
         try {
             const [grants, activeJobs] = await Promise.all([
                 this.prisma.autoSyncGrant.findMany({
-                    where: { dueAt: { lte: now }, expiresAt: { gt: now } },
+                    // A grant on a gone subscription waits, still due, until its device registers a new endpoint.
+                    where: { dueAt: { lte: now }, expiresAt: { gt: now }, pushSubscription: { goneAt: null } },
                     orderBy: { dueAt: "asc" },
                     select: DUE_GRANT_SELECT,
                 }),
@@ -170,7 +171,7 @@ export class AutoSyncSchedulerService {
 
                 // The device's subscription was removed, or now belongs to another user: this grant must not run.
                 if (!(await isGrantSubscriptionOwned(this.prisma, grant))) {
-                    await deleteAutoSyncGrant(this.prisma, grant.id);
+                    await deleteAutoSyncGrant(this.prisma, grant);
                     continue;
                 }
 
@@ -201,11 +202,8 @@ export class AutoSyncSchedulerService {
                     },
                 );
 
-                // The device subscription is gone for good, so the grant can never run again: delete it.
-                if (results.some((result) => result.outcome === "gone")) {
-                    await deleteAutoSyncGrant(this.prisma, grant.id);
-                    continue;
-                }
+                // The subscription is now marked gone: the grant stays due and runs once its device comes back.
+                if (results.some((result) => result.outcome === "gone")) continue;
 
                 await this.advance(grant, schedule, now);
             } catch (err) {

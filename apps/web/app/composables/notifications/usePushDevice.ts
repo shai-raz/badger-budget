@@ -11,6 +11,7 @@ import {
 } from "~/utils/push/pushState";
 import { enablePushSubscription } from "~/utils/push/pushSync";
 import { getPushRegistration } from "~/utils/push/pushDeps";
+import { pushIdStore } from "~/utils/push/pushSubscriptionIdStore";
 import { notificationKeys, vapidPublicKeyOptions } from "./useNotificationQueries";
 
 function readEnvironment(): PushEnvironment {
@@ -94,6 +95,7 @@ export function usePushDevice() {
                 publicKey,
                 register: (data) => apiClient.registerPushSubscription(data),
                 device: device(),
+                idStore: pushIdStore(),
             });
             await invalidateSubscriptions();
             return subscriptionId;
@@ -103,6 +105,8 @@ export function usePushDevice() {
 
     async function disable() {
         await withBusy(async () => {
+            // Turned off on purpose: app start must not bring this device back.
+            pushIdStore().clear();
             const registration = await getPushRegistration();
             const subscription = await registration?.pushManager.getSubscription();
             if (!subscription) return;

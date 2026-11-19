@@ -2,18 +2,18 @@ import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from "@nestjs
 import { ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { Throttle, ThrottlerGuard } from "@nestjs/throttler";
 import { AutoSyncService } from "./auto-sync.service";
-import { RunAutoSyncDto } from "./dto";
+import { MoveAutoSyncDeviceDto, RunAutoSyncDto } from "./dto";
 
 const MINUTE_MS = 60_000;
 
-/** Public: a scheduled run proves itself with its grant's device key and one-time token, not a session. */
+/** Public: these routes prove themselves with the grant's device key (and a run its one-time token), not a session. */
 @ApiTags("bank-sync")
-@Controller("bank-sync/auto-sync/run")
+@Controller("bank-sync/auto-sync")
 @UseGuards(ThrottlerGuard)
 export class AutoSyncRunController {
     constructor(private readonly autoSyncService: AutoSyncService) {}
 
-    @Post()
+    @Post("run")
     @Throttle({ default: { limit: 10, ttl: MINUTE_MS } })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: "Start a scheduled automatic bank sync" })
@@ -23,5 +23,16 @@ export class AutoSyncRunController {
     @ApiResponse({ status: 409, description: "A sync is already in progress" })
     run(@Body() dto: RunAutoSyncDto): Promise<{ jobId: string }> {
         return this.autoSyncService.run(dto);
+    }
+
+    @Post("device")
+    @Throttle({ default: { limit: 10, ttl: MINUTE_MS } })
+    @HttpCode(HttpStatus.NO_CONTENT)
+    @ApiOperation({ summary: "Point automatic bank sync at this browser's current push subscription" })
+    @ApiResponse({ status: 204, description: "Auto-sync pushes to this subscription" })
+    @ApiResponse({ status: 400, description: "Invalid input" })
+    @ApiResponse({ status: 401, description: "Device rejected" })
+    async moveDevice(@Body() dto: MoveAutoSyncDeviceDto): Promise<void> {
+        await this.autoSyncService.moveDevice(dto);
     }
 }

@@ -20,9 +20,11 @@ import type { CredentialSource, SyncJobSummary } from "./credential-source";
 import { EnableAutoSyncDto } from "./dto/enable-auto-sync.dto";
 import { AutoSyncScheduleDto } from "./dto/auto-sync-schedule.dto";
 import { UpdateAutoSyncScheduleDto } from "./dto/update-auto-sync-schedule.dto";
+import { MoveAutoSyncDeviceDto } from "./dto/move-auto-sync-device.dto";
 import { canonicalTimeZone, jitterRunAt, nextScheduledRunAt, parseAutoSyncSchedule } from "./auto-sync-schedule";
 import { sha256Hex } from "../oauth/oauth-crypto";
 import { PushService } from "../notifications/push.service";
+import { replacePushSubscription } from "../notifications/replace-push-subscription";
 
 /** A grant is shown as unreachable once it has missed this many runs and none has run for this long. */
 export const AUTO_SYNC_UNREACHABLE_MISSES = 2;
@@ -33,10 +35,20 @@ const DAY_MS = 86_400_000;
 /** The one refusal every failed run gets, so a caller cannot tell which check failed. */
 const runRejected = () => new UnauthorizedException("Auto-sync run rejected");
 
-/** Deletes a grant and its credential copies, for a device whose push subscription is gone for good. */
-export async function deleteAutoSyncGrant(prisma: PrismaService, grantId: string): Promise<void> {
-    await prisma.autoSyncCredential.deleteMany({ where: { grantId } });
-    await prisma.autoSyncGrant.deleteMany({ where: { id: grantId } });
+/** The one refusal every failed device move gets, for the same reason. */
+const deviceRejected = () => new UnauthorizedException("Auto-sync device rejected");
+
+/**
+ * Deletes a grant and its credential copies, for a device whose push subscription was removed or now belongs to
+ * another user. Only while the grant still points at that subscription: a grant moved to a new one meanwhile is kept.
+ */
+export async function deleteAutoSyncGrant(
+    prisma: PrismaService,
+    grant: { id: string; pushSubscriptionId: string },
+): Promise<void> {
+    const where = { id: grant.id, pushSubscriptionId: grant.pushSubscriptionId };
+    await prisma.autoSyncCredential.deleteMany({ where: { grantId: grant.id, grant: where } });
+    await prisma.autoSyncGrant.deleteMany({ where });
 }
 
 /** True while the grant's push subscription is live and still belongs to the grant's user. */
@@ -254,7 +266,7 @@ export class AutoSyncService {
     async enable(userId: string, dto: EnableAutoSyncDto, now: Date = new Date()): Promise<IAutoSyncStatus> {
         // Checked before anything else: a grant must have a live push subscription that belongs to this user.
         const pushSubscription = await this.prisma.pushSubscription.findFirst({
-            where: { id: dto.pushSubscriptionId, userId, removedAt: null },
+            where: { id: dto.pushSubscriptionId, userId, removedAt: null, goneAt: null },
             select: { id: true },
         });
         if (!pushSubscription) {
@@ -447,11 +459,8 @@ export class AutoSyncService {
         });
         if (!grant || grant.expiresAt.getTime() <= now.getTime()) throw runRejected();
 
-        const deviceKey = Buffer.from(input.key, "base64url");
-        if (deviceKey.length !== AUTO_SYNC_KEY_BYTES) throw runRejected();
-        const grantKey = this.credentialCryptoService.deriveGrantKey(deviceKey, grant.id);
-        const keyCheck = { ciphertext: grant.keyCheckCt, iv: grant.keyCheckIv, authTag: grant.keyCheckAuthTag };
-        if (!this.credentialCryptoService.verifyGrantKeyCheck(keyCheck, grantKey, grant.id)) throw runRejected();
+        const grantKey = this.grantKeyFor(grant, input.key);
+        if (!grantKey) throw runRejected();
         if (!isAutoSyncIntervalUnit(grant.intervalUnit)) {
             throw new Error(`Auto-sync grant ${grant.id} has an unknown interval unit`);
         }
@@ -537,28 +546,76 @@ export class AutoSyncService {
     }
 
     /**
+     * Puts the browser's new endpoint in place of the grant's subscription (see replacePushSubscription), which also
+     * brings back a gone one. Proven by the device key, not a session, so the service worker can call it when the
+     * browser replaces its subscription. Every refusal is the same 401.
+     */
+    async moveDevice(input: MoveAutoSyncDeviceDto, now: Date = new Date()): Promise<void> {
+        const grant = await this.prisma.autoSyncGrant.findUnique({
+            where: { id: input.grantId },
+            select: {
+                id: true,
+                userId: true,
+                expiresAt: true,
+                keyCheckCt: true,
+                keyCheckIv: true,
+                keyCheckAuthTag: true,
+                pushSubscriptionId: true,
+            },
+        });
+        if (!grant || grant.expiresAt.getTime() <= now.getTime()) throw deviceRejected();
+        if (!this.grantKeyFor(grant, input.key)) throw deviceRejected();
+
+        await this.prisma.$transaction(async (tx) => {
+            const existing = await tx.pushSubscription.findUnique({
+                where: { endpoint: input.endpoint },
+                select: { userId: true, removedAt: true, goneAt: true },
+            });
+            // A removed or dead endpoint stays out, and this route never takes an endpoint from another user.
+            if (existing && (existing.removedAt || existing.goneAt || existing.userId !== grant.userId)) {
+                throw deviceRejected();
+            }
+            await replacePushSubscription(tx, {
+                userId: grant.userId,
+                previousId: grant.pushSubscriptionId,
+                endpoint: input.endpoint,
+                keys: input.keys,
+                now,
+            });
+        });
+    }
+
+    /** The grant key derived from a device key, or null when the key is malformed or is not this grant's. */
+    private grantKeyFor(
+        grant: { id: string; keyCheckCt: string; keyCheckIv: string; keyCheckAuthTag: string },
+        key: string,
+    ): Buffer | null {
+        const deviceKey = Buffer.from(key, "base64url");
+        if (deviceKey.length !== AUTO_SYNC_KEY_BYTES) return null;
+        const grantKey = this.credentialCryptoService.deriveGrantKey(deviceKey, grant.id);
+        const keyCheck = { ciphertext: grant.keyCheckCt, iv: grant.keyCheckIv, authTag: grant.keyCheckAuthTag };
+        return this.credentialCryptoService.verifyGrantKeyCheck(keyCheck, grantKey, grant.id) ? grantKey : null;
+    }
+
+    /**
      * Pushes a run's result to the device that ran it, so "Syncing…" is always replaced. Auto-sync notices can't be
      * muted, so stored preferences are not consulted. A subscription that was removed, or now belongs to another user,
      * gets nothing: the grant is deleted instead.
      */
     private async sendRunResult(grant: RunGrant, summary: SyncJobSummary): Promise<void> {
         if (!(await isGrantSubscriptionOwned(this.prisma, grant))) {
-            await deleteAutoSyncGrant(this.prisma, grant.id);
+            await deleteAutoSyncGrant(this.prisma, grant);
             return;
         }
 
         const quiet = summary.newTransactions === 0 && summary.failedConnections.length === 0;
         const content = quiet ? quietResult(summary) : changedResult(summary);
 
-        const results = await this.pushService.send({ subscriptionId: grant.pushSubscriptionId }, content, {
+        // A gone subscription is marked by PushService; the grant waits for its device to come back.
+        await this.pushService.send({ subscriptionId: grant.pushSubscriptionId }, content, {
             tag: "auto-sync",
             ttl: autoSyncRunTokenTtlMs(grant.intervalUnit, grant.intervalCount) / 1000,
         });
-
-        // The device subscription is gone for good, so the grant can never run again: delete it.
-        if (results.some((result) => result.outcome === "gone")) {
-            await deleteAutoSyncGrant(this.prisma, grant.id);
-        }
     }
 
     /** Closes the device's "Syncing…" for a run whose token was spent but which started no job. Never throws. */

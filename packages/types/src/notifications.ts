@@ -13,6 +13,8 @@ export interface IRegisterPushSubscriptionRequest {
     endpoint: string;
     keys: { p256dh: string; auth: string };
     deviceLabel: string;
+    /** The subscription this browser registered before; the new endpoint takes its place. */
+    replacesId?: string;
 }
 
 export interface IUnregisterPushSubscriptionRequest {

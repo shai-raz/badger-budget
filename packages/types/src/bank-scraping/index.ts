@@ -13,3 +13,4 @@ export type { IUpdateAutoSyncSchedule } from "./IUpdateAutoSyncSchedule";
 export type { IAutoSyncConnectionRef } from "./IAutoSyncConnectionRef";
 export type { IAutoSyncStatus } from "./IAutoSyncStatus";
 export type { IAutoSyncState } from "./IAutoSyncState";
+export type { IMoveAutoSyncDevice } from "./IMoveAutoSyncDevice";
